@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 import picocli.CommandLine.Command
 import picocli.CommandLine.Option
+import picocli.CommandLine.Parameters
 import java.io.InputStream
 import java.io.PrintWriter
 import java.nio.file.Path
@@ -34,8 +35,8 @@ class SearchCommand(
     @Autowired(required = false)
     private var springEmbeddingModel: EmbeddingModel? = null
 
-    @Option(names = ["--question", "-q"], description = ["Question to search for. Reads from stdin if omitted."])
-    var question: String? = null
+    @Parameters(index = "0..*", description = ["Question to search for. Multiple tokens are joined with spaces. Reads from stdin if omitted."])
+    var questionArgs: List<String> = emptyList()
 
     @Option(names = ["--top-k"], description = ["Number of chunks to retrieve (default: 5)."])
     var topK: Int = 5
@@ -68,15 +69,16 @@ class SearchCommand(
         }
 
         // Resolve the question
-        val resolvedQuestion = question
-            ?: run {
-                val stdin = inputStream.readBytes().toString(Charsets.UTF_8)
-                if (stdin.isEmpty()) {
-                    outputWriter.println("No question provided")
-                    return 1
-                }
-                stdin
+        val resolvedQuestion = if (questionArgs.isNotEmpty()) {
+            questionArgs.joinToString(" ")
+        } else {
+            val stdin = inputStream.readBytes().toString(Charsets.UTF_8)
+            if (stdin.isEmpty()) {
+                outputWriter.println("No question provided")
+                return 1
             }
+            stdin
+        }
 
         // Resolve the pipeline and repository (injected or built from Spring beans)
         val (pipeline, repository) = if (searchPipeline != null) {

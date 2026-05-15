@@ -1,7 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
-import ch.obermuhlner.ezrag.rag.ChunkMatch
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.SearchQuery
@@ -14,6 +13,7 @@ import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
+import picocli.CommandLine
 import java.io.ByteArrayInputStream
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -74,6 +74,95 @@ class SearchCommandTest {
             errorWriter = PrintWriter(err, true),
             inputStream = inputStream,
         )
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 0a: positional words joined into single question string
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `positional words are joined into single question string`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("vector-store.json")
+        createPopulatedRepository(storePath)
+
+        val capturedQueries = mutableListOf<SearchQuery>()
+        val capturingPipeline = object : EmbeddingSearchPipeline(
+            VectorStoreRepository(fakeEmbeddingModel, storePath).also { it.load() },
+            fakeEmbeddingModel
+        ) {
+            override fun search(query: SearchQuery): SearchResult {
+                capturedQueries.add(query)
+                return SearchResult(emptyList())
+            }
+        }
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = SearchCommand(
+            storePathOverride = storePath,
+            searchPipeline = capturingPipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        cmd.questionArgs = listOf("What", "is", "X?")
+
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(capturedQueries).hasSize(1)
+        assertThat(capturedQueries[0].question).isEqualTo("What is X?")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 0b: single quoted token passed via questionArgs
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `single quoted token in questionArgs is used as question`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("vector-store.json")
+        createPopulatedRepository(storePath)
+
+        val capturedQueries = mutableListOf<SearchQuery>()
+        val capturingPipeline = object : EmbeddingSearchPipeline(
+            VectorStoreRepository(fakeEmbeddingModel, storePath).also { it.load() },
+            fakeEmbeddingModel
+        ) {
+            override fun search(query: SearchQuery): SearchResult {
+                capturedQueries.add(query)
+                return SearchResult(emptyList())
+            }
+        }
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = SearchCommand(
+            storePathOverride = storePath,
+            searchPipeline = capturingPipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        cmd.questionArgs = listOf("What is X?")
+
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(capturedQueries).hasSize(1)
+        assertThat(capturedQueries[0].question).isEqualTo("What is X?")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 0c: picocli-level test — multi-word positional args without USAGE error
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `commandLine execute search with multi-word positional args exits without USAGE error`() {
+        val commandLine = CommandLine(ch.obermuhlner.ezrag.EzRagCommand())
+        val exitCode = commandLine.execute("search", "What", "is", "X?")
+        assertThat(exitCode).isNotEqualTo(CommandLine.ExitCode.USAGE)
     }
 
     // -----------------------------------------------------------------------
@@ -156,7 +245,7 @@ class SearchCommandTest {
             errorWriter = PrintWriter(err, true),
             inputStream = ByteArrayInputStream(ByteArray(0)),
         )
-        cmd.question = "hello"
+        cmd.questionArgs = listOf("hello")
 
         val exitCode = cmd.call()
 

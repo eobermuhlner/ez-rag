@@ -82,18 +82,30 @@ class SubcommandTest {
     }
 
     @Test
-    fun `query accepts --question flag`() {
+    fun `query accepts positional question`() {
         // Picocli accepts the argument; the command exits non-zero because
         // no vector store exists in the non-Spring test context.
-        val exitCode = commandLine.execute("query", "--question", "who are you?")
+        val exitCode = commandLine.execute("query", "who", "are", "you?")
         assertThat(exitCode).isNotEqualTo(CommandLine.ExitCode.USAGE)
     }
 
     @Test
-    fun `search accepts --question flag`() {
+    fun `query rejects --question flag`() {
+        val exitCode = commandLine.execute("query", "--question", "who are you?")
+        assertThat(exitCode).isEqualTo(CommandLine.ExitCode.USAGE)
+    }
+
+    @Test
+    fun `search accepts positional question`() {
         // Picocli accepts the argument; the command exits non-zero because
         // no vector store exists in the non-Spring test context.
-        val exitCode = commandLine.execute("search", "--question", "who are you?")
+        val exitCode = commandLine.execute("search", "who", "are", "you?")
         assertThat(exitCode).isNotEqualTo(CommandLine.ExitCode.USAGE)
+    }
+
+    @Test
+    fun `search rejects --question flag`() {
+        val exitCode = commandLine.execute("search", "--question", "who are you?")
+        assertThat(exitCode).isEqualTo(CommandLine.ExitCode.USAGE)
     }
 }

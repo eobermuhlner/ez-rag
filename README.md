@@ -37,26 +37,32 @@ export OPENAI_API_KEY=sk-...
 ez-rag ingest ./docs
 
 # Ask a question
-ez-rag query --question "What is the project's license?"
+ez-rag query "What is the project's license?"
+
+# Multi-word questions can be passed without quotes
+ez-rag query What is the project license?
 
 # Use Anthropic for chat, OpenAI for embeddings
-ez-rag query --provider anthropic --embedding-provider openai --question "Summarize the architecture."
+ez-rag query --provider anthropic --embedding-provider openai "Summarize the architecture."
 
 # Fully local setup with Ollama
 ez-rag ingest --embedding-provider ollama ./docs
-ez-rag query --provider ollama --embedding-provider ollama --question "What are the main features?"
+ez-rag query --provider ollama --embedding-provider ollama "What are the main features?"
+
+# Pipe a question from stdin
+echo "What is X?" | ez-rag search
 ```
 
 ## Commands
 
-| Command              | Description                                                                                           |
-|----------------------|-------------------------------------------------------------------------------------------------------|
-| `ingest <file\|dir>` | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`.        |
-| `query`              | Retrieve relevant chunks and answer using an LLM. Reads question from `--question` or stdin.          |
-| `status`             | Show the vector store path, chunk count, and list of ingested documents.                              |
-| `search`             | Pure embedding search returning raw chunks without LLM involvement. Reads question from `--question` or stdin. |
-| `mcp-server`         | Run as an MCP server over stdio (for Claude Code and other agentic tools).                            |
-| `shell`              | _(not yet implemented)_ Interactive REPL mode.                                                        |
+| Command                        | Description                                                                                        |
+|--------------------------------|----------------------------------------------------------------------------------------------------|
+| `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`.    |
+| `query [<word>...]`            | Retrieve relevant chunks and answer using an LLM. Reads question from positional args or stdin.    |
+| `status`                       | Show the vector store path, chunk count, and list of ingested documents.                           |
+| `search [<word>...]`           | Pure embedding search returning raw chunks without LLM involvement. Reads question from positional args or stdin. |
+| `mcp-server`                   | Run as an MCP server over stdio (for Claude Code and other agentic tools).                         |
+| `shell`                        | _(not yet implemented)_ Interactive REPL mode.                                                     |
 
 Every command accepts `--help` for details.
 

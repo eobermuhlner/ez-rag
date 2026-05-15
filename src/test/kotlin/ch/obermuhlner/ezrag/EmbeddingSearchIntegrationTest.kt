@@ -92,7 +92,7 @@ class EmbeddingSearchIntegrationTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = buildSearchCommand(storePath, out, err)
-        cmd.question = "architecture"
+        cmd.questionArgs = listOf("architecture")
 
         val exitCode = cmd.call()
 
@@ -119,7 +119,7 @@ class EmbeddingSearchIntegrationTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = buildSearchCommand(storePath, out, err)
-        cmd.question = "embeddings"
+        cmd.questionArgs = listOf("embeddings")
         cmd.outputFormat = "json"
 
         val exitCode = cmd.call()

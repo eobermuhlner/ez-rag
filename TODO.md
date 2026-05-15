@@ -1,5 +1,6 @@
-- make --question a positional parameter for sub-commands that need it (e.g., `search`, `query`), so that users can run `ez-rag search "What is X?"` without needing `--question`.
-- mcp-server with option to run as stdio or http protocol
 - fix very slow startup time
-- default configuration should allow using ez-rag immediately (e.g. ONNX embedding + dummy model)
+- default configuration should allow using ez-rag immediately (e.g. ONNX embedding + dummy model). Will this be a problem later when implementing reranking which presumably uses the same model?
 - add BM25 search and hybrid search (default?)
+- add reranking search results
+- add markdown chunking
+- add pdf to markdown converter

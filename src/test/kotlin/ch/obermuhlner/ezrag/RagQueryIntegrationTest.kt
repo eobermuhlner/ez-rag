@@ -106,7 +106,7 @@ class RagQueryIntegrationTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = buildQueryCommand(storePath, out, err)
-        cmd.question = "What architecture is used?"
+        cmd.questionArgs = listOf("What architecture is used?")
 
         val exitCode = cmd.call()
 
@@ -129,7 +129,7 @@ class RagQueryIntegrationTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = buildQueryCommand(storePath, out, err)
-        cmd.question = "How do services communicate?"
+        cmd.questionArgs = listOf("How do services communicate?")
 
         cmd.call()
 
@@ -153,7 +153,7 @@ class RagQueryIntegrationTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = buildQueryCommand(storePath, out, err)
-        cmd.question = "What orchestrates containers?"
+        cmd.questionArgs = listOf("What orchestrates containers?")
         cmd.outputFormat = "json"
 
         val exitCode = cmd.call()
@@ -185,7 +185,7 @@ class RagQueryIntegrationTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = buildQueryCommand(storePath, out, err)
-        cmd.question = "What is the architecture?"
+        cmd.questionArgs = listOf("What is the architecture?")
 
         val exitCode = cmd.call()
 
