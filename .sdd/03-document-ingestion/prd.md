@@ -36,7 +36,7 @@ Implement the `ingest` subcommand. It accepts one or more file or directory path
 - **DocumentChunker module**: Wraps Spring AI's `TokenTextSplitter`. Accepts a list of `Document` objects and chunk/overlap parameters. Returns a flat list of chunked `Document` objects, each carrying source metadata (original file path, chunk index).
 - **VectorStoreRepository module**: Manages the lifecycle of the `SimpleVectorStore` — load from disk if the JSON file exists, add new documents, save back to disk. Exposes `load()`, `add(documents)`, `save()`, `getMetadata()`.
 - **Ingestion deduplication**: Each ingested file's path and last-modified timestamp are stored as metadata on its chunks. On subsequent runs, `VectorStoreRepository` checks existing metadata and skips files whose path+mtime matches.
-- **Embedding provider**: Resolved by `ConfigService`. The `EmbeddingModel` bean is conditionally created based on `embeddingProvider` config (covered in PRD 04). `DocumentChunker` and `VectorStoreRepository` depend only on Spring AI's `EmbeddingModel` interface.
+- **Embedding provider**: Resolved by `ConfigService`. The `EmbeddingModel` bean is conditionally created based on `embeddingProvider` config (covered in PRD 02). `DocumentChunker` and `VectorStoreRepository` depend only on Spring AI's `EmbeddingModel` interface.
 - **Output**: Prints one line per file in human-readable mode. In JSON mode, outputs a single JSON object with `filesIngested`, `chunksCreated`, `filesSkipped`.
 
 ## Testing Decisions
@@ -63,7 +63,7 @@ The `status` subcommand has no dedicated PRD; its behavior is specified here sin
 - Updating or removing previously ingested documents (beyond skip-on-same-mtime).
 - Parallel ingestion of multiple files.
 - Progress bars or streaming output.
-- Embedding provider implementation — covered in PRD 04.
+- Embedding provider implementation — covered in PRD 02.
 
 ## Further Notes
 

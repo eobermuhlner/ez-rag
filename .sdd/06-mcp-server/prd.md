@@ -1,10 +1,10 @@
 ## Problem Statement
 
-Agentic coding tools (Claude Code, and others supporting MCP) cannot natively search project documentation unless a tool integration exists. Shelling out to `ez-rag query` and parsing text output is fragile. A proper MCP server integration allows agents to call `ingest`, `query`, and `status` as structured tools with typed inputs and outputs, making `ez-rag` a first-class tool in any MCP-compatible agentic workflow.
+Agentic coding tools (Claude Code, and others supporting MCP) cannot natively search project documentation unless a tool integration exists. Shelling out to `ez-rag query` and parsing text output is fragile. A proper MCP server integration allows agents to call `ingest`, `query`, `search`, and `status` as structured tools with typed inputs and outputs, making `ez-rag` a first-class tool in any MCP-compatible agentic workflow.
 
 ## Solution
 
-Implement the `mcp-server` subcommand. When invoked, `ez-rag mcp-server` starts a long-running MCP server that communicates over stdio using the MCP protocol. It exposes three MCP tools: `ingest`, `query`, and `status`. Agentic tools add `ez-rag mcp-server` to their MCP server config and invoke these tools directly without parsing CLI text output.
+Implement the `mcp-server` subcommand. When invoked, `ez-rag mcp-server` starts a long-running MCP server that communicates over stdio using the MCP protocol. It exposes four MCP tools: `ingest`, `query`, `search`, and `status`. Agentic tools add `ez-rag mcp-server` to their MCP server config and invoke these tools directly without parsing CLI text output.
 
 ## User Stories
 
@@ -13,14 +13,14 @@ Implement the `mcp-server` subcommand. When invoked, `ez-rag mcp-server` starts 
 3. As an agentic tool, I want to call the `search` MCP tool with `{ "question": "..." }` and receive `{ "chunks": [...] }`, so that I can retrieve raw matching chunks and do my own reasoning without delegating generation to a second LLM.
 4. As an agentic tool, I want to call the `ingest` MCP tool with `{ "path": "docs/" }`, so that I can trigger document ingestion programmatically.
 5. As an agentic tool, I want to call the `status` MCP tool and receive structured store metadata, so that I can check whether ingestion has been done before querying.
-5. As a user, I want `ez-rag mcp-server` to start instantly and stay running, accepting MCP requests over stdin and writing responses to stdout, so that the MCP host does not have to restart it between calls.
-6. As a user, I want the MCP server to load the vector store from disk at startup, so that queries are fast without reloading on every call.
-7. As a user, I want the MCP server to save the vector store after each `ingest` call, so that ingested data is persisted immediately.
-8. As a user, I want all logging suppressed in MCP server mode (unless `--verbose`), so that log output does not corrupt the stdio MCP protocol stream.
-9. As a developer, I want the MCP tool implementations to reuse the same `RagPipeline`, `DocumentLoader`, and `VectorStoreRepository` modules used by the CLI commands, so that behaviour is identical across integration modes.
-10. As a user, I want the MCP server to handle errors gracefully and return MCP error responses rather than crashing, so that the agentic tool receives structured error information.
-11. As a Claude Code user, I want documentation on how to add `ez-rag` to my MCP config (`.claude/mcp.json`), so that setup is straightforward.
-12. As an agentic tool, I want to pass `--provider`, `--embedding-provider`, and `--store` flags when starting the MCP server, so that the server is configured for the project without requiring a config file.
+6. As a user, I want `ez-rag mcp-server` to start instantly and stay running, accepting MCP requests over stdin and writing responses to stdout, so that the MCP host does not have to restart it between calls.
+7. As a user, I want the MCP server to load the vector store from disk at startup, so that queries are fast without reloading on every call.
+8. As a user, I want the MCP server to save the vector store after each `ingest` call, so that ingested data is persisted immediately.
+9. As a user, I want all logging suppressed in MCP server mode (unless `--verbose`), so that log output does not corrupt the stdio MCP protocol stream.
+10. As a developer, I want the MCP tool implementations to reuse the same `RagPipeline`, `DocumentLoader`, and `VectorStoreRepository` modules used by the CLI commands, so that behaviour is identical across integration modes.
+11. As a user, I want the MCP server to handle errors gracefully and return MCP error responses rather than crashing, so that the agentic tool receives structured error information.
+12. As a Claude Code user, I want documentation on how to add `ez-rag` to my MCP config (`.claude/mcp.json`), so that setup is straightforward.
+13. As an agentic tool, I want to pass `--provider`, `--embedding-provider`, and `--store` flags when starting the MCP server, so that the server is configured for the project without requiring a config file.
 
 ## Implementation Decisions
 
@@ -56,7 +56,7 @@ Implement the `mcp-server` subcommand. When invoked, `ez-rag mcp-server` starts 
 ## Out of Scope
 
 - HTTP/SSE transport (stdio only in this PRD).
-- MCP tool for `status` returning document-level detail beyond what PRD 02's status command returns.
+- MCP tool for `status` returning document-level detail beyond what PRD 03's status command returns.
 - Authentication or authorization on the MCP server.
 - Claude Code skill wrapper (`.claude/skills/ez-rag.md`) — that is a simple markdown file, not a code artifact.
 

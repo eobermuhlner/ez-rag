@@ -1,10 +1,10 @@
 ## Problem Statement
 
-Users and agentic tools sometimes need pure semantic similarity search without LLM-generated answers. The full RAG pipeline in `query` (PRD 03) always calls a chat model, which costs money, adds latency, and requires LLM provider credentials. For use cases such as inspecting retrieval quality, building downstream pipelines, or operating in privacy-sensitive environments where document content must not reach a cloud LLM, users need a way to retrieve raw matching chunks directly from the vector store using only embeddings.
+Users and agentic tools sometimes need pure semantic similarity search without LLM-generated answers. The full RAG pipeline in `query` (PRD 04) always calls a chat model, which costs money, adds latency, and requires LLM provider credentials. For use cases such as inspecting retrieval quality, building downstream pipelines, or operating in privacy-sensitive environments where document content must not reach a cloud LLM, users need a way to retrieve raw matching chunks directly from the vector store using only embeddings.
 
 ## Solution
 
-Implement the `search` subcommand. It accepts a question from `--question` or stdin, embeds it using the configured embedding provider, retrieves the top-k most similar chunks from the vector store, optionally filters by a minimum similarity score, and prints the full chunk content with source and score metadata. No chat model is involved. The same capability is exposed as an MCP tool in `mcp-server` (PRD 05) and as a `/search` meta-command in the interactive shell (PRD 06).
+Implement the `search` subcommand. It accepts a question from `--question` or stdin, embeds it using the configured embedding provider, retrieves the top-k most similar chunks from the vector store, optionally filters by a minimum similarity score, and prints the full chunk content with source and score metadata. No chat model is involved. The same capability is exposed as an MCP tool in `mcp-server` (PRD 06) and as a `/search` meta-command in the interactive shell (PRD 07).
 
 ## User Stories
 
@@ -41,8 +41,8 @@ Implement the `search` subcommand. It accepts a question from `--question` or st
 - **JSON output format**: `{ "chunks": [{ "file": "docs/arch.md", "chunkIndex": 3, "score": 0.87, "content": "The architecture consists of..." }] }`. Top-level key is `chunks` (not `sources`) to distinguish from the `query` output schema.
 - **Stdin reading**: Same as `QueryCommand` — reads all of stdin until EOF if `--question` is absent. Empty stdin is an error.
 - **No ChatModel dependency**: `SearchCommand` and `EmbeddingSearchPipeline` must not import or reference any `ChatModel` type. This is enforced by keeping them in a module that does not depend on the chat provider configuration.
-- **OutputFormatter reuse**: The existing `OutputFormatter` from PRD 03 is extended to handle `SearchResult` rendering in both text and JSON modes.
-- **VectorStoreRepository reuse**: `EmbeddingSearchPipeline` calls the same `VectorStoreRepository` used by `RagPipeline`. No changes to `VectorStoreRepository` are required beyond confirming that its search API returns similarity scores (which PRD 02 already specifies via metadata).
+- **OutputFormatter reuse**: The existing `OutputFormatter` from PRD 04 is extended to handle `SearchResult` rendering in both text and JSON modes.
+- **VectorStoreRepository reuse**: `EmbeddingSearchPipeline` calls the same `VectorStoreRepository` used by `RagPipeline`. No changes to `VectorStoreRepository` are required beyond confirming that its search API returns similarity scores (which PRD 03 already specifies via metadata).
 - **Stub in PRD 01**: `SearchCommand` is added as a stub alongside `IngestCommand`, `QueryCommand`, etc. in the project scaffolding (see PRD 01 update).
 
 ## Testing Decisions
@@ -68,5 +68,5 @@ The primary motivation for `search` is the use case where no LLM provider creden
 
 PRDs affected by this addition:
 - **PRD 01**: `SearchCommand` stub added to the subcommand list.
-- **PRD 05**: `search` MCP tool added (`search(question, topK?, minScore?)` → `SearchResult`).
-- **PRD 06**: `/search <question>` added as a REPL meta-command in the interactive shell.
+- **PRD 06**: `search` MCP tool added (`search(question, topK?, minScore?)` → `SearchResult`).
+- **PRD 07**: `/search <question>` added as a REPL meta-command in the interactive shell.

@@ -42,7 +42,7 @@ Implement the `query` subcommand. It reads a question from `--question` or stdin
   Stored as a constant, overridable via config/CLI.
 - **Stdin reading**: If `--question` is absent, `QueryCommand` reads all of stdin until EOF. Empty stdin is an error.
 - **Output formatting**: A dedicated `OutputFormatter` module handles both text and JSON rendering of `RagResult`. Text format: answer paragraph, then `--- Sources ---` section listing each source. JSON format: `{ "answer": "...", "sources": [{ "file": "...", "score": 0.87, "excerpt": "..." }] }`.
-- **VectorStoreRepository** (from PRD 02) is reused for search. `QueryCommand` depends only on `RagPipeline` and `OutputFormatter`.
+- **VectorStoreRepository** (from PRD 03) is reused for search. `QueryCommand` depends only on `RagPipeline` and `OutputFormatter`.
 
 ## Testing Decisions
 

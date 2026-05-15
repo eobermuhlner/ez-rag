@@ -43,7 +43,7 @@ Implement the `shell` subcommand. When invoked, `ez-rag shell` starts an interac
 - Tab completion for REPL commands.
 - Multi-line question input within the REPL.
 - Session-level context / follow-up questions that reference previous answers.
-- This is a secondary use case; it should be implemented after PRDs 01–05 and PRD 07 are stable, since the `/search` meta-command depends on `EmbeddingSearchPipeline` from PRD 07. Recommended implementation order: 01 → 04 → 02 → 03 → 07 → 05 → 06.
+- This is a secondary use case; it should be implemented after PRDs 01–06 are stable, since the `/search` meta-command depends on `EmbeddingSearchPipeline` from PRD 05. Recommended implementation order: 01 → 02 → 03 → 04 → 05 → 06 → 07.
 
 ## Further Notes
 
