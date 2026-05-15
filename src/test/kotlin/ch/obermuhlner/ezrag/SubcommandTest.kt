@@ -75,8 +75,10 @@ class SubcommandTest {
 
     @Test
     fun `ingest accepts positional file path argument`() {
+        // Picocli accepts the argument; the command exits non-zero because
+        // no EmbeddingModel is wired in the non-Spring test context.
         val exitCode = commandLine.execute("ingest", "somefile.txt")
-        assertThat(exitCode).isEqualTo(0)
+        assertThat(exitCode).isNotEqualTo(CommandLine.ExitCode.USAGE)
     }
 
     @Test

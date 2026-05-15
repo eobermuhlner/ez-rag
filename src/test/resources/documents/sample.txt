@@ -1,0 +1,10 @@
+This is a sample text file for testing document ingestion.
+It contains multiple sentences and paragraphs.
+
+The quick brown fox jumps over the lazy dog.
+Spring AI provides a powerful framework for building AI applications.
+Document loaders read files and produce Document objects.
+
+This paragraph adds more content to ensure the file has enough text
+to be split into multiple chunks when a small chunk size is configured.
+Each chunk should carry the source metadata from the original document.

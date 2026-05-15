@@ -1,7 +1,14 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import com.fasterxml.jackson.databind.ObjectMapper
+import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.stereotype.Component
 import picocli.CommandLine.Command
+import picocli.CommandLine.Option
+import java.io.PrintWriter
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.concurrent.Callable
 
 @Command(
@@ -10,9 +17,55 @@ import java.util.concurrent.Callable
     description = ["Show the status of the vector store."]
 )
 @Component
-class StatusCommand : Callable<Int> {
+class StatusCommand(
+    private val embeddingModel: EmbeddingModel? = null,
+    private val storePathOverride: Path? = null,
+    private val outputWriter: PrintWriter = PrintWriter(System.out, true),
+    private val errorWriter: PrintWriter = PrintWriter(System.err, true),
+) : Callable<Int> {
+
+    @Option(names = ["--output-format"], description = ["Output format: text, json."])
+    var outputFormat: String = "text"
+
     override fun call(): Int {
-        println("not yet implemented")
+        val model = embeddingModel ?: run {
+            errorWriter.println("Error: No embedding model configured.")
+            return 1
+        }
+        val storePath = storePathOverride ?: Paths.get(".ez-rag/vector-store.json")
+
+        val repository = VectorStoreRepository(model, storePath)
+
+        if (!repository.storeExists()) {
+            outputWriter.println(
+                "No vector store found at ${storePath.toAbsolutePath()}. Run 'ez-rag ingest' first."
+            )
+            return 1
+        }
+
+        repository.load()
+        val metadata = repository.getMetadata()
+
+        if (outputFormat == "json") {
+            val mapper = ObjectMapper()
+            val docsArray = metadata.documents.map { doc ->
+                mapOf("path" to doc.path, "chunkCount" to doc.chunkCount)
+            }
+            val result = mapOf(
+                "storePath" to metadata.storePath,
+                "chunkCount" to metadata.chunkCount,
+                "documents" to docsArray
+            )
+            outputWriter.println(mapper.writeValueAsString(result))
+        } else {
+            outputWriter.println("Store: ${metadata.storePath}")
+            outputWriter.println("Chunks: ${metadata.chunkCount}")
+            outputWriter.println()
+            for (doc in metadata.documents) {
+                outputWriter.println("  ${doc.path}  (${doc.chunkCount} chunks)")
+            }
+        }
+
         return 0
     }
 }

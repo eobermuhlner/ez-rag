@@ -38,6 +38,8 @@ dependencies {
     implementation("org.springframework.ai:spring-ai-starter-model-anthropic")
     implementation("org.springframework.ai:spring-ai-starter-model-ollama")
     implementation("org.springframework.ai:spring-ai-starter-model-transformers")
+    implementation("org.springframework.ai:spring-ai-vector-store")
+    implementation("org.springframework.ai:spring-ai-pdf-document-reader")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
