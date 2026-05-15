@@ -14,6 +14,7 @@ fun readConfigFile(path: String = System.getProperty("user.home") + "/.ez-rag/co
         embeddingProvider = data.string("embeddingProvider") ?: data.string("embedding-provider") ?: "openai",
         model = data.string("model") ?: "gpt-4o-mini",
         embeddingModel = data.string("embeddingModel") ?: data.string("embedding-model") ?: "text-embedding-3-small",
+        ollamaUrl = data.string("ollamaUrl") ?: data.string("ollama-url") ?: "http://localhost:11434",
         storePath = data.string("storePath") ?: data.string("store-path") ?: ".ez-rag/vector-store.json",
         chunkSize = data.int("chunkSize") ?: data.int("chunk-size") ?: 1000,
         chunkOverlap = data.int("chunkOverlap") ?: data.int("chunk-overlap") ?: 200,

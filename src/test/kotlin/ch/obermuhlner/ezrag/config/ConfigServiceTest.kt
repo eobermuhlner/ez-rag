@@ -42,12 +42,13 @@ class ConfigServiceTest {
     }
 
     @Test
-    fun `EzRagConfig has all eleven fields with correct defaults`() {
+    fun `EzRagConfig has all twelve fields with correct defaults`() {
         val config = EzRagConfig()
         assertThat(config.provider).isEqualTo("openai")
         assertThat(config.embeddingProvider).isEqualTo("openai")
         assertThat(config.model).isEqualTo("gpt-4o-mini")
         assertThat(config.embeddingModel).isEqualTo("text-embedding-3-small")
+        assertThat(config.ollamaUrl).isEqualTo("http://localhost:11434")
         assertThat(config.storePath).isEqualTo(".ez-rag/vector-store.json")
         assertThat(config.chunkSize).isEqualTo(1000)
         assertThat(config.chunkOverlap).isEqualTo(200)

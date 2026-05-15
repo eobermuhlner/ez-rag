@@ -23,9 +23,21 @@ repositories {
     mavenCentral()
 }
 
+extra["springAiVersion"] = "1.0.0"
+
+dependencyManagement {
+    imports {
+        mavenBom("org.springframework.ai:spring-ai-bom:${property("springAiVersion")}")
+    }
+}
+
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("info.picocli:picocli:4.7.6")
+    implementation("org.springframework.ai:spring-ai-starter-model-openai")
+    implementation("org.springframework.ai:spring-ai-starter-model-anthropic")
+    implementation("org.springframework.ai:spring-ai-starter-model-ollama")
+    implementation("org.springframework.ai:spring-ai-starter-model-transformers")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
