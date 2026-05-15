@@ -34,23 +34,23 @@ Register six subcommand stubs — `ingest`, `query`, `search`, `status`, `mcp-se
 
 ### Implementation steps
 
-- [ ] Create `IngestCommand`, `QueryCommand`, `SearchCommand`, `StatusCommand`, `McpServerCommand`, `ShellCommand` as `@Component @Command` beans with `mixinStandardHelpOptions = true`
-- [ ] Annotate `EzRagCommand` with `@Command(subcommands = [IngestCommand::class, QueryCommand::class, SearchCommand::class, StatusCommand::class, McpServerCommand::class, ShellCommand::class])`
-- [ ] Each stub's `call()` prints "not yet implemented" to stdout and returns exit code 0
-- [ ] Add `--verbose` flag (`@Option(names = ["--verbose", "-v"])`) to `EzRagCommand` for inheritance by all subcommands (use `@Command(scope = ScopeType.INHERIT)` or mixin)
-- [ ] Write tests: for each subcommand, construct via `CommandLine` directly and assert `<subcommand> --help` exits 0; assert `ez-rag --help` output contains all six subcommand names
+- [x] Create `IngestCommand`, `QueryCommand`, `SearchCommand`, `StatusCommand`, `McpServerCommand`, `ShellCommand` as `@Component @Command` beans with `mixinStandardHelpOptions = true`
+- [x] Annotate `EzRagCommand` with `@Command(subcommands = [IngestCommand::class, QueryCommand::class, SearchCommand::class, StatusCommand::class, McpServerCommand::class, ShellCommand::class])`
+- [x] Each stub's `call()` prints "not yet implemented" to stdout and returns exit code 0
+- [x] Add `--verbose` flag (`@Option(names = ["--verbose", "-v"])`) to `EzRagCommand` for inheritance by all subcommands (use `@Command(scope = ScopeType.INHERIT)` or mixin)
+- [x] Write tests: for each subcommand, construct via `CommandLine` directly and assert `<subcommand> --help` exits 0; assert `ez-rag --help` output contains all six subcommand names
 
 ### Acceptance criteria
 
-- [ ] `ez-rag --help` output lists `ingest`, `query`, `search`, `status`, `mcp-server`, `shell`
-- [ ] `ez-rag ingest --help`, `ez-rag query --help`, `ez-rag search --help`, `ez-rag status --help`, `ez-rag mcp-server --help`, `ez-rag shell --help` each exit 0
-- [ ] Each subcommand is a Spring `@Component` resolved through the picocli Spring `IFactory`
-- [ ] `--verbose` flag is available on the top-level command and all subcommands
+- [x] `ez-rag --help` output lists `ingest`, `query`, `search`, `status`, `mcp-server`, `shell`
+- [x] `ez-rag ingest --help`, `ez-rag query --help`, `ez-rag search --help`, `ez-rag status --help`, `ez-rag mcp-server --help`, `ez-rag shell --help` each exit 0
+- [x] Each subcommand is a Spring `@Component` resolved through the picocli Spring `IFactory`
+- [x] `--verbose` flag is available on the top-level command and all subcommands
 
 ### Quality gates
 
-- [ ] Kotlin compiler reports zero warnings
-- [ ] `./gradlew test` passes with tests covering `--help` for each subcommand
+- [x] Kotlin compiler reports zero warnings
+- [x] `./gradlew test` passes with tests covering `--help` for each subcommand
 
 ---
 
@@ -75,25 +75,25 @@ Fields of `EzRagConfig` (with defaults):
 
 ### Implementation steps
 
-- [ ] Create `EzRagConfig` as a Kotlin data class with all eleven fields and defaults as listed above
-- [ ] Create `ConfigService` with injectable source parameters: a `ConfigFileSource` (returns nullable `EzRagConfig` from YAML), an `EnvVarSource` (reads `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` from the environment map), and a `CliFlags` data class passed at call time
-- [ ] Implement merge: start from `EzRagConfig` defaults, overlay non-null config-file values, overlay env var values where applicable, overlay non-null CLI flags
-- [ ] Implement YAML config file reader that returns `null` (not an exception) when `~/.ez-rag/config.yml` does not exist
-- [ ] Wire `ConfigService` as a Spring `@Service` bean with real filesystem and `System.getenv` sources for production use
-- [ ] Write pure unit tests (no Spring context) covering: CLI flag beats file value, env var beats file value, file value used when no override, missing config file yields all defaults
+- [x] Create `EzRagConfig` as a Kotlin data class with all eleven fields and defaults as listed above
+- [x] Create `ConfigService` with injectable source parameters: a `ConfigFileSource` (returns nullable `EzRagConfig` from YAML), an `EnvVarSource` (reads `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` from the environment map), and a `CliFlags` data class passed at call time
+- [x] Implement merge: start from `EzRagConfig` defaults, overlay non-null config-file values, overlay env var values where applicable, overlay non-null CLI flags
+- [x] Implement YAML config file reader that returns `null` (not an exception) when `~/.ez-rag/config.yml` does not exist
+- [x] Wire `ConfigService` as a Spring `@Service` bean with real filesystem and `System.getenv` sources for production use
+- [x] Write pure unit tests (no Spring context) covering: CLI flag beats file value, env var beats file value, file value used when no override, missing config file yields all defaults
 
 ### Acceptance criteria
 
-- [ ] Unit test: when config file sets `provider = "anthropic"` and CLI flag sets `provider = "openai"`, resolved `provider` is `"openai"`
-- [ ] Unit test: when config file sets `provider = "anthropic"` and env var `PROVIDER=openai` is present, resolved `provider` is `"openai"`
-- [ ] Unit test: when only config file sets `provider = "anthropic"` (no CLI flag, no env var), resolved `provider` is `"anthropic"`
-- [ ] Unit test: when `~/.ez-rag/config.yml` does not exist, `ConfigService.resolve()` returns `EzRagConfig` with all defaults and does not throw
-- [ ] `EzRagConfig` data class contains all eleven fields with correct types and default values
+- [x] Unit test: when config file sets `provider = "anthropic"` and CLI flag sets `provider = "openai"`, resolved `provider` is `"openai"`
+- [x] Unit test: when config file sets `provider = "anthropic"` and env var `PROVIDER=openai` is present, resolved `provider` is `"openai"`
+- [x] Unit test: when only config file sets `provider = "anthropic"` (no CLI flag, no env var), resolved `provider` is `"anthropic"`
+- [x] Unit test: when `~/.ez-rag/config.yml` does not exist, `ConfigService.resolve()` returns `EzRagConfig` with all defaults and does not throw
+- [x] `EzRagConfig` data class contains all eleven fields with correct types and default values
 
 ### Quality gates
 
-- [ ] Kotlin compiler reports zero warnings
-- [ ] `./gradlew test` passes with no Spring context loaded for `ConfigService` unit tests (verified by test execution time < 2 s for the config test class)
+- [x] Kotlin compiler reports zero warnings
+- [x] `./gradlew test` passes with no Spring context loaded for `ConfigService` unit tests (verified by test execution time < 2 s for the config test class)
 
 ---
 
