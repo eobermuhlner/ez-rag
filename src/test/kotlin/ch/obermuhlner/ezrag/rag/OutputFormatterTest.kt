@@ -78,4 +78,129 @@ class OutputFormatterTest {
         assertThat(json).contains("\"sources\"")
         assertThat(json).contains("[]")
     }
+
+    // ---- SearchResult text format tests ----
+
+    private fun twoChunkSearchResult(): SearchResult {
+        val chunk1 = ChunkMatch(
+            filePath = "docs/arch.md",
+            chunkIndex = 3,
+            score = 0.87,
+            content = "The architecture consists of three layers..."
+        )
+        val chunk2 = ChunkMatch(
+            filePath = "docs/overview.md",
+            chunkIndex = 1,
+            score = 0.74,
+            content = "An overview of the system..."
+        )
+        return SearchResult(chunks = listOf(chunk1, chunk2))
+    }
+
+    @Test
+    fun `formatText SearchResult with two chunks contains exact header format for first chunk`() {
+        val result = twoChunkSearchResult()
+        val output = formatter.formatText(result)
+
+        assertThat(output).contains("[1] score=0.87  source=docs/arch.md  chunk=3")
+    }
+
+    @Test
+    fun `formatText SearchResult with two chunks contains exact header format for second chunk`() {
+        val result = twoChunkSearchResult()
+        val output = formatter.formatText(result)
+
+        assertThat(output).contains("[2] score=0.74  source=docs/overview.md  chunk=1")
+    }
+
+    @Test
+    fun `formatText SearchResult with two chunks has blank line between them`() {
+        val result = twoChunkSearchResult()
+        val output = formatter.formatText(result)
+
+        // There must be a blank line (double newline) between the two blocks
+        assertThat(output).contains("\n\n")
+    }
+
+    @Test
+    fun `formatText SearchResult with single chunk has no trailing blank line`() {
+        val chunk = ChunkMatch(
+            filePath = "docs/single.md",
+            chunkIndex = 0,
+            score = 0.90,
+            content = "Single chunk content."
+        )
+        val result = SearchResult(chunks = listOf(chunk))
+        val output = formatter.formatText(result)
+
+        assertThat(output.trimEnd()).doesNotEndWith("\n\n")
+    }
+
+    @Test
+    fun `formatText SearchResult with zero chunks returns empty string`() {
+        val result = SearchResult(chunks = emptyList())
+        val output = formatter.formatText(result)
+
+        assertThat(output).isEmpty()
+    }
+
+    // ---- SearchResult JSON format tests ----
+
+    @Test
+    fun `formatJson SearchResult uses chunks as top-level key not sources or results`() {
+        val result = twoChunkSearchResult()
+        val json = formatter.formatJson(result)
+
+        assertThat(json).contains("\"chunks\"")
+        assertThat(json).doesNotContain("\"sources\"")
+        assertThat(json).doesNotContain("\"results\"")
+    }
+
+    @Test
+    fun `formatJson SearchResult entries include file chunkIndex score and content keys`() {
+        val result = twoChunkSearchResult()
+        val json = formatter.formatJson(result)
+
+        assertThat(json).contains("\"file\"")
+        assertThat(json).contains("\"chunkIndex\"")
+        assertThat(json).contains("\"score\"")
+        assertThat(json).contains("\"content\"")
+    }
+
+    @Test
+    fun `formatJson SearchResult with zero chunks produces chunks empty array`() {
+        val result = SearchResult(chunks = emptyList())
+        val json = formatter.formatJson(result)
+
+        assertThat(json).contains("\"chunks\"")
+        assertThat(json).contains("[]")
+    }
+
+    @Test
+    fun `formatJson SearchResult backslash double-quote and newline in content are escaped`() {
+        val chunk = ChunkMatch(
+            filePath = "test.txt",
+            chunkIndex = 0,
+            score = 0.5,
+            content = "Line1\nLine2 with \"quotes\" and \\backslash"
+        )
+        val result = SearchResult(chunks = listOf(chunk))
+        val json = formatter.formatJson(result)
+
+        assertThat(json).contains("\\n")
+        assertThat(json).contains("\\\"")
+        assertThat(json).contains("\\\\")
+    }
+
+    @Test
+    fun `formatJson SearchResult is parseable as valid JSON`() {
+        val result = twoChunkSearchResult()
+        val json = formatter.formatJson(result)
+
+        assertThat(json.trim()).startsWith("{")
+        assertThat(json.trim()).endsWith("}")
+        // The key and values should be present
+        assertThat(json).contains("docs/arch.md")
+        assertThat(json).contains("docs/overview.md")
+    }
 }

@@ -54,11 +54,19 @@ ez-rag query --provider ollama --embedding-provider ollama --question "What are 
 | `ingest <file\|dir>` | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`.        |
 | `query`              | Retrieve relevant chunks and answer using an LLM. Reads question from `--question` or stdin.          |
 | `status`             | Show the vector store path, chunk count, and list of ingested documents.                              |
-| `search`             | _(not yet implemented)_ Pure embedding search returning raw chunks without LLM involvement.           |
+| `search`             | Pure embedding search returning raw chunks without LLM involvement. Reads question from `--question` or stdin. |
 | `mcp-server`         | _(not yet implemented)_ Run as an MCP server over stdio (for Claude Code and other agentic tools).    |
 | `shell`              | _(not yet implemented)_ Interactive REPL mode.                                                        |
 
 Every command accepts `--help` for details.
+
+## Search-specific flags
+
+| Flag            | Default | Description                                      |
+|-----------------|---------|--------------------------------------------------|
+| `--top-k N`     | `5`     | Maximum number of chunks to return               |
+| `--min-score T` | `0.0`   | Minimum similarity score; lower-scoring chunks are filtered out |
+| `--output`      | `text`  | Output format: `text` or `json`                  |
 
 ## Global flags
 

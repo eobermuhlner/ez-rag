@@ -2,6 +2,28 @@ package ch.obermuhlner.ezrag.rag
 
 class OutputFormatter {
 
+    fun formatText(result: SearchResult): String {
+        if (result.chunks.isEmpty()) {
+            return ""
+        }
+        return result.chunks.mapIndexed { idx, chunk ->
+            val header = "[${idx + 1}] score=${"%.2f".format(chunk.score)}  source=${chunk.filePath}  chunk=${chunk.chunkIndex}"
+            "$header\n${chunk.content}"
+        }.joinToString("\n\n")
+    }
+
+    fun formatJson(result: SearchResult): String {
+        val chunksJson = result.chunks.joinToString(",\n    ") { chunk ->
+            val escapedFile = escapeJsonString(chunk.filePath)
+            val escapedContent = escapeJsonString(chunk.content)
+            """{"file": "$escapedFile", "chunkIndex": ${chunk.chunkIndex}, "score": ${chunk.score}, "content": "$escapedContent"}"""
+        }
+        val chunksArray = if (result.chunks.isEmpty()) "[]" else "[\n    $chunksJson\n  ]"
+        return """{
+  "chunks": $chunksArray
+}"""
+    }
+
     fun formatText(result: RagResult): String {
         val sb = StringBuilder()
         sb.append(result.answer)
