@@ -2,3 +2,4 @@
 - mcp-server with option to run as stdio or http protocol
 - fix very slow startup time
 - default configuration should allow using ez-rag immediately (e.g. ONNX embedding + dummy model)
+- add BM25 search and hybrid search (default?)
