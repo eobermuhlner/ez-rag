@@ -3,6 +3,7 @@ package ch.obermuhlner.ezrag.command
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.ai.embedding.EmbeddingModel
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 import picocli.CommandLine.Command
 import picocli.CommandLine.Option
@@ -24,11 +25,14 @@ class StatusCommand(
     private val errorWriter: PrintWriter = PrintWriter(System.err, true),
 ) : Callable<Int> {
 
+    @Autowired(required = false)
+    private var springEmbeddingModel: EmbeddingModel? = null
+
     @Option(names = ["--output-format"], description = ["Output format: text, json."])
     var outputFormat: String = "text"
 
     override fun call(): Int {
-        val model = embeddingModel ?: run {
+        val model = embeddingModel ?: springEmbeddingModel ?: run {
             errorWriter.println("Error: No embedding model configured.")
             return 1
         }

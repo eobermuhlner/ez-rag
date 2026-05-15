@@ -6,6 +6,7 @@ import ch.obermuhlner.ezrag.ingestion.DocumentLoader
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import org.springframework.ai.document.Document
 import org.springframework.ai.embedding.EmbeddingModel
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 import picocli.CommandLine.Command
 import picocli.CommandLine.Option
@@ -32,6 +33,9 @@ class IngestCommand(
     private val verbose: Boolean = false,
 ) : Callable<Int> {
 
+    @Autowired(required = false)
+    private var springEmbeddingModel: EmbeddingModel? = null
+
     @Parameters(arity = "1..*", description = ["Files or directories to ingest."])
     var paths: List<File> = emptyList()
 
@@ -47,7 +51,7 @@ class IngestCommand(
     override fun call(): Int = call(paths)
 
     fun call(files: List<File>): Int {
-        val model = embeddingModel ?: return exitWithError("No embedding model configured.")
+        val model = embeddingModel ?: springEmbeddingModel ?: return exitWithError("No embedding model configured.")
 
         // Pre-flight: verify embedding provider is usable before any file I/O
         try {
