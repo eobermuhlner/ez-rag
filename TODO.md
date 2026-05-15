@@ -1,0 +1,4 @@
+- make --question a positional parameter for sub-commands that need it (e.g., `search`, `query`), so that users can run `ez-rag search "What is X?"` without needing `--question`.
+- mcp-server with option to run as stdio or http protocol
+- fix very slow startup time
+- default configuration should allow using ez-rag immediately (e.g. ONNX embedding + dummy model)

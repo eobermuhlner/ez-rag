@@ -40,6 +40,7 @@ dependencies {
     implementation("org.springframework.ai:spring-ai-starter-model-transformers")
     implementation("org.springframework.ai:spring-ai-vector-store")
     implementation("org.springframework.ai:spring-ai-pdf-document-reader")
+    implementation("org.springframework.ai:spring-ai-starter-mcp-server")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 

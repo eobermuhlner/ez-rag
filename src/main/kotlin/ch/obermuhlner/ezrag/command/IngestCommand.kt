@@ -1,10 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.DirectoryWalker
-import ch.obermuhlner.ezrag.ingestion.DocumentChunker
-import ch.obermuhlner.ezrag.ingestion.DocumentLoader
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
-import org.springframework.ai.document.Document
+import ch.obermuhlner.ezrag.ingestion.IngestService
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
@@ -66,61 +62,21 @@ class IngestCommand(
         val resolvedChunkSize = chunkSize ?: chunkSizeOption ?: 1000
         val resolvedChunkOverlap = chunkOverlap ?: chunkOverlapOption ?: 200
 
-        val loader = DocumentLoader()
-        val chunker = DocumentChunker(resolvedChunkSize, resolvedChunkOverlap)
-        val repository = VectorStoreRepository(model, resolvedStorePath)
-        val directoryWalker = DirectoryWalker(warningWriter)
-        repository.load()
+        val service = IngestService(model, resolvedStorePath, resolvedChunkSize, resolvedChunkOverlap, warningWriter)
 
-        var filesIngested = 0
-        var chunksCreated = 0
-        var skipped = 0
-
-        val resolvedPaths = files.flatMap { file ->
-            if (file.isDirectory) {
-                directoryWalker.walk(file.toPath())
-            } else {
-                listOf(file.toPath())
-            }
-        }
-
-        for (path in resolvedPaths) {
-            val mtime = path.toFile().lastModified()
-            val sourceKey = path.toString()
-            if (repository.isAlreadyIngested(sourceKey, mtime)) {
-                skipped++
-                continue
-            }
-            if (verbose) {
+        if (verbose) {
+            service.onFileLoaded = { path, chunks ->
                 outputWriter.println("Loading: $path")
-            }
-            val documents = loader.load(path)
-            val chunks = withMtime(chunker.split(documents), mtime)
-            if (verbose) {
                 chunks.forEachIndexed { index, chunk ->
                     val tokenCount = chunk.text?.split(Regex("\\s+"))?.size ?: 0
                     outputWriter.println("Chunk $index: $tokenCount tokens")
                 }
             }
-            repository.add(chunks)
-            filesIngested++
-            chunksCreated += chunks.size
         }
 
-        repository.save()
-
-        outputWriter.println("$filesIngested files ingested, $chunksCreated chunks created, $skipped skipped")
+        val result = service.ingest(files)
+        outputWriter.println("${result.filesIngested} files ingested, ${result.chunksCreated} chunks created, ${result.skipped} skipped")
         return 0
-    }
-
-    private fun withMtime(documents: List<Document>, mtime: Long): List<Document> {
-        return documents.map { doc ->
-            Document.builder()
-                .id(doc.id)
-                .text(doc.text)
-                .metadata(doc.metadata + mapOf("mtime" to mtime))
-                .build()
-        }
     }
 
     private fun exitWithError(message: String): Int {
