@@ -1,0 +1,373 @@
+package ch.obermuhlner.ezrag.command
+
+import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.rag.OutputFormatter
+import ch.obermuhlner.ezrag.rag.RagPipeline
+import ch.obermuhlner.ezrag.rag.RagQuery
+import ch.obermuhlner.ezrag.rag.RagResult
+import ch.obermuhlner.ezrag.rag.SourceReference
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import org.springframework.ai.chat.messages.AssistantMessage
+import org.springframework.ai.chat.model.ChatModel
+import org.springframework.ai.chat.model.ChatResponse
+import org.springframework.ai.chat.model.Generation
+import org.springframework.ai.document.Document
+import org.springframework.ai.embedding.Embedding
+import org.springframework.ai.embedding.EmbeddingModel
+import org.springframework.ai.embedding.EmbeddingRequest
+import org.springframework.ai.embedding.EmbeddingResponse
+import java.io.ByteArrayInputStream
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.nio.file.Path
+
+class QueryCommandTest {
+
+    private val fakeEmbeddingModel: EmbeddingModel = object : EmbeddingModel {
+        override fun call(request: EmbeddingRequest): EmbeddingResponse {
+            val embeddings = request.instructions.mapIndexed { idx, _ ->
+                Embedding(FloatArray(4) { 0.25f }, idx)
+            }
+            return EmbeddingResponse(embeddings)
+        }
+
+        override fun embed(document: Document): FloatArray = FloatArray(4) { 0.25f }
+        override fun embed(text: String): FloatArray = FloatArray(4) { 0.25f }
+
+        override fun embedForResponse(texts: List<String>): EmbeddingResponse {
+            val embeddings = texts.mapIndexed { idx, _ ->
+                Embedding(FloatArray(4) { 0.25f }, idx)
+            }
+            return EmbeddingResponse(embeddings)
+        }
+
+        override fun dimensions(): Int = 4
+    }
+
+    private val stubChatModel: ChatModel = ChatModel { _ ->
+        ChatResponse(listOf(Generation(AssistantMessage("Stub answer"))))
+    }
+
+    private fun createPopulatedRepository(storePath: Path): VectorStoreRepository {
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        repo.load()
+        val doc = Document.builder()
+            .text("Test content for querying.")
+            .metadata(mapOf("source" to "test.txt", "chunk_index" to 0, "mtime" to 1000L))
+            .build()
+        repo.add(listOf(doc))
+        repo.save()
+        return repo
+    }
+
+    private fun createQueryCommand(
+        storePath: Path,
+        out: StringWriter,
+        err: StringWriter,
+        inputStream: ByteArrayInputStream = ByteArrayInputStream(ByteArray(0)),
+        pipeline: RagPipeline? = null,
+        formatter: OutputFormatter = OutputFormatter(),
+    ): QueryCommand {
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        repo.load()
+        val ragPipeline = pipeline ?: RagPipeline(repo, stubChatModel)
+        return QueryCommand(
+            storePathOverride = storePath,
+            ragPipeline = ragPipeline,
+            outputFormatter = formatter,
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = inputStream,
+        )
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 1: non-existent store exits 1 and stdout contains "ingest"
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `non-existent store exits code 1 and output contains word ingest`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("nonexistent.json")
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createQueryCommand(storePath, out, err)
+        cmd.question = "hello"
+
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(1)
+        assertThat(out.toString()).containsIgnoringCase("ingest")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 2: --question with populated store exits 0 and answer on outputWriter
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--question with populated store exits code 0 and answer on outputWriter`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("vector-store.json")
+        createPopulatedRepository(storePath)
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createQueryCommand(storePath, out, err)
+        cmd.question = "hello"
+
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(out.toString()).contains("Stub answer")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 3: absence of --question reads stdin until EOF
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `absence of --question reads stdin until EOF and uses as question`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("vector-store.json")
+        createPopulatedRepository(storePath)
+
+        val stdinContent = "Question from stdin"
+        val inputStream = ByteArrayInputStream(stdinContent.toByteArray())
+        val capturedQueries = mutableListOf<RagQuery>()
+        val capturingPipeline = object : RagPipeline(
+            VectorStoreRepository(fakeEmbeddingModel, storePath).also { it.load() },
+            stubChatModel
+        ) {
+            override fun query(ragQuery: RagQuery): RagResult {
+                capturedQueries.add(ragQuery)
+                return RagResult("Answer", emptyList())
+            }
+        }
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = QueryCommand(
+            storePathOverride = storePath,
+            ragPipeline = capturingPipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = inputStream,
+        )
+        // no question set
+
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(capturedQueries).hasSize(1)
+        assertThat(capturedQueries[0].question).isEqualTo(stdinContent)
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 4: empty stdin exits code 1 with message "No question provided"
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `empty stdin exits code 1 with message No question provided`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("vector-store.json")
+        createPopulatedRepository(storePath)
+
+        val inputStream = ByteArrayInputStream(ByteArray(0))
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createQueryCommand(storePath, out, err, inputStream)
+        // no question set
+
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(1)
+        assertThat(out.toString()).contains("No question provided")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 5: --output json produces JSON-formatted output
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--output json produces JSON-formatted output`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("vector-store.json")
+        createPopulatedRepository(storePath)
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createQueryCommand(storePath, out, err)
+        cmd.question = "hello"
+        cmd.outputFormat = "json"
+
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        val output = out.toString().trim()
+        assertThat(output).startsWith("{")
+        assertThat(output).contains("\"answer\"")
+        assertThat(output).contains("\"sources\"")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 6: --top-k N passes topK=N to RagPipeline via RagQuery
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--top-k 2 passes topK=2 to RagPipeline via RagQuery`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("vector-store.json")
+        createPopulatedRepository(storePath)
+
+        val capturedQueries = mutableListOf<RagQuery>()
+        val capturingPipeline = object : RagPipeline(
+            VectorStoreRepository(fakeEmbeddingModel, storePath).also { it.load() },
+            stubChatModel
+        ) {
+            override fun query(ragQuery: RagQuery): RagResult {
+                capturedQueries.add(ragQuery)
+                return RagResult("Answer", emptyList())
+            }
+        }
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = QueryCommand(
+            storePathOverride = storePath,
+            ragPipeline = capturingPipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        cmd.question = "hello"
+        cmd.topK = 2
+
+        cmd.call()
+
+        assertThat(capturedQueries).hasSize(1)
+        assertThat(capturedQueries[0].topK).isEqualTo(2)
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 7: --model "claude-3-5-sonnet" passes modelOverride to RagQuery
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--model claude-3-5-sonnet passes modelOverride to RagQuery`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("vector-store.json")
+        createPopulatedRepository(storePath)
+
+        val capturedQueries = mutableListOf<RagQuery>()
+        val capturingPipeline = object : RagPipeline(
+            VectorStoreRepository(fakeEmbeddingModel, storePath).also { it.load() },
+            stubChatModel
+        ) {
+            override fun query(ragQuery: RagQuery): RagResult {
+                capturedQueries.add(ragQuery)
+                return RagResult("Answer", emptyList())
+            }
+        }
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = QueryCommand(
+            storePathOverride = storePath,
+            ragPipeline = capturingPipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        cmd.question = "hello"
+        cmd.modelOverride = "claude-3-5-sonnet"
+
+        cmd.call()
+
+        assertThat(capturedQueries).hasSize(1)
+        assertThat(capturedQueries[0].modelOverride).isEqualTo("claude-3-5-sonnet")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 8: --system-prompt "Custom" passes systemPrompt to RagQuery
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--system-prompt Custom passes systemPrompt to RagQuery`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("vector-store.json")
+        createPopulatedRepository(storePath)
+
+        val capturedQueries = mutableListOf<RagQuery>()
+        val capturingPipeline = object : RagPipeline(
+            VectorStoreRepository(fakeEmbeddingModel, storePath).also { it.load() },
+            stubChatModel
+        ) {
+            override fun query(ragQuery: RagQuery): RagResult {
+                capturedQueries.add(ragQuery)
+                return RagResult("Answer", emptyList())
+            }
+        }
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = QueryCommand(
+            storePathOverride = storePath,
+            ragPipeline = capturingPipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        cmd.question = "hello"
+        cmd.systemPromptOverride = "Custom prompt"
+
+        cmd.call()
+
+        assertThat(capturedQueries).hasSize(1)
+        assertThat(capturedQueries[0].systemPrompt).isEqualTo("Custom prompt")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 9: --verbose writes source details to errorWriter
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--verbose writes source info to errorWriter`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("vector-store.json")
+        createPopulatedRepository(storePath)
+
+        val fixedResult = RagResult(
+            answer = "Answer",
+            sources = listOf(
+                SourceReference(
+                    filePath = "doc/source.txt",
+                    chunkIndex = 0,
+                    similarityScore = 0.87,
+                    excerpt = "Some excerpt"
+                )
+            )
+        )
+        val stubPipeline = object : RagPipeline(
+            VectorStoreRepository(fakeEmbeddingModel, storePath).also { it.load() },
+            stubChatModel
+        ) {
+            override fun query(ragQuery: RagQuery): RagResult = fixedResult
+        }
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = QueryCommand(
+            storePathOverride = storePath,
+            ragPipeline = stubPipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        cmd.question = "hello"
+        cmd.verbose = true
+
+        cmd.call()
+
+        val errOutput = err.toString()
+        assertThat(errOutput).contains("doc/source.txt")
+        assertThat(errOutput).contains("0.87")
+    }
+}

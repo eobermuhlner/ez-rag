@@ -1,0 +1,20 @@
+package ch.obermuhlner.ezrag.rag
+
+data class RagQuery(
+    val question: String,
+    val topK: Int,
+    val systemPrompt: String,
+    val modelOverride: String?
+)
+
+data class SourceReference(
+    val filePath: String,
+    val chunkIndex: Int,
+    val similarityScore: Double,
+    val excerpt: String
+)
+
+data class RagResult(
+    val answer: String,
+    val sources: List<SourceReference>
+)

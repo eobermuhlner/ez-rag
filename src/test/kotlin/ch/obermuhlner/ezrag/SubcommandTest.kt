@@ -83,8 +83,10 @@ class SubcommandTest {
 
     @Test
     fun `query accepts --question flag`() {
+        // Picocli accepts the argument; the command exits non-zero because
+        // no vector store exists in the non-Spring test context.
         val exitCode = commandLine.execute("query", "--question", "who are you?")
-        assertThat(exitCode).isEqualTo(0)
+        assertThat(exitCode).isNotEqualTo(CommandLine.ExitCode.USAGE)
     }
 
     @Test

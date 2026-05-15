@@ -1,0 +1,230 @@
+package ch.obermuhlner.ezrag.rag
+
+import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import org.springframework.ai.chat.messages.SystemMessage
+import org.springframework.ai.chat.messages.UserMessage
+import org.springframework.ai.chat.messages.AssistantMessage
+import org.springframework.ai.chat.model.ChatModel
+import org.springframework.ai.chat.model.ChatResponse
+import org.springframework.ai.chat.model.Generation
+import org.springframework.ai.chat.prompt.Prompt
+import org.springframework.ai.document.Document
+import org.springframework.ai.embedding.Embedding
+import org.springframework.ai.embedding.EmbeddingModel
+import org.springframework.ai.embedding.EmbeddingRequest
+import org.springframework.ai.embedding.EmbeddingResponse
+import java.nio.file.Path
+
+class RagPipelineTest {
+
+    private val fakeEmbeddingModel: EmbeddingModel = object : EmbeddingModel {
+        override fun call(request: EmbeddingRequest): EmbeddingResponse {
+            val embeddings = request.instructions.mapIndexed { idx, _ ->
+                Embedding(FloatArray(4) { 0.25f }, idx)
+            }
+            return EmbeddingResponse(embeddings)
+        }
+
+        override fun embed(document: Document): FloatArray = FloatArray(4) { 0.25f }
+        override fun embed(text: String): FloatArray = FloatArray(4) { 0.25f }
+
+        override fun embedForResponse(texts: List<String>): EmbeddingResponse {
+            val embeddings = texts.mapIndexed { idx, _ ->
+                Embedding(FloatArray(4) { 0.25f }, idx)
+            }
+            return EmbeddingResponse(embeddings)
+        }
+
+        override fun dimensions(): Int = 4
+    }
+
+    private fun createRepository(tempDir: Path): VectorStoreRepository {
+        val storePath = tempDir.resolve("vector-store.json")
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        repo.load()
+        return repo
+    }
+
+    @Test
+    fun `empty store returns no-documents result without invoking ChatModel`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        var chatModelInvoked = false
+        val stubChatModel: ChatModel = ChatModel { _ ->
+            chatModelInvoked = true
+            ChatResponse(listOf(Generation(AssistantMessage("should not be called"))))
+        }
+
+        val pipeline = RagPipeline(repository, stubChatModel)
+        val query = RagQuery(question = "What is X?", topK = 5, systemPrompt = "", modelOverride = null)
+        val result = pipeline.query(query)
+
+        assertThat(result.answer).isEqualTo("No relevant documents found")
+        assertThat(result.sources).isEmpty()
+        assertThat(chatModelInvoked).isFalse()
+    }
+
+    @Test
+    fun `UserMessage sent to ChatModel contains chunk text with Context label and ends with user question`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        // Add a document to the store
+        val doc = Document.builder()
+            .text("The capital of France is Paris.")
+            .metadata(mapOf("source" to "geography.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc))
+
+        var capturedPrompt: Prompt? = null
+        val capturingChatModel: ChatModel = ChatModel { prompt ->
+            capturedPrompt = prompt
+            ChatResponse(listOf(Generation(AssistantMessage("Paris"))))
+        }
+
+        val pipeline = RagPipeline(repository, capturingChatModel)
+        val query = RagQuery(question = "What is the capital of France?", topK = 5, systemPrompt = "", modelOverride = null)
+        pipeline.query(query)
+
+        assertThat(capturedPrompt).isNotNull()
+        val userMessage = capturedPrompt!!.instructions
+            .filterIsInstance<UserMessage>()
+            .firstOrNull()
+        assertThat(userMessage).isNotNull()
+        val content = userMessage!!.text
+        assertThat(content).contains("--- Context:")
+        assertThat(content).contains("The capital of France is Paris.")
+        assertThat(content).endsWith("What is the capital of France?")
+    }
+
+    @Test
+    fun `topK=1 with two chunks in store produces exactly one source`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        // Add two documents
+        val doc1 = Document.builder()
+            .text("Chunk one content.")
+            .metadata(mapOf("source" to "file1.txt", "chunk_index" to 0))
+            .build()
+        val doc2 = Document.builder()
+            .text("Chunk two content.")
+            .metadata(mapOf("source" to "file2.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc1, doc2))
+
+        val stubChatModel: ChatModel = ChatModel { _ ->
+            ChatResponse(listOf(Generation(AssistantMessage("answer"))))
+        }
+
+        val pipeline = RagPipeline(repository, stubChatModel)
+        val query = RagQuery(question = "Tell me something", topK = 1, systemPrompt = "", modelOverride = null)
+        val result = pipeline.query(query)
+
+        assertThat(result.sources).hasSize(1)
+    }
+
+    @Test
+    fun `SourceReference excerpt is truncated to at most 200 characters`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val longText = "A".repeat(300)
+        val doc = Document.builder()
+            .text(longText)
+            .metadata(mapOf("source" to "long.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc))
+
+        val stubChatModel: ChatModel = ChatModel { _ ->
+            ChatResponse(listOf(Generation(AssistantMessage("answer"))))
+        }
+
+        val pipeline = RagPipeline(repository, stubChatModel)
+        val query = RagQuery(question = "What?", topK = 5, systemPrompt = "", modelOverride = null)
+        val result = pipeline.query(query)
+
+        assertThat(result.sources).isNotEmpty()
+        result.sources.forEach { source ->
+            assertThat(source.excerpt.length).isLessThanOrEqualTo(200)
+        }
+    }
+
+    @Test
+    fun `SourceReference chunkIndex equals the integer stored in chunk_index metadata`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc = Document.builder()
+            .text("Some chunk text.")
+            .metadata(mapOf("source" to "test.txt", "chunk_index" to 7))
+            .build()
+        repository.add(listOf(doc))
+
+        val stubChatModel: ChatModel = ChatModel { _ ->
+            ChatResponse(listOf(Generation(AssistantMessage("answer"))))
+        }
+
+        val pipeline = RagPipeline(repository, stubChatModel)
+        val query = RagQuery(question = "What?", topK = 5, systemPrompt = "", modelOverride = null)
+        val result = pipeline.query(query)
+
+        assertThat(result.sources).isNotEmpty()
+        assertThat(result.sources.first().chunkIndex).isEqualTo(7)
+    }
+
+    @Test
+    fun `blank systemPrompt uses default RAG system prompt in SystemMessage`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc = Document.builder()
+            .text("Some content.")
+            .metadata(mapOf("source" to "test.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc))
+
+        var capturedPrompt: Prompt? = null
+        val capturingChatModel: ChatModel = ChatModel { prompt ->
+            capturedPrompt = prompt
+            ChatResponse(listOf(Generation(AssistantMessage("answer"))))
+        }
+
+        val pipeline = RagPipeline(repository, capturingChatModel)
+        val query = RagQuery(question = "What?", topK = 5, systemPrompt = "", modelOverride = null)
+        pipeline.query(query)
+
+        val systemMessage = capturedPrompt!!.instructions
+            .filterIsInstance<SystemMessage>()
+            .firstOrNull()
+        assertThat(systemMessage).isNotNull()
+        assertThat(systemMessage!!.text).contains(RagPipeline.DEFAULT_RAG_SYSTEM_PROMPT)
+    }
+
+    @Test
+    fun `non-blank systemPrompt replaces default system prompt in SystemMessage`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc = Document.builder()
+            .text("Some content.")
+            .metadata(mapOf("source" to "test.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc))
+
+        var capturedPrompt: Prompt? = null
+        val capturingChatModel: ChatModel = ChatModel { prompt ->
+            capturedPrompt = prompt
+            ChatResponse(listOf(Generation(AssistantMessage("answer"))))
+        }
+
+        val pipeline = RagPipeline(repository, capturingChatModel)
+        val customPrompt = "You are a domain expert. Only use the context."
+        val query = RagQuery(question = "What?", topK = 5, systemPrompt = customPrompt, modelOverride = null)
+        pipeline.query(query)
+
+        val systemMessage = capturedPrompt!!.instructions
+            .filterIsInstance<SystemMessage>()
+            .firstOrNull()
+        assertThat(systemMessage).isNotNull()
+        assertThat(systemMessage!!.text).isEqualTo(customPrompt)
+        assertThat(systemMessage.text).doesNotContain(RagPipeline.DEFAULT_RAG_SYSTEM_PROMPT)
+    }
+}

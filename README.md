@@ -53,10 +53,10 @@ ez-rag query --provider ollama --embedding-provider ollama --question "What are 
 |----------------------|-------------------------------------------------------------------------------------------------------|
 | `ingest <file\|dir>` | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`.        |
 | `query`              | Retrieve relevant chunks and answer using an LLM. Reads question from `--question` or stdin.          |
-| `search`             | Pure embedding search returning raw chunks without LLM involvement. Reads from `--question` or stdin. |
 | `status`             | Show the vector store path, chunk count, and list of ingested documents.                              |
-| `mcp-server`         | Run as an MCP server over stdio (for Claude Code and other agentic tools).                            |
-| `shell`              | Interactive REPL mode.                                                                                |
+| `search`             | _(not yet implemented)_ Pure embedding search returning raw chunks without LLM involvement.           |
+| `mcp-server`         | _(not yet implemented)_ Run as an MCP server over stdio (for Claude Code and other agentic tools).    |
+| `shell`              | _(not yet implemented)_ Interactive REPL mode.                                                        |
 
 Every command accepts `--help` for details.
 
@@ -71,7 +71,7 @@ These flags apply to all subcommands:
 | `--model`              | provider default         | Override the chat model name                   |
 | `--embedding-model`    | provider default         | Override the embedding model name              |
 | `--ollama-url`         | `http://localhost:11434` | Ollama base URL                                |
-| `--verbose` / `-v`     | off                      | Enable debug logging                           |
+| `--verbose` / `-v`     | off                      | Enable debug logging; for `query`, also prints each source file path, similarity score, and chunk index to stderr |
 
 ## Providers
 
