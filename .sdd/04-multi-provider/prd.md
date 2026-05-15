@@ -21,13 +21,13 @@ Implement runtime-selectable chat and embedding providers via `--provider` and `
 11. As a user, I want the ONNX embedding model (`all-MiniLM-L6-v2`) downloaded automatically on first use, so that I don't have to manually download model files.
 12. As a user, I want API keys read from `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` environment variables, so that secrets are never in config files.
 13. As a user, I want the Ollama base URL configurable via `OLLAMA_BASE_URL` or `--ollama-url`, so that I can point to a non-default Ollama instance.
-14. As a developer, I want the provider selection logic isolated in a `ProviderFactory` module, so that adding a new provider only requires adding a new branch in one place.
+14. As a developer, I want the provider selection logic isolated in a `ProviderConfiguration` module, so that adding a new provider only requires adding a new branch in one place.
 15. As a developer, I want all command modules to depend only on `ChatModel` and `EmbeddingModel` interfaces, so that provider selection is entirely transparent to the rest of the application.
 
 ## Implementation Decisions
 
 - **Dependencies**: Include all provider Spring AI starters in `build.gradle.kts`. Disable auto-configuration for all providers via `spring.autoconfigure.exclude` in `application.yml`. Provider beans are created manually in a `ProviderConfiguration` class based on runtime config.
-- **ProviderFactory / ProviderConfiguration**: A `@Configuration` class with `@Bean` methods for `ChatModel` and `EmbeddingModel`. Each method reads `ConfigService` to determine the provider, then instantiates and configures the correct Spring AI client. No Spring profiles used.
+- **ProviderConfiguration**: A `@Configuration` class with `@Bean` methods for `ChatModel` and `EmbeddingModel`. Each method reads `ConfigService` to determine the provider, then instantiates and configures the correct Spring AI client. No Spring profiles used.
 - **ChatModel providers**:
   - `openai`: `OpenAiChatModel` with `OpenAiApi` configured from `OPENAI_API_KEY`. Default model: `gpt-4o-mini`.
   - `anthropic`: `AnthropicChatModel` configured from `ANTHROPIC_API_KEY`. Default model: `claude-sonnet-4-6`.
@@ -42,7 +42,7 @@ Implement runtime-selectable chat and embedding providers via `--provider` and `
 ## Testing Decisions
 
 - **What makes a good test**: Test that the correct `ChatModel` / `EmbeddingModel` subtype is instantiated for each provider string. Do not test that Spring AI's models actually call the API.
-- **ProviderFactory**: Unit-test by constructing `ProviderConfiguration` with mock `ConfigService` objects for each provider value. Assert the returned bean is the correct subtype. Test that an invalid provider string throws with a descriptive message.
+- **ProviderConfiguration**: Unit-test by constructing `ProviderConfiguration` with mock `ConfigService` objects for each provider value. Assert the returned bean is the correct subtype. Test that an invalid provider string throws with a descriptive message.
 - **No live API tests**: Provider integration tests (actually calling OpenAI, Anthropic, Ollama) are out of scope for the automated test suite; they require live credentials and network.
 - **ONNX smoke test**: A single integration test that instantiates `TransformersEmbeddingModel` with `all-MiniLM-L6-v2` and calls `embed("hello")` — validates the model loads correctly on CI without needing a GPU.
 

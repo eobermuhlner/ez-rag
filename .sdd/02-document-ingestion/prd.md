@@ -48,6 +48,15 @@ Implement the `ingest` subcommand. It accepts one or more file or directory path
 - **DirectoryWalker**: Unit-test with a temp directory containing mixed file types. Assert that only supported extensions are returned.
 - **Integration test**: End-to-end `ingest` of a small `.txt` file to a temp store path, then assert the store file exists and is non-empty.
 
+## Status Subcommand
+
+The `status` subcommand has no dedicated PRD; its behavior is specified here since it depends entirely on `VectorStoreRepository`.
+
+- **Output (text)**: Three lines: `Store: <absolute path>`, `Chunks: <count>`, then a blank line followed by a list of ingested source files (one per line, sorted alphabetically), each showing path and chunk count: `  docs/arch.md  (12 chunks)`.
+- **Output (JSON)**: `{ "storePath": "...", "chunkCount": 42, "documents": [{ "file": "...", "chunks": 12 }] }`.
+- **Error**: If the store file does not exist, prints `No vector store found at <path>. Run 'ez-rag ingest' first.` and exits non-zero.
+- **Implementation**: `StatusCommand` calls `VectorStoreRepository.getMetadata()` and passes the result to `OutputFormatter`. No new modules required.
+
 ## Out of Scope
 
 - Word (`.docx`), HTML, and other formats — can be added later.

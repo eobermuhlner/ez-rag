@@ -14,6 +14,7 @@ Setup this project as follows:
 
 - `ingest <file|dir>` — ingest files or directories (recursive by default), supports `.txt`, `.pdf`, `.md`
 - `query [--question "..."]` — query the vector store; reads from stdin if `--question` is omitted
+- `search [--question "..."]` — pure embedding search returning raw chunks; no LLM involved; reads from stdin if `--question` is omitted
 - `status` — show vector store path, number of chunks, and list of ingested documents
 - `mcp-server` — run as an MCP server using stdio transport (for Claude Code and other agentic tools)
 - `shell` — interactive REPL mode (secondary use case)

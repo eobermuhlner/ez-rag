@@ -17,15 +17,16 @@ Implement the `shell` subcommand. When invoked, `ez-rag shell` starts an interac
 7. As a user, I want `--provider`, `--embedding-provider`, `--model`, `--top-k`, and `--store` flags to work with `shell` the same way they work with `query`, so that I can configure the REPL session.
 8. As a user, I want to type `/help` in the REPL to see available commands, so that I can discover REPL-specific commands.
 9. As a user, I want to type `/status` in the REPL to see vector store info without exiting, so that I can check the store state during exploration.
-10. As a user, I want to type `/verbose` to toggle verbose mode on/off during a session, so that I can inspect retrieval details for a specific question.
+10. As a user, I want to type `/search <question>` in the REPL to run a pure embedding search without LLM generation, so that I can inspect raw retrieval results mid-session.
+11. As a user, I want to type `/verbose` to toggle verbose mode on/off during a session, so that I can inspect retrieval details for a specific question.
 11. As a user, I want blank lines ignored rather than treated as empty queries, so that accidental Enter presses don't produce unhelpful responses.
 12. As a user, I want errors (e.g., LLM API failure) on a single question to print an error message and continue the REPL rather than exiting, so that one bad query doesn't end the session.
 
 ## Implementation Decisions
 
-- **ShellCommand**: A picocli `@Command` that starts the REPL loop. Reuses `RagPipeline`, `VectorStoreRepository`, and `OutputFormatter` from PRDs 02–04 — no new core logic.
+- **ShellCommand**: A picocli `@Command` that starts the REPL loop. Reuses `RagPipeline`, `EmbeddingSearchPipeline`, `VectorStoreRepository`, and `OutputFormatter` from PRDs 02–04 and 07 — no new core logic.
 - **REPL loop**: Uses `java.io.BufferedReader` on `System.in`. Prompt string (`> `) is written to `System.err`. EOF from `System.in` exits cleanly. Exceptions from `RagPipeline` are caught per iteration, printed to stderr, and the loop continues.
-- **REPL commands**: Lines starting with `/` are treated as REPL meta-commands (`/help`, `/status`, `/verbose`, `/exit`). All other lines are passed to `RagPipeline` as questions.
+- **REPL commands**: Lines starting with `/` are treated as REPL meta-commands (`/help`, `/status`, `/search <question>`, `/verbose`, `/exit`). All other lines are passed to `RagPipeline` as questions. `/search` delegates to `EmbeddingSearchPipeline` and prints results using the same text format as the `search` subcommand.
 - **No readline/history**: No dependency on JLine or similar in this PRD. Basic `BufferedReader` is sufficient for the initial implementation. JLine can be added as a follow-up for history and completion.
 - **Output format**: Answers are always printed to stdout. The prompt and error messages go to stderr. `--output json` applies to each answer, same as in `query`.
 
@@ -42,7 +43,7 @@ Implement the `shell` subcommand. When invoked, `ez-rag shell` starts an interac
 - Tab completion for REPL commands.
 - Multi-line question input within the REPL.
 - Session-level context / follow-up questions that reference previous answers.
-- This is a secondary use case; it should be implemented after PRDs 01–05 are stable.
+- This is a secondary use case; it should be implemented after PRDs 01–05 and PRD 07 are stable, since the `/search` meta-command depends on `EmbeddingSearchPipeline` from PRD 07. Recommended implementation order: 01 → 04 → 02 → 03 → 07 → 05 → 06.
 
 ## Further Notes
 

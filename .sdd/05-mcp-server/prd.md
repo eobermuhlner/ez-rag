@@ -10,8 +10,9 @@ Implement the `mcp-server` subcommand. When invoked, `ez-rag mcp-server` starts 
 
 1. As a Claude Code user, I want to add `ez-rag mcp-server` to my MCP config, so that Claude Code can call `ingest` and `query` as structured tools.
 2. As an agentic tool, I want to call the `query` MCP tool with `{ "question": "..." }` and receive `{ "answer": "...", "sources": [...] }`, so that I get structured data without parsing text.
-3. As an agentic tool, I want to call the `ingest` MCP tool with `{ "path": "docs/" }`, so that I can trigger document ingestion programmatically.
-4. As an agentic tool, I want to call the `status` MCP tool and receive structured store metadata, so that I can check whether ingestion has been done before querying.
+3. As an agentic tool, I want to call the `search` MCP tool with `{ "question": "..." }` and receive `{ "chunks": [...] }`, so that I can retrieve raw matching chunks and do my own reasoning without delegating generation to a second LLM.
+4. As an agentic tool, I want to call the `ingest` MCP tool with `{ "path": "docs/" }`, so that I can trigger document ingestion programmatically.
+5. As an agentic tool, I want to call the `status` MCP tool and receive structured store metadata, so that I can check whether ingestion has been done before querying.
 5. As a user, I want `ez-rag mcp-server` to start instantly and stay running, accepting MCP requests over stdin and writing responses to stdout, so that the MCP host does not have to restart it between calls.
 6. As a user, I want the MCP server to load the vector store from disk at startup, so that queries are fast without reloading on every call.
 7. As a user, I want the MCP server to save the vector store after each `ingest` call, so that ingested data is persisted immediately.
@@ -24,11 +25,12 @@ Implement the `mcp-server` subcommand. When invoked, `ez-rag mcp-server` starts 
 ## Implementation Decisions
 
 - **MCP framework**: Use Spring AI's MCP server support (`spring-ai-mcp-server-spring-boot-starter`). Configure it for stdio transport in `application.yml` when the `mcp-server` subcommand is active.
-- **MCP tool registration**: Each tool is a Spring bean annotated with Spring AI's `@Tool` annotation (or equivalent MCP tool registration API). The three tools are:
+- **MCP tool registration**: Each tool is a Spring bean annotated with Spring AI's `@Tool` annotation (or equivalent MCP tool registration API). The four tools are:
   - `ingest(path: String, chunkSize: Int?, chunkOverlap: Int?)` → `IngestResult`
   - `query(question: String, topK: Int?, provider: String?, model: String?)` → `RagResult`
+  - `search(question: String, topK: Int?, minScore: Double?)` → `SearchResult`
   - `status()` → `StoreStatus`
-- **Reuse**: `McpServerCommand` wires the same `RagPipeline`, `DocumentLoader`, `DocumentChunker`, `DirectoryWalker`, and `VectorStoreRepository` beans as the CLI commands. No logic is duplicated.
+- **Reuse**: `McpServerCommand` wires the same `RagPipeline`, `EmbeddingSearchPipeline`, `DocumentLoader`, `DocumentChunker`, `DirectoryWalker`, and `VectorStoreRepository` beans as the CLI commands. No logic is duplicated.
 - **Startup vector store load**: `McpServerCommand` calls `VectorStoreRepository.load()` on startup, so the store is in memory for the lifetime of the server process.
 - **Logging isolation**: When `mcp-server` is the active subcommand, the logging configuration must route all output to stderr (not stdout), since stdout is the MCP communication channel.
 - **Error handling**: Exceptions thrown by tool implementations are caught and returned as MCP error responses with a human-readable message.

@@ -29,7 +29,7 @@ Scaffold the `ez-rag` project with Kotlin, Spring Boot 3.4.x, Gradle Kotlin DSL,
 
 - **Build**: Gradle Kotlin DSL (`build.gradle.kts`). Spring Boot Gradle Plugin for fat JAR (`bootJar`). Gradle Application Plugin for distribution scripts. The `mainClass` is set to the picocli top-level command.
 - **CLI entry point**: A `@SpringBootApplication` class that implements `CommandLineRunner` and delegates to picocli's `CommandLine` dispatcher. This wires Spring DI into picocli command beans.
-- **Subcommand stubs**: `IngestCommand`, `QueryCommand`, `StatusCommand`, `McpServerCommand`, `ShellCommand` — each a Spring-managed picocli `@Command` bean. In this PRD they are stubs; other PRDs implement them.
+- **Subcommand stubs**: `IngestCommand`, `QueryCommand`, `SearchCommand`, `StatusCommand`, `McpServerCommand`, `ShellCommand` — each a Spring-managed picocli `@Command` bean. In this PRD they are stubs; other PRDs implement them. (`SearchCommand` is specified in PRD 07 but stubbed here alongside the others.)
 - **ConfigService**: A single bean that merges config from (lowest to highest priority): `~/.ez-rag/config.yml` → environment variables → CLI flags. Exposes a typed config record/data class to the rest of the application. Config file is YAML parsed via Jackson or SnakeYAML.
 - **Logging**: `application.yml` sets root log level to `OFF` and Spring/Hibernate loggers to `OFF`. The `--verbose` flag programmatically sets the root logger to `DEBUG` before the Spring context starts.
 - **Spring Boot banner**: Disabled in `application.yml` (`spring.main.banner-mode=off`).
@@ -44,7 +44,7 @@ Scaffold the `ez-rag` project with Kotlin, Spring Boot 3.4.x, Gradle Kotlin DSL,
 
 ## Out of Scope
 
-- Actual implementation of `ingest`, `query`, `status`, `mcp-server`, `shell` — covered in PRDs 02–06.
+- Actual implementation of `ingest`, `query`, `search`, `status`, `mcp-server`, `shell` — covered in PRDs 02–07.
 - Provider-specific Spring AI configuration — covered in PRD 04.
 - CI/CD pipeline setup.
 - Windows-specific testing.
