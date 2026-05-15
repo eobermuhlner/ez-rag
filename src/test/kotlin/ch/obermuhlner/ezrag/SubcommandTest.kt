@@ -78,4 +78,16 @@ class SubcommandTest {
         val exitCode = commandLine.execute("ingest", "somefile.txt")
         assertThat(exitCode).isEqualTo(0)
     }
+
+    @Test
+    fun `query accepts --question flag`() {
+        val exitCode = commandLine.execute("query", "--question", "who are you?")
+        assertThat(exitCode).isEqualTo(0)
+    }
+
+    @Test
+    fun `search accepts --question flag`() {
+        val exitCode = commandLine.execute("search", "--question", "who are you?")
+        assertThat(exitCode).isEqualTo(0)
+    }
 }
