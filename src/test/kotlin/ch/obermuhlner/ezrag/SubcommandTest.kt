@@ -72,4 +72,10 @@ class SubcommandTest {
         val exitCode = commandLine.execute("ingest", "--verbose", "--help")
         assertThat(exitCode).isEqualTo(0)
     }
+
+    @Test
+    fun `ingest accepts positional file path argument`() {
+        val exitCode = commandLine.execute("ingest", "somefile.txt")
+        assertThat(exitCode).isEqualTo(0)
+    }
 }
