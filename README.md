@@ -55,7 +55,7 @@ ez-rag query --provider ollama --embedding-provider ollama --question "What are 
 | `query`              | Retrieve relevant chunks and answer using an LLM. Reads question from `--question` or stdin.          |
 | `status`             | Show the vector store path, chunk count, and list of ingested documents.                              |
 | `search`             | Pure embedding search returning raw chunks without LLM involvement. Reads question from `--question` or stdin. |
-| `mcp-server`         | _(not yet implemented)_ Run as an MCP server over stdio (for Claude Code and other agentic tools).    |
+| `mcp-server`         | Run as an MCP server over stdio (for Claude Code and other agentic tools).                            |
 | `shell`              | _(not yet implemented)_ Interactive REPL mode.                                                        |
 
 Every command accepts `--help` for details.
@@ -141,9 +141,15 @@ Documents are stored in a `SimpleVectorStore` JSON file. The default location is
 
 By default, responses are human-readable with source citations. Pass `--output json` for machine-readable output suitable for agentic pipelines.
 
-## MCP integration
+## MCP Server
 
-Run ez-rag as an MCP server so Claude Code or other tools can call it as a tool:
+`ez-rag mcp-server` starts a long-running MCP server that communicates over stdio using the MCP protocol. Claude Code and any other MCP-compatible agentic tool can call `ingest`, `query`, `search`, and `status` as structured tools without parsing CLI text output.
+
+> **Note:** You must ingest documents with the `ingest` tool (or the `ez-rag ingest` CLI command) before calling `status`, `search`, or `query`. The server loads the vector store from disk at startup.
+
+### Registering ez-rag in Claude Code
+
+Add the following to `.claude/mcp.json` in your project (create the file if it does not exist):
 
 ```json
 {
@@ -155,6 +161,92 @@ Run ez-rag as an MCP server so Claude Code or other tools can call it as a tool:
   }
 }
 ```
+
+To use a specific provider or a non-default store location:
+
+```json
+{
+  "mcpServers": {
+    "ez-rag": {
+      "command": "ez-rag",
+      "args": ["mcp-server", "--provider", "anthropic", "--embedding-provider", "onnx", "--store", ".ez-rag/vector-store.json"]
+    }
+  }
+}
+```
+
+### MCP server flags
+
+| Flag                   | Default                          | Description                                            |
+|------------------------|----------------------------------|--------------------------------------------------------|
+| `--provider`           | `openai`                         | Chat provider used by the `query` tool                 |
+| `--embedding-provider` | `openai`                         | Embedding provider used by all tools                   |
+| `--store`              | `.ez-rag/vector-store.json`      | Path to the vector store JSON file                     |
+| `--verbose` / `-v`     | off                              | Enable debug logging to stderr (does not affect stdout)|
+
+### Available MCP tools
+
+#### `status`
+
+Returns metadata about the vector store.
+
+No input parameters.
+
+| Return field | Type             | Description                             |
+|--------------|------------------|-----------------------------------------|
+| `storePath`  | String           | Absolute path of the vector store file  |
+| `chunkCount` | Int              | Total number of stored chunks           |
+| `documents`  | List of objects  | Each entry has `path` (String) and `chunkCount` (Int) |
+| `error`      | String or null   | Set when an error occurred              |
+
+#### `search`
+
+Searches the vector store using embeddings and returns matching chunks. No LLM is involved.
+
+| Parameter  | Type   | Required | Default | Description                                    |
+|------------|--------|----------|---------|------------------------------------------------|
+| `question` | String | yes      | —       | The search question or query text              |
+| `topK`     | Int    | no       | `5`     | Maximum number of chunks to return             |
+| `minScore` | Double | no       | `0.0`   | Minimum similarity score threshold (0.0–1.0)   |
+
+| Return field | Type            | Description                                 |
+|--------------|-----------------|---------------------------------------------|
+| `chunks`     | List of objects | Each entry has `filePath`, `chunkIndex`, `score`, `content` |
+| `error`      | String or null  | Set when an error occurred                  |
+
+#### `query`
+
+Retrieves relevant chunks and generates an answer using the configured LLM (RAG).
+
+| Parameter  | Type   | Required | Default          | Description                          |
+|------------|--------|----------|------------------|--------------------------------------|
+| `question` | String | yes      | —                | The question to ask                  |
+| `topK`     | Int    | no       | `5`              | Maximum number of chunks to retrieve |
+| `provider` | String | no       | server default   | Override the chat provider           |
+| `model`    | String | no       | provider default | Override the chat model              |
+
+| Return field | Type            | Description                                                              |
+|--------------|-----------------|--------------------------------------------------------------------------|
+| `answer`     | String          | LLM-generated answer                                                     |
+| `sources`    | List of objects | Each entry has `filePath`, `chunkIndex`, `similarityScore`, `excerpt`    |
+| `error`      | String or null  | Set when an error occurred                                               |
+
+#### `ingest`
+
+Ingests documents from a file or directory into the vector store. The store is saved to disk after each successful call.
+
+| Parameter      | Type   | Required | Default | Description                                  |
+|----------------|--------|----------|---------|----------------------------------------------|
+| `path`         | String | yes      | —       | Path to a file or directory to ingest        |
+| `chunkSize`    | Int    | no       | `1000`  | Chunk size in characters                     |
+| `chunkOverlap` | Int    | no       | `200`   | Overlap between consecutive chunks           |
+
+| Return field    | Type           | Description                              |
+|-----------------|----------------|------------------------------------------|
+| `filesIngested` | Int            | Number of files successfully ingested    |
+| `chunksCreated` | Int            | Number of chunks added to the store      |
+| `skipped`       | Int            | Files skipped because already up to date |
+| `error`         | String or null | Set when an error occurred               |
 
 ## Developer guide
 

@@ -140,25 +140,25 @@ Add the `ingest` MCP tool. When called with `path`, optional `chunkSize`, and op
 
 ### Implementation steps
 
-- [ ] Inject `IngestService` (or construct it) into the MCP tools bean using the same `EmbeddingModel` and store path as the other tools
-- [ ] Implement a `@Tool`-annotated `ingest(path: String, chunkSize: Int?, chunkOverlap: Int?)` method that resolves defaults, calls `IngestService.ingest()`, and returns `IngestResult`
-- [ ] Ensure `VectorStoreRepository.save()` is called after each successful ingest so data is persisted within the server process
-- [ ] Catch exceptions and return a structured error response
-- [ ] Write a unit test with a mocked `IngestService`
+- [x] Inject `IngestService` (or construct it) into the MCP tools bean using the same `EmbeddingModel` and store path as the other tools
+- [x] Implement a `@Tool`-annotated `ingest(path: String, chunkSize: Int?, chunkOverlap: Int?)` method that resolves defaults, calls `IngestService.ingest()`, and returns `IngestResult`
+- [x] Ensure `VectorStoreRepository.save()` is called after each successful ingest so data is persisted within the server process
+- [x] Catch exceptions and return a structured error response
+- [x] Write a unit test with a mocked `IngestService`
 
 ### Acceptance criteria
 
-- [ ] `tools/list` response contains a tool named `ingest`
-- [ ] Calling `ingest` with a valid `path` forwards path, chunkSize (default 1000), and chunkOverlap (default 200) to `IngestService`
-- [ ] After a successful `ingest` call, the vector store file on disk is updated (save is called)
-- [ ] Return value contains `filesIngested`, `chunksCreated`, and `skipped` fields from `IngestResult`
-- [ ] Unit test: assert `IngestService.ingest()` is called with the resolved parameters and save is called on `VectorStoreRepository`
-- [ ] Unit test: `IngestService` throwing an exception results in a structured MCP error response
+- [x] `tools/list` response contains a tool named `ingest`
+- [x] Calling `ingest` with a valid `path` forwards path, chunkSize (default 1000), and chunkOverlap (default 200) to `IngestService`
+- [x] After a successful `ingest` call, the vector store file on disk is updated (save is called)
+- [x] Return value contains `filesIngested`, `chunksCreated`, and `skipped` fields from `IngestResult`
+- [x] Unit test: assert `IngestService.ingest()` is called with the resolved parameters and save is called on `VectorStoreRepository`
+- [x] Unit test: `IngestService` throwing an exception results in a structured MCP error response
 
 ### Quality gates
 
-- [ ] Kotlin compiler reports zero warnings
-- [ ] `./gradlew test` passes with no new test failures
+- [x] Kotlin compiler reports zero warnings
+- [x] `./gradlew test` passes with no new test failures
 
 ---
 
@@ -168,19 +168,19 @@ Update the README with all information a user needs to add `ez-rag` as an MCP se
 
 ### Implementation steps
 
-- [ ] Add a dedicated "MCP Server" section to `README.md`
-- [ ] Include the JSON config snippet for `.claude/mcp.json` with `command: "ez-rag"` and `args: ["mcp-server"]`
-- [ ] Document each of the four MCP tools: `status`, `search`, `query`, `ingest` with their parameters, defaults, and return shapes
-- [ ] Document `--provider`, `--embedding-provider`, `--store`, and `--verbose` flags applicable to `mcp-server`
-- [ ] Note the requirement that the vector store must be ingested before calling `status`, `search`, or `query`
+- [x] Add a dedicated "MCP Server" section to `README.md`
+- [x] Include the JSON config snippet for `.claude/mcp.json` with `command: "ez-rag"` and `args: ["mcp-server"]`
+- [x] Document each of the four MCP tools: `status`, `search`, `query`, `ingest` with their parameters, defaults, and return shapes
+- [x] Document `--provider`, `--embedding-provider`, `--store`, and `--verbose` flags applicable to `mcp-server`
+- [x] Note the requirement that the vector store must be ingested before calling `status`, `search`, or `query`
 
 ### Acceptance criteria
 
-- [ ] README contains a `mcp-server` subcommand section with the `.claude/mcp.json` snippet
-- [ ] Each MCP tool (`status`, `search`, `query`, `ingest`) is described with its input parameters and return fields
-- [ ] Startup flags for `mcp-server` are documented
-- [ ] The note about pre-ingesting the store before querying is present
+- [x] README contains a `mcp-server` subcommand section with the `.claude/mcp.json` snippet
+- [x] Each MCP tool (`status`, `search`, `query`, `ingest`) is described with its input parameters and return fields
+- [x] Startup flags for `mcp-server` are documented
+- [x] The note about pre-ingesting the store before querying is present
 
 ### Quality gates
 
-- [ ] `./gradlew test` passes (no regressions from doc-only changes)
+- [x] `./gradlew test` passes (no regressions from doc-only changes)

@@ -12,7 +12,7 @@ import java.nio.file.Path
  * Returns results as [IngestResult]; has no dependency on picocli.
  * Used by both [ch.obermuhlner.ezrag.command.IngestCommand] and the MCP ingest tool.
  */
-class IngestService(
+open class IngestService(
     private val embeddingModel: EmbeddingModel,
     private val storePath: Path,
     private val chunkSize: Int = 1000,
@@ -26,7 +26,7 @@ class IngestService(
      */
     var onFileLoaded: ((Path, List<Document>) -> Unit)? = null
 
-    fun ingest(files: List<File>): IngestResult {
+    open fun ingest(files: List<File>): IngestResult {
         val loader = DocumentLoader()
         val chunker = DocumentChunker(chunkSize, chunkOverlap)
         val repository = VectorStoreRepository(embeddingModel, storePath)

@@ -1,5 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.ingestion.IngestService
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.RagPipeline
@@ -56,10 +57,13 @@ class McpServerCommand : Callable<Int> {
         val searchTool = McpSearchTool(EmbeddingSearchPipeline(repository, embeddingModel))
         val queryTool = chatModel?.let { McpQueryTool(RagPipeline(repository, it)) }
 
+        val ingestTool = McpIngestTool(embeddingModel, storePath)
+
         val tools = buildList {
             add(statusTool)
             add(searchTool)
             if (queryTool != null) add(queryTool)
+            add(ingestTool)
         }.toTypedArray()
 
         return StaticToolCallbackProvider(*ToolCallbacks.from(*tools))
