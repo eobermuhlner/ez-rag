@@ -1,0 +1,1 @@
+The goal of this project is a simple command line tool for RAG (retrieval-augmented generation).
