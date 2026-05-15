@@ -103,20 +103,20 @@ Configure `application.yml` to disable the Spring Boot startup banner and silenc
 
 ### Implementation steps
 
-- [ ] Set `spring.main.banner-mode: off` and `logging.level.root: off` in `src/main/resources/application.yml`
-- [ ] In `EzRagCommand.call()` (or a picocli `IParameterExceptionHandler` / `@Spec` initializer), check the `--verbose` flag; if set, cast `LoggerFactory.getILoggerFactory()` to `LoggerContext` and set root logger level to `Level.DEBUG`
-- [ ] Write a unit test that instantiates `EzRagCommand` directly, sets `verbose = true`, calls `call()`, and asserts `(LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger).level == Level.DEBUG`; restore root logger level in `@AfterEach`
-- [ ] Verify `./gradlew bootRun` (or integration test stdout capture) produces no Spring framework log lines and no banner on a normal `--help` invocation
+- [x] Set `spring.main.banner-mode: off` and `logging.level.root: off` in `src/main/resources/application.yml`
+- [x] In `EzRagCommand.call()` (or a picocli `IParameterExceptionHandler` / `@Spec` initializer), check the `--verbose` flag; if set, cast `LoggerFactory.getILoggerFactory()` to `LoggerContext` and set root logger level to `Level.DEBUG`
+- [x] Write a unit test that instantiates `EzRagCommand` directly, sets `verbose = true`, calls `call()`, and asserts `(LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger).level == Level.DEBUG`; restore root logger level in `@AfterEach`
+- [x] Verify `./gradlew bootRun` (or integration test stdout capture) produces no Spring framework log lines and no banner on a normal `--help` invocation
 
 ### Acceptance criteria
 
-- [ ] `ez-rag --help` stdout and stderr contain no Spring Boot banner text
-- [ ] `ez-rag --help` stdout and stderr contain no Spring framework INFO/DEBUG log lines
-- [ ] After parsing `--verbose`, the Logback root logger level equals `DEBUG` (verified by unit test)
-- [ ] `spring.main.banner-mode: off` and `logging.level.root: off` are present in `application.yml`
-- [ ] Unit test resets the root logger level in `@AfterEach` to avoid cross-test contamination
+- [x] `ez-rag --help` stdout and stderr contain no Spring Boot banner text
+- [x] `ez-rag --help` stdout and stderr contain no Spring framework INFO/DEBUG log lines
+- [x] After parsing `--verbose`, the Logback root logger level equals `DEBUG` (verified by unit test)
+- [x] `spring.main.banner-mode: off` and `logging.level.root: off` are present in `application.yml`
+- [x] Unit test resets the root logger level in `@AfterEach` to avoid cross-test contamination
 
 ### Quality gates
 
-- [ ] Kotlin compiler reports zero warnings
-- [ ] `./gradlew test` passes with the logging unit test included and no global logger state leaked between tests
+- [x] Kotlin compiler reports zero warnings
+- [x] `./gradlew test` passes with the logging unit test included and no global logger state leaked between tests

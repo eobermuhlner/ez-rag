@@ -6,6 +6,9 @@ import ch.obermuhlner.ezrag.command.QueryCommand
 import ch.obermuhlner.ezrag.command.SearchCommand
 import ch.obermuhlner.ezrag.command.ShellCommand
 import ch.obermuhlner.ezrag.command.StatusCommand
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import picocli.CommandLine.Command
 import picocli.CommandLine.Option
@@ -32,5 +35,10 @@ class EzRagCommand : Callable<Int> {
     @Option(names = ["--verbose", "-v"], description = ["Enable verbose/debug logging."], scope = ScopeType.INHERIT)
     var verbose: Boolean = false
 
-    override fun call(): Int = 0
+    override fun call(): Int {
+        if (verbose) {
+            (LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger).level = Level.DEBUG
+        }
+        return 0
+    }
 }
