@@ -69,6 +69,8 @@ echo "What is X?" | ez-rag search
 | Command                        | Description                                                                                        |
 |--------------------------------|----------------------------------------------------------------------------------------------------|
 | `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`. Prints each file as it is ingested. |
+| `delete <file> [<file>...]`    | Remove one or more ingested documents from the vector store without touching other content.        |
+| `show <file>`                  | Show per-chunk metadata (and optionally raw text) for an ingested file. Useful for debugging retrieval. |
 | `query [<word>...]`            | Retrieve relevant chunks and answer using an LLM. Reads question from positional args or stdin.    |
 | `status`                       | Show the vector store path, chunk count, and list of ingested documents.                           |
 | `search [<word>...]`           | Pure embedding search returning raw chunks without LLM involvement. Reads question from positional args or stdin. |
@@ -107,6 +109,94 @@ Ingesting: docs/getting-started.md
   Chunk 1 [287 tokens]: "Configuration All settings can be overrid…"
 1 files ingested, 2 chunks created, 0 skipped
 ```
+
+### delete
+
+Remove one or more ingested documents from the vector store:
+
+```sh
+ez-rag delete docs/old-guide.md
+```
+
+Output:
+```
+Deleted: /absolute/path/to/docs/old-guide.md (7 chunks)
+```
+
+Delete multiple files in a single command:
+
+```sh
+ez-rag delete docs/old-guide.md docs/deprecated.md
+```
+
+Pass `--quiet` (or `-q`) to suppress all output on success:
+
+```sh
+ez-rag delete --quiet docs/old-guide.md
+```
+
+If the file was never ingested, `delete` prints a warning but still exits 0 (safe for scripts):
+
+```
+Warning: not found in store: /absolute/path/to/docs/old-guide.md
+```
+
+| Flag             | Description                                         |
+|------------------|-----------------------------------------------------|
+| `--quiet` / `-q` | Suppress output on success; warnings are still printed. |
+
+After deletion, running `ez-rag ingest` on the same file re-ingests it normally.
+
+### show
+
+Inspect how an ingested file was chunked, including per-chunk metadata:
+
+```sh
+ez-rag show docs/getting-started.md
+```
+
+Output:
+```
+File: /absolute/path/to/docs/getting-started.md
+Chunks: 3
+
+Chunk 1 — 842 chars, mtime: 1716000000000
+Chunk 2 — 1021 chars, mtime: 1716000000000
+Chunk 3 — 634 chars, mtime: 1716000000000
+```
+
+Pass `--chunks` to also print the raw text of each chunk beneath its metadata line:
+
+```sh
+ez-rag show --chunks docs/getting-started.md
+```
+
+Pass `--output json` for machine-readable output suitable for scripting with `jq`:
+
+```sh
+ez-rag show --output json docs/getting-started.md
+```
+
+JSON output:
+```json
+{
+  "file": "/absolute/path/to/docs/getting-started.md",
+  "chunks": [
+    { "chunkIndex": 0, "charCount": 842, "mtime": 1716000000000 },
+    { "chunkIndex": 1, "charCount": 1021, "mtime": 1716000000000 },
+    { "chunkIndex": 2, "charCount": 634, "mtime": 1716000000000 }
+  ]
+}
+```
+
+Combine `--output json --chunks` to include the raw `text` field in each chunk object.
+
+If the file was never ingested, `show` exits with a non-zero code and prints an error to stderr.
+
+| Flag            | Description                                               |
+|-----------------|-----------------------------------------------------------|
+| `--chunks`      | Include raw chunk text in output.                         |
+| `--output`      | Output format: `text` (default) or `json`.                |
 
 ## Search-specific flags
 
@@ -329,6 +419,35 @@ Retrieves relevant chunks and returns an answer. With the default `passthrough` 
 | `answer`     | String          | Generated answer, or context chunks if using the `passthrough` provider  |
 | `sources`    | List of objects | Each entry has `filePath`, `chunkIndex`, `similarityScore`, `excerpt`    |
 | `error`      | String or null  | Set when an error occurred                                               |
+
+#### `delete`
+
+Removes an ingested document from the vector store by file path. The store is saved to disk after each successful call.
+
+| Parameter  | Type   | Required | Description                                    |
+|------------|--------|----------|------------------------------------------------|
+| `filePath` | String | yes      | Path to the file to remove from the store      |
+
+| Return field    | Type           | Description                                    |
+|-----------------|----------------|------------------------------------------------|
+| `filePath`      | String         | Absolute path that was matched against         |
+| `chunksRemoved` | Int            | Number of chunks removed (0 if not found)      |
+| `error`         | String or null | Set when an error occurred                     |
+
+#### `show`
+
+Returns per-chunk metadata for an ingested file. Optionally includes raw chunk text.
+
+| Parameter       | Type    | Required | Description                                           |
+|-----------------|---------|----------|-------------------------------------------------------|
+| `filePath`      | String  | yes      | Path to the file to inspect                           |
+| `includeChunks` | Boolean | no       | If true, include raw chunk text in each chunk object  |
+
+| Return field | Type            | Description                                                                 |
+|--------------|-----------------|-----------------------------------------------------------------------------|
+| `file`       | String          | Absolute path that was matched against                                      |
+| `chunks`     | List of objects | Each entry has `chunkIndex`, `charCount`, `mtime`, and optionally `text`    |
+| `error`      | String or null  | Set when an error occurred or the file was not found                        |
 
 #### `ingest`
 

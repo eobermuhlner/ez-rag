@@ -65,12 +65,16 @@ class McpServerCommand : Callable<Int> {
         val queryTool = chatModel?.let { McpQueryTool(RagPipeline(repository, it)) }
 
         val ingestTool = McpIngestTool(embeddingModel, storeFilePath)
+        val deleteTool = McpDeleteTool(embeddingModel, storeFilePath)
+        val showTool = McpShowTool(embeddingModel, storeFilePath)
 
         val tools = buildList {
             add(statusTool)
             add(searchTool)
             if (queryTool != null) add(queryTool)
             add(ingestTool)
+            add(deleteTool)
+            add(showTool)
         }.toTypedArray()
 
         return StaticToolCallbackProvider(*ToolCallbacks.from(*tools))

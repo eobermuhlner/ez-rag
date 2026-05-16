@@ -55,19 +55,20 @@ open class IngestService(
         }
 
         for (path in resolvedPaths) {
-            val mtime = path.toFile().lastModified()
-            val sourceKey = path.toString()
+            val absolutePath = path.toAbsolutePath().normalize()
+            val mtime = absolutePath.toFile().lastModified()
+            val sourceKey = absolutePath.toString()
             if (repository.isAlreadyIngested(sourceKey, mtime)) {
-                onFileSkipped?.invoke(path, "already ingested")
+                onFileSkipped?.invoke(absolutePath, "already ingested")
                 skipped++
                 continue
             }
-            onFileIngesting?.invoke(path)
-            val documents = loader.load(path)
+            onFileIngesting?.invoke(absolutePath)
+            val documents = loader.load(absolutePath)
             val chunks = withMtime(chunker.split(documents), mtime)
-            onFileLoaded?.invoke(path, chunks)
+            onFileLoaded?.invoke(absolutePath, chunks)
             if (chunks.isEmpty()) {
-                warningWriter.println("Warning: No chunks produced for: $path")
+                warningWriter.println("Warning: No chunks produced for: $absolutePath")
                 continue
             }
             repository.add(chunks)
@@ -85,11 +86,11 @@ open class IngestService(
     }
 
     private fun withMtime(documents: List<Document>, mtime: Long): List<Document> {
-        return documents.map { doc ->
+        return documents.mapIndexed { index, doc ->
             Document.builder()
                 .id(doc.id)
                 .text(doc.text)
-                .metadata(doc.metadata + mapOf("mtime" to mtime))
+                .metadata(doc.metadata + mapOf("mtime" to mtime, "chunk_index" to index))
                 .build()
         }
     }

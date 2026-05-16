@@ -7,6 +7,13 @@ import java.nio.file.Path
 
 data class StoreDocumentInfo(val path: String, val chunkCount: Int)
 
+data class DocumentChunkInfo(
+    val chunkIndex: Int,
+    val charCount: Int,
+    val mtime: Long,
+    val text: String
+)
+
 data class StoreMetadata(
     val storeFilePath: String,
     val chunkCount: Int,
@@ -55,6 +62,63 @@ class VectorStoreRepository(
     fun storeExists(): Boolean = storeFilePath.toFile().exists()
 
     fun getStore(): SimpleVectorStore = vectorStore
+
+    fun delete(absoluteFilePath: String): Int {
+        val storeField = SimpleVectorStore::class.java.getDeclaredField("store")
+        storeField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val storeMap = storeField.get(vectorStore) as Map<String, Any>
+
+        val matchingIds = mutableListOf<String>()
+        for ((id, entry) in storeMap) {
+            val metadataMethod = entry.javaClass.getMethod("getMetadata")
+            @Suppress("UNCHECKED_CAST")
+            val metadata = metadataMethod.invoke(entry) as? Map<String, Any> ?: continue
+            val source = metadata["source"] as? String ?: continue
+            if (source == absoluteFilePath) {
+                matchingIds.add(id)
+            }
+        }
+
+        if (matchingIds.isEmpty()) return 0
+
+        vectorStore.delete(matchingIds)
+
+        // Evict all (source, mtime) pairs for this file from the ingestedFiles cache
+        ingestedFiles.removeIf { (source, _) -> source == absoluteFilePath }
+
+        return matchingIds.size
+    }
+
+    fun getChunksForFile(absoluteFilePath: String): List<DocumentChunkInfo> {
+        val storeField = SimpleVectorStore::class.java.getDeclaredField("store")
+        storeField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val storeMap = storeField.get(vectorStore) as Map<String, Any>
+
+        val chunks = mutableListOf<DocumentChunkInfo>()
+        for (entry in storeMap.values) {
+            val metadataMethod = entry.javaClass.getMethod("getMetadata")
+            @Suppress("UNCHECKED_CAST")
+            val metadata = metadataMethod.invoke(entry) as? Map<String, Any> ?: continue
+            val source = metadata["source"] as? String ?: continue
+            if (source != absoluteFilePath) continue
+
+            val textMethod = entry.javaClass.getMethod("getText")
+            val text = textMethod.invoke(entry) as? String ?: ""
+            val mtime = metadata["mtime"]?.let { toLong(it) } ?: 0L
+            val chunkIndex = metadata["chunk_index"]?.let { toLong(it)?.toInt() } ?: 0
+
+            chunks.add(DocumentChunkInfo(
+                chunkIndex = chunkIndex,
+                charCount = text.length,
+                mtime = mtime,
+                text = text
+            ))
+        }
+
+        return chunks.sortedBy { it.chunkIndex }
+    }
 
     fun getMetadata(): StoreMetadata {
         val chunkCountBySource = mutableMapOf<String, Int>()

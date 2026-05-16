@@ -1,11 +1,13 @@
 package ch.obermuhlner.ezrag
 
+import ch.obermuhlner.ezrag.command.DeleteCommand
 import ch.obermuhlner.ezrag.command.InitCommand
 import ch.obermuhlner.ezrag.command.IngestCommand
 import ch.obermuhlner.ezrag.command.McpServerCommand
 import ch.obermuhlner.ezrag.command.QueryCommand
 import ch.obermuhlner.ezrag.command.SearchCommand
 import ch.obermuhlner.ezrag.command.ShellCommand
+import ch.obermuhlner.ezrag.command.ShowCommand
 import ch.obermuhlner.ezrag.command.StatusCommand
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
@@ -24,6 +26,8 @@ import java.util.concurrent.Callable
     subcommands = [
         InitCommand::class,
         IngestCommand::class,
+        DeleteCommand::class,
+        ShowCommand::class,
         QueryCommand::class,
         SearchCommand::class,
         StatusCommand::class,
