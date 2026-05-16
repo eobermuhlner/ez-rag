@@ -23,7 +23,9 @@ fun readConfigFile(path: String = System.getProperty("user.home") + "/.ez-rag/co
         topK = data.int("topK") ?: data.int("top-k") ?: 5,
         systemPrompt = data.string("systemPrompt") ?: data.string("system-prompt") ?: "",
         outputFormat = data.string("outputFormat") ?: data.string("output-format") ?: "text",
-        verbose = data["verbose"] as? Boolean ?: false
+        verbose = data["verbose"] as? Boolean ?: false,
+        rerankModel = data.string("rerankModel") ?: data.string("rerank-model") ?: EzRagConfig().rerankModel,
+        rerankCandidates = data.int("rerankCandidates") ?: data.int("rerank-candidates")
     )
 }
 

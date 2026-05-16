@@ -15,7 +15,9 @@ import org.springframework.ai.openai.OpenAiEmbeddingModel
 import org.springframework.ai.openai.OpenAiEmbeddingOptions
 import org.springframework.ai.openai.api.OpenAiApi
 import org.springframework.ai.transformers.TransformersEmbeddingModel
+import ch.obermuhlner.ezrag.rag.OnnxCrossEncoderReranker
 import ch.obermuhlner.ezrag.rag.PassthroughChatModel
+import ch.obermuhlner.ezrag.rag.Reranker
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -77,6 +79,14 @@ class ProviderConfiguration(
                 "Unsupported chat provider '${config.provider}'. Valid providers are: openai, anthropic, ollama, passthrough."
             )
         }
+    }
+
+    @Bean
+    fun reranker(): Reranker? {
+        val config = configService.resolve()
+        if (config.rerankModel.isEmpty()) return null
+        val cacheDir = System.getProperty("user.home") + "/.ez-rag/models/"
+        return OnnxCrossEncoderReranker(config.rerankModel, cacheDir)
     }
 
     @Bean

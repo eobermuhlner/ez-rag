@@ -1,10 +1,12 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.EzRagCommand
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
+import ch.obermuhlner.ezrag.rag.Reranker
 import ch.obermuhlner.ezrag.rag.SearchQuery
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.beans.factory.annotation.Autowired
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Component
 import picocli.CommandLine.Command
 import picocli.CommandLine.Option
 import picocli.CommandLine.Parameters
+import picocli.CommandLine.ParentCommand
 import java.io.InputStream
 import java.io.PrintWriter
 import java.nio.file.Path
@@ -35,11 +38,17 @@ class SearchCommand(
     private val startDirOverride: Path? = null,
 ) : Callable<Int> {
 
+    @ParentCommand
+    private var parent: EzRagCommand? = null
+
     @Autowired(required = false)
     private var springEmbeddingModel: EmbeddingModel? = null
 
     @Autowired(required = false)
     private var springConfigService: ConfigService? = null
+
+    @Autowired(required = false)
+    private var springReranker: Reranker? = null
 
     @Parameters(index = "0..*", description = ["Question to search for. Multiple tokens are joined with spaces. Reads from stdin if omitted."])
     var questionArgs: List<String> = emptyList()
@@ -56,18 +65,23 @@ class SearchCommand(
     @Option(names = ["--output"], description = ["Output format: text (default) or json."])
     var outputFormat: String = "text"
 
-    // --verbose is inherited from the parent EzRagCommand (ScopeType.INHERIT)
-    // and not re-declared here to avoid DuplicateOptionAnnotationsException.
+    // Fallback fields for unit tests (where @ParentCommand is not wired by picocli).
+    // In production, parent?.x takes precedence.
     var verbose: Boolean = false
+    var rerankModel: String? = null
+    var rerankCandidates: Int? = null
 
     override fun call(): Int {
+        val verbose = parent?.verbose ?: this.verbose
+        val rerankModel = parent?.rerankModel ?: this.rerankModel
+        val rerankCandidates = parent?.rerankCandidates ?: this.rerankCandidates
+
         val storeDir = storeDirOverride
             ?: storeDirOption?.let { Paths.get(it) }
             ?: springConfigService?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
         val storeFilePath = storeDir.resolve("vector-store.json")
 
-        // Check store existence first
         val storeFile = storeFilePath.toFile()
         if (!storeFile.exists()) {
             outputWriter.println(
@@ -76,7 +90,6 @@ class SearchCommand(
             return 1
         }
 
-        // Resolve the question
         val resolvedQuestion = if (questionArgs.isNotEmpty()) {
             questionArgs.joinToString(" ")
         } else {
@@ -88,7 +101,6 @@ class SearchCommand(
             stdin
         }
 
-        // Resolve the pipeline and repository (injected or built from Spring beans)
         val (pipeline, repository) = if (searchPipeline != null) {
             Pair(searchPipeline, repositoryForVerbose)
         } else {
@@ -96,13 +108,21 @@ class SearchCommand(
                 ?: return exitWithError("No embedding model configured.")
             val repo = VectorStoreRepository(embeddingModel, storeFilePath)
             repo.load()
-            Pair(EmbeddingSearchPipeline(repo, embeddingModel), repo)
+            Pair(EmbeddingSearchPipeline(repo, embeddingModel, springReranker), repo)
+        }
+
+        val effectiveRerankCandidates = if (springReranker != null || rerankModel?.isNotEmpty() == true) {
+            rerankCandidates ?: (topK * 3)
+        } else {
+            null
         }
 
         val searchQuery = SearchQuery(
             question = resolvedQuestion,
             topK = topK,
             minScore = minScore,
+            rerankCandidates = effectiveRerankCandidates,
+            verbose = verbose,
         )
 
         val result = pipeline.search(searchQuery)

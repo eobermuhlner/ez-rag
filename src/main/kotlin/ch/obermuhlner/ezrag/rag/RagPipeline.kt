@@ -1,12 +1,12 @@
 package ch.obermuhlner.ezrag.rag
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import org.springframework.ai.chat.messages.SystemMessage
 import org.springframework.ai.chat.messages.UserMessage
 import org.springframework.ai.chat.model.ChatModel
 import org.springframework.ai.chat.prompt.Prompt
+
 open class RagPipeline(
-    private val repository: VectorStoreRepository,
+    private val searchPipeline: EmbeddingSearchPipeline,
     private val chatModel: ChatModel
 ) {
 
@@ -18,27 +18,29 @@ Always cite which document(s) your answer is based on."""
     }
 
     open fun query(ragQuery: RagQuery): RagResult {
-        val similarDocs = repository.getStore().similaritySearch(
-            org.springframework.ai.vectorstore.SearchRequest.builder()
-                .query(ragQuery.question)
-                .topK(ragQuery.topK)
-                .build()
+        val searchQuery = SearchQuery(
+            question = ragQuery.question,
+            topK = ragQuery.topK,
+            minScore = 0.0,
+            rerankCandidates = ragQuery.rerankCandidates,
+            verbose = ragQuery.verbose
         )
+        val searchResult = searchPipeline.search(searchQuery)
 
-        if (similarDocs.isNullOrEmpty()) {
+        if (searchResult.chunks.isEmpty()) {
             return RagResult(answer = "No relevant documents found", sources = emptyList())
         }
 
-        val sources = similarDocs.map { doc ->
-            val filePath = doc.metadata["source"] as? String ?: ""
-            val chunkIndex = doc.metadata["chunk_index"]?.let { toInt(it) } ?: 0
-            val score = doc.score ?: 0.0
-            val text = doc.text ?: ""
-            val excerpt = if (text.length > EXCERPT_MAX_LENGTH) text.substring(0, EXCERPT_MAX_LENGTH) else text
+        val sources = searchResult.chunks.map { chunk ->
+            val excerpt = if (chunk.content.length > EXCERPT_MAX_LENGTH) {
+                chunk.content.substring(0, EXCERPT_MAX_LENGTH)
+            } else {
+                chunk.content
+            }
             SourceReference(
-                filePath = filePath,
-                chunkIndex = chunkIndex,
-                similarityScore = score,
+                filePath = chunk.filePath,
+                chunkIndex = chunk.chunkIndex,
+                similarityScore = chunk.score,
                 excerpt = excerpt
             )
         }
@@ -49,8 +51,8 @@ Always cite which document(s) your answer is based on."""
             ragQuery.systemPrompt
         }
 
-        val contextText = similarDocs.mapIndexed { idx, doc ->
-            "--- Context: ${doc.metadata["source"] ?: "unknown"} ---\n${doc.text}"
+        val contextText = searchResult.chunks.mapIndexed { idx, chunk ->
+            "--- Context: ${chunk.filePath} ---\n${chunk.content}"
         }.joinToString("\n\n")
 
         if (chatModel is PassthroughChatModel) {
@@ -64,12 +66,5 @@ Always cite which document(s) your answer is based on."""
         val answer = response.result?.output?.text ?: ""
 
         return RagResult(answer = answer, sources = sources)
-    }
-
-    private fun toInt(value: Any): Int? = when (value) {
-        is Int -> value
-        is Number -> value.toInt()
-        is String -> value.toIntOrNull()
-        else -> null
     }
 }

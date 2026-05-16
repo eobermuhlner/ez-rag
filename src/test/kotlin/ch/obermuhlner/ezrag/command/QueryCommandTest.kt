@@ -1,6 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.RagPipeline
 import ch.obermuhlner.ezrag.rag.RagQuery
@@ -73,7 +74,7 @@ class QueryCommandTest {
     ): QueryCommand {
         val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
         repo.load()
-        val ragPipeline = pipeline ?: RagPipeline(repo, stubChatModel)
+        val ragPipeline = pipeline ?: RagPipeline(EmbeddingSearchPipeline(repo, fakeEmbeddingModel), stubChatModel)
         return QueryCommand(
             storeDirOverride = storeFilePath.parent,
             ragPipeline = ragPipeline,
@@ -95,7 +96,7 @@ class QueryCommandTest {
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() },
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -134,7 +135,7 @@ class QueryCommandTest {
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() },
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -224,7 +225,7 @@ class QueryCommandTest {
         val inputStream = ByteArrayInputStream(stdinContent.toByteArray())
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() },
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -308,7 +309,7 @@ class QueryCommandTest {
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() },
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -347,7 +348,7 @@ class QueryCommandTest {
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() },
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -386,7 +387,7 @@ class QueryCommandTest {
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() },
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -435,7 +436,7 @@ class QueryCommandTest {
             )
         )
         val stubPipeline = object : RagPipeline(
-            VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() },
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult = fixedResult

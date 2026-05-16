@@ -9,7 +9,26 @@ import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.nio.file.Path
+
+/**
+ * A stub reranker that reverses the order of candidates, assigning scores so the
+ * last candidate gets the highest score. Used to verify that reranking integration
+ * in EmbeddingSearchPipeline works correctly.
+ */
+class StubReranker : Reranker {
+    override val name: String = "StubReranker"
+
+    override fun rerank(query: String, candidates: List<ChunkMatch>): List<ChunkMatch> {
+        // Assigns highest score to last candidate, lowest score to first candidate,
+        // so the reranked order is the reverse of the input order.
+        return candidates.mapIndexed { index, chunk ->
+            chunk.copy(score = (index + 1).toDouble())
+        }.sortedByDescending { it.score }
+    }
+}
 
 class EmbeddingSearchPipelineTest {
 
@@ -158,5 +177,257 @@ class EmbeddingSearchPipelineTest {
 
         // Should return results without throwing
         assertThat(result.chunks).isNotEmpty
+    }
+
+    // ---------------------------------------------------------------------------
+    // Reranking tests
+    // ---------------------------------------------------------------------------
+
+    @Test
+    fun `StubReranker reranks so last embedding candidate becomes first result`(@TempDir tempDir: Path) {
+        // Store: doc1 (high embedding score) and doc2 (low embedding score)
+        // StubReranker reverses order, so doc2 must come first in reranked output
+        val repository = createRepository(tempDir)
+
+        val doc1 = Document.builder()
+            .text("High score document content.")
+            .metadata(mapOf("source" to "high.txt", "chunk_index" to 0))
+            .build()
+        val doc2 = Document.builder()
+            .text("Low score document content.")
+            .metadata(mapOf("source" to "low.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc1, doc2))
+
+        val stub = StubReranker()
+        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub)
+        val result = pipeline.search(
+            SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 2)
+        )
+
+        // StubReranker assigns highest score to the last candidate from the store.
+        // The store returns [high.txt, low.txt] by embedding score; stub reverses → low.txt first.
+        assertThat(result.chunks).hasSize(2)
+        assertThat(result.chunks.first().filePath).isEqualTo("low.txt")
+    }
+
+    @Test
+    fun `when rerankCandidates=6 and topK=2, result contains exactly 2 chunks`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        // Insert 6 documents (4 "other" docs use generic vectors)
+        val docs = listOf(
+            Document.builder().text("High score document content.").metadata(mapOf("source" to "high.txt", "chunk_index" to 0)).build(),
+            Document.builder().text("Low score document content.").metadata(mapOf("source" to "low.txt", "chunk_index" to 0)).build(),
+            Document.builder().text("doc3").metadata(mapOf("source" to "doc3.txt", "chunk_index" to 0)).build(),
+            Document.builder().text("doc4").metadata(mapOf("source" to "doc4.txt", "chunk_index" to 0)).build(),
+            Document.builder().text("doc5").metadata(mapOf("source" to "doc5.txt", "chunk_index" to 0)).build(),
+            Document.builder().text("doc6").metadata(mapOf("source" to "doc6.txt", "chunk_index" to 0)).build(),
+        )
+        repository.add(docs)
+
+        val stub = StubReranker()
+        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub)
+        val result = pipeline.search(
+            SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 6)
+        )
+
+        assertThat(result.chunks).hasSize(2)
+    }
+
+    @Test
+    fun `reranked ChunkMatch scores equal stub scores, not original embedding scores`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc1 = Document.builder()
+            .text("High score document content.")
+            .metadata(mapOf("source" to "high.txt", "chunk_index" to 0))
+            .build()
+        val doc2 = Document.builder()
+            .text("Low score document content.")
+            .metadata(mapOf("source" to "low.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc1, doc2))
+
+        val stub = StubReranker()
+        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub)
+        val result = pipeline.search(
+            SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 2)
+        )
+
+        // StubReranker assigns scores 2.0 and 1.0 (n - index for reversed list)
+        assertThat(result.chunks).hasSize(2)
+        assertThat(result.chunks[0].score).isEqualTo(2.0)
+        assertThat(result.chunks[1].score).isEqualTo(1.0)
+    }
+
+    @Test
+    fun `null reranker with null rerankCandidates behaves identically to pre-reranking`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc1 = Document.builder()
+            .text("High score document content.")
+            .metadata(mapOf("source" to "high.txt", "chunk_index" to 0))
+            .build()
+        val doc2 = Document.builder()
+            .text("Low score document content.")
+            .metadata(mapOf("source" to "low.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc1, doc2))
+
+        // No reranker: null (default)
+        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel)
+        val result = pipeline.search(SearchQuery(question = "test query", topK = 5, minScore = 0.0))
+
+        // Original embedding ordering: high.txt first
+        assertThat(result.chunks).isNotEmpty()
+        assertThat(result.chunks.first().filePath).isEqualTo("high.txt")
+    }
+
+    @Test
+    fun `null reranker with non-null rerankCandidates still fetches topK, not rerankCandidates`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val docs = (1..4).map { i ->
+            Document.builder()
+                .text("doc$i content")
+                .metadata(mapOf("source" to "doc$i.txt", "chunk_index" to 0))
+                .build()
+        }
+        repository.add(docs)
+
+        // reranker=null (default), rerankCandidates=4 set but reranker is null → must use topK
+        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel)
+        val result = pipeline.search(
+            SearchQuery(question = "test query", topK = 1, minScore = 0.0, rerankCandidates = 4)
+        )
+
+        // Even though rerankCandidates=4, reranker is null, so pipeline fetches topK=1
+        assertThat(result.chunks).hasSize(1)
+    }
+
+    // ---------------------------------------------------------------------------
+    // Verbose diagnostic tests
+    // ---------------------------------------------------------------------------
+
+    @Test
+    fun `verbose=true with StubReranker writes Reranker and Reranking lines to errWriter`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc1 = Document.builder()
+            .text("High score document content.")
+            .metadata(mapOf("source" to "high.txt", "chunk_index" to 0))
+            .build()
+        val doc2 = Document.builder()
+            .text("Low score document content.")
+            .metadata(mapOf("source" to "low.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc1, doc2))
+
+        val sw = StringWriter()
+        val errWriter = PrintWriter(sw, true)
+        val stub = StubReranker()
+        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub, errWriter = errWriter)
+
+        pipeline.search(SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 2, verbose = true))
+
+        val output = sw.toString()
+        val lines = output.lines().filter { it.isNotEmpty() }
+        assertThat(lines).anyMatch { it.startsWith("Reranker: ") }
+        assertThat(lines).anyMatch { it.startsWith("Reranking: ") }
+    }
+
+    @Test
+    fun `Reranker diagnostic line contains the stub name`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc1 = Document.builder()
+            .text("High score document content.")
+            .metadata(mapOf("source" to "high.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc1))
+
+        val sw = StringWriter()
+        val errWriter = PrintWriter(sw, true)
+        val stub = StubReranker()
+        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub, errWriter = errWriter)
+
+        pipeline.search(SearchQuery(question = "test query", topK = 1, minScore = 0.0, rerankCandidates = 1, verbose = true))
+
+        val output = sw.toString()
+        val rerankerLine = output.lines().first { it.startsWith("Reranker: ") }
+        assertThat(rerankerLine).contains(stub.name)
+    }
+
+    @Test
+    fun `Reranking diagnostic line matches pattern with rerankCandidates and topK`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val docs = (1..4).map { i ->
+            Document.builder()
+                .text("doc$i content")
+                .metadata(mapOf("source" to "doc$i.txt", "chunk_index" to 0))
+                .build()
+        }
+        repository.add(docs)
+
+        val sw = StringWriter()
+        val errWriter = PrintWriter(sw, true)
+        val stub = StubReranker()
+        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub, errWriter = errWriter)
+
+        pipeline.search(SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 4, verbose = true))
+
+        val output = sw.toString()
+        val rerankingLine = output.lines().first { it.startsWith("Reranking: ") }
+        assertThat(rerankingLine).isEqualTo("Reranking: 4 candidates → top 2")
+    }
+
+    @Test
+    fun `verbose=false writes no reranker diagnostic lines even with active reranker`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc1 = Document.builder()
+            .text("High score document content.")
+            .metadata(mapOf("source" to "high.txt", "chunk_index" to 0))
+            .build()
+        val doc2 = Document.builder()
+            .text("Low score document content.")
+            .metadata(mapOf("source" to "low.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc1, doc2))
+
+        val sw = StringWriter()
+        val errWriter = PrintWriter(sw, true)
+        val stub = StubReranker()
+        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub, errWriter = errWriter)
+
+        pipeline.search(SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 2, verbose = false))
+
+        val output = sw.toString()
+        assertThat(output).doesNotContain("Reranker: ")
+        assertThat(output).doesNotContain("Reranking: ")
+    }
+
+    @Test
+    fun `verbose=true with null reranker writes no reranker diagnostic lines`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc1 = Document.builder()
+            .text("High score document content.")
+            .metadata(mapOf("source" to "high.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc1))
+
+        val sw = StringWriter()
+        val errWriter = PrintWriter(sw, true)
+        // No reranker (null)
+        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = null, errWriter = errWriter)
+
+        pipeline.search(SearchQuery(question = "test query", topK = 1, minScore = 0.0, verbose = true))
+
+        val output = sw.toString()
+        assertThat(output).doesNotContain("Reranker: ")
+        assertThat(output).doesNotContain("Reranking: ")
     }
 }

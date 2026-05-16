@@ -4,7 +4,9 @@ data class RagQuery(
     val question: String,
     val topK: Int,
     val systemPrompt: String,
-    val modelOverride: String?
+    val modelOverride: String?,
+    val rerankCandidates: Int? = null,
+    val verbose: Boolean = false
 )
 
 data class SourceReference(

@@ -41,6 +41,8 @@ dependencies {
     implementation("org.springframework.ai:spring-ai-vector-store")
     implementation("org.springframework.ai:spring-ai-pdf-document-reader")
     implementation("org.springframework.ai:spring-ai-starter-mcp-server")
+    implementation("com.microsoft.onnxruntime:onnxruntime:1.19.2")
+    implementation("ai.djl.huggingface:tokenizers:0.32.0")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
@@ -52,7 +54,14 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 }
 
 tasks.withType<Test> {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        val tags = System.getProperty("tags")
+        if (tags != null) {
+            includeTags(tags)
+        } else {
+            excludeTags("integration")
+        }
+    }
 }
 
 // Embed the Gradle-provisioned JDK 21 as a fallback JAVA_HOME so the installDist

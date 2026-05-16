@@ -78,9 +78,10 @@ class ShellCommand(
                 ?: return exitWithError("No chat model configured.")
             val repository = VectorStoreRepository(embeddingModel, storeFilePath)
             repository.load()
+            val esp = EmbeddingSearchPipeline(repository, embeddingModel)
             Triple(
-                RagPipeline(repository, chatModel),
-                EmbeddingSearchPipeline(repository, embeddingModel),
+                RagPipeline(esp, chatModel),
+                esp,
                 repository
             )
         }

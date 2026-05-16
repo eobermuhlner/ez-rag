@@ -1,6 +1,4 @@
-- add sub-command to delete document
-- add sub-command(s) to view document metadata and raw chunk content
-- add optional reranking search results (using cross-encode model, configured independently)
+- add `list` sub-command to print all ingested documents. Make `status` not print the list of documents but add information about configuration (provider, model, ...). Make `status` print the number of documents and chunks. Any other valuable status info? 
 - add markdown chunking
 - add pdf to markdown converter
 - add local .ez-rag/config.yaml support (overriding defaults in ~/.ez-rag/config.yaml)

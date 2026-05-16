@@ -3,6 +3,7 @@ package ch.obermuhlner.ezrag
 import ch.obermuhlner.ezrag.command.IngestCommand
 import ch.obermuhlner.ezrag.command.QueryCommand
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.RagPipeline
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -80,7 +81,8 @@ class RagQueryIntegrationTest {
     ): QueryCommand {
         val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
         repo.load()
-        val pipeline = RagPipeline(repo, stubChatModel)
+        val searchPipeline = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
+        val pipeline = RagPipeline(searchPipeline, stubChatModel)
         return QueryCommand(
             storeDirOverride = storeFilePath.parent,
             ragPipeline = pipeline,

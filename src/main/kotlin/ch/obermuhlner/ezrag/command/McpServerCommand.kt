@@ -61,8 +61,9 @@ class McpServerCommand : Callable<Int> {
 
         val chatModel = springChatModel
         val statusTool = McpStatusTool(repository)
-        val searchTool = McpSearchTool(EmbeddingSearchPipeline(repository, embeddingModel))
-        val queryTool = chatModel?.let { McpQueryTool(RagPipeline(repository, it)) }
+        val embeddingSearchPipeline = EmbeddingSearchPipeline(repository, embeddingModel)
+        val searchTool = McpSearchTool(embeddingSearchPipeline)
+        val queryTool = chatModel?.let { McpQueryTool(RagPipeline(embeddingSearchPipeline, it)) }
 
         val ingestTool = McpIngestTool(embeddingModel, storeFilePath)
         val deleteTool = McpDeleteTool(embeddingModel, storeFilePath)

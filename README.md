@@ -210,14 +210,16 @@ If the file was never ingested, `show` exits with a non-zero code and prints an 
 
 These flags apply to all subcommands:
 
-| Flag                   | Default                  | Description                                    |
-|------------------------|--------------------------|------------------------------------------------|
-| `--provider`           | `passthrough`            | Chat provider: `passthrough`, `openai`, `anthropic`, `ollama` |
-| `--embedding-provider` | `onnx`                   | Embedding provider: `onnx`, `openai`, `ollama` |
-| `--model`              | provider default         | Override the chat model name                   |
-| `--embedding-model`    | provider default         | Override the embedding model name              |
-| `--ollama-url`         | `http://localhost:11434` | Ollama base URL                                |
-| `--verbose` / `-v`     | off                      | Enable debug logging; for `query`, also prints each source file path, similarity score, and chunk index to stderr |
+| Flag                      | Default                  | Description                                    |
+|---------------------------|--------------------------|------------------------------------------------|
+| `--provider`              | `passthrough`            | Chat provider: `passthrough`, `openai`, `anthropic`, `ollama` |
+| `--embedding-provider`    | `onnx`                   | Embedding provider: `onnx`, `openai`, `ollama` |
+| `--model`                 | provider default         | Override the chat model name                   |
+| `--embedding-model`       | provider default         | Override the embedding model name              |
+| `--rerank-model`          | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Cross-encoder reranker model name. Set to `""` to disable reranking. |
+| `--rerank-candidates`     | `topK * 3`               | Number of candidates fetched before reranking. Only relevant when `--rerank-model` is set. |
+| `--ollama-url`            | `http://localhost:11434` | Ollama base URL                                |
+| `--verbose` / `-v`        | off                      | Enable debug logging; for `query`, also prints each source file path, similarity score, and chunk index to stderr. When reranking is active also prints reranker name and candidate pool size. |
 
 ## Providers
 
@@ -309,6 +311,8 @@ Persistent defaults can be set in `~/.ez-rag/config.yml` so you do not have to r
 #system-prompt: ""
 #output-format: text
 #verbose: false
+rerank-model: cross-encoder/ms-marco-MiniLM-L-6-v2   # default: cross-encoder/ms-marco-MiniLM-L-6-v2 (reranking enabled by default)
+#rerank-candidates: 15   # default: topK * 3 when rerank-model is set
 ```
 
 All keys support both camelCase (`chunkSize`) and kebab-case (`chunk-size`) spelling.
@@ -325,6 +329,68 @@ Documents are stored in a `SimpleVectorStore` JSON file. The default location is
 | `chunk-overlap` | 200                   | Overlap between consecutive chunks   |
 | `top-k`         | 5                     | Number of chunks retrieved per query |
 | `system-prompt` | built-in RAG template | Override the LLM system prompt       |
+
+## Reranking
+
+Reranking is an optional second-pass stage that improves result quality. After the initial vector similarity search retrieves a larger pool of candidate chunks, a cross-encoder model re-scores each candidate by jointly encoding the query and chunk text together. The final result set is the top `topK` chunks ordered by the cross-encoder's relevance score.
+
+Reranking is enabled by default using `cross-encoder/ms-marco-MiniLM-L-6-v2`. The model is downloaded automatically on first use and cached in `~/.ez-rag/models/` — no manual setup required.
+
+To disable reranking, set the rerank model to an empty string:
+
+```sh
+# via CLI flag
+ez-rag search --rerank-model "" "What is X?"
+
+# via environment variable
+export RERANK_MODEL=
+ez-rag search "What is X?"
+
+# via config file (~/.ez-rag/config.yml)
+rerank-model: ""
+```
+
+To use a different model, override the default:
+
+```sh
+ez-rag search --rerank-model my-custom/cross-encoder "What is X?"
+```
+
+### How it works
+
+When reranking is active, the pipeline fetches `rerankCandidates` chunks from the vector store (default: `topK * 3`) instead of just `topK`. The reranker then scores all candidates and the top `topK` are returned. The `score` field in results reflects the cross-encoder relevance score, not the original embedding similarity score.
+
+```sh
+# Fetch 15 candidates, rerank, return top 5 (reranking is on by default; topK * 3 = 15)
+ez-rag search "What is X?"
+
+# Override the candidate pool explicitly
+ez-rag search --rerank-candidates 20 "What is X?"
+```
+
+### Reranking flags and config keys
+
+| Source          | Key / Flag               | Description                                                             |
+|-----------------|--------------------------|-------------------------------------------------------------------------|
+| CLI             | `--rerank-model`         | Cross-encoder model name; set to `""` to disable reranking              |
+| CLI             | `--rerank-candidates N`  | Candidate pool size before reranking                                    |
+| Environment     | `RERANK_MODEL`           | Same as `--rerank-model`                                                |
+| Environment     | `RERANK_CANDIDATES`      | Same as `--rerank-candidates`                                           |
+| Config file     | `rerank-model`           | Same as `--rerank-model`                                                |
+| Config file     | `rerank-candidates`      | Same as `--rerank-candidates`                                           |
+
+### Recommended model
+
+`cross-encoder/ms-marco-MiniLM-L-6-v2` is a 6-layer MiniLM model fine-tuned on MS MARCO passage ranking. It runs entirely on CPU (no GPU required), is fast enough for interactive use (sub-second for up to 25 candidates), and requires no API key.
+
+### Verbose output
+
+Pass `--verbose` to see reranking diagnostics on stderr:
+
+```
+Reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+Reranking: 15 candidates → top 5
+```
 
 ## Output format
 

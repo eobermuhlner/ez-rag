@@ -16,7 +16,6 @@ import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
-import ch.obermuhlner.ezrag.rag.PassthroughChatModel
 import java.nio.file.Path
 
 class RagPipelineTest {
@@ -49,6 +48,11 @@ class RagPipelineTest {
         return repo
     }
 
+    private fun createPipeline(repository: VectorStoreRepository, chatModel: ChatModel): RagPipeline {
+        val searchPipeline = EmbeddingSearchPipeline(repository, fakeEmbeddingModel)
+        return RagPipeline(searchPipeline, chatModel)
+    }
+
     @Test
     fun `empty store returns no-documents result without invoking ChatModel`(@TempDir tempDir: Path) {
         val repository = createRepository(tempDir)
@@ -59,7 +63,7 @@ class RagPipelineTest {
             ChatResponse(listOf(Generation(AssistantMessage("should not be called"))))
         }
 
-        val pipeline = RagPipeline(repository, stubChatModel)
+        val pipeline = createPipeline(repository, stubChatModel)
         val query = RagQuery(question = "What is X?", topK = 5, systemPrompt = "", modelOverride = null)
         val result = pipeline.query(query)
 
@@ -85,7 +89,7 @@ class RagPipelineTest {
             ChatResponse(listOf(Generation(AssistantMessage("Paris"))))
         }
 
-        val pipeline = RagPipeline(repository, capturingChatModel)
+        val pipeline = createPipeline(repository, capturingChatModel)
         val query = RagQuery(question = "What is the capital of France?", topK = 5, systemPrompt = "", modelOverride = null)
         pipeline.query(query)
 
@@ -119,7 +123,7 @@ class RagPipelineTest {
             ChatResponse(listOf(Generation(AssistantMessage("answer"))))
         }
 
-        val pipeline = RagPipeline(repository, stubChatModel)
+        val pipeline = createPipeline(repository, stubChatModel)
         val query = RagQuery(question = "Tell me something", topK = 1, systemPrompt = "", modelOverride = null)
         val result = pipeline.query(query)
 
@@ -141,7 +145,7 @@ class RagPipelineTest {
             ChatResponse(listOf(Generation(AssistantMessage("answer"))))
         }
 
-        val pipeline = RagPipeline(repository, stubChatModel)
+        val pipeline = createPipeline(repository, stubChatModel)
         val query = RagQuery(question = "What?", topK = 5, systemPrompt = "", modelOverride = null)
         val result = pipeline.query(query)
 
@@ -165,7 +169,7 @@ class RagPipelineTest {
             ChatResponse(listOf(Generation(AssistantMessage("answer"))))
         }
 
-        val pipeline = RagPipeline(repository, stubChatModel)
+        val pipeline = createPipeline(repository, stubChatModel)
         val query = RagQuery(question = "What?", topK = 5, systemPrompt = "", modelOverride = null)
         val result = pipeline.query(query)
 
@@ -189,7 +193,7 @@ class RagPipelineTest {
             ChatResponse(listOf(Generation(AssistantMessage("answer"))))
         }
 
-        val pipeline = RagPipeline(repository, capturingChatModel)
+        val pipeline = createPipeline(repository, capturingChatModel)
         val query = RagQuery(question = "What?", topK = 5, systemPrompt = "", modelOverride = null)
         pipeline.query(query)
 
@@ -210,10 +214,8 @@ class RagPipelineTest {
             .build()
         repository.add(listOf(doc))
 
-        var chatModelInvoked = false
         val passthroughModel = PassthroughChatModel()
-        // Wrap PassthroughChatModel but track if call() is ever triggered (it should not be)
-        val pipeline = RagPipeline(repository, passthroughModel)
+        val pipeline = createPipeline(repository, passthroughModel)
         val query = RagQuery(question = "What is the capital of France?", topK = 5, systemPrompt = "", modelOverride = null)
         val result = pipeline.query(query)
 
@@ -243,7 +245,7 @@ class RagPipelineTest {
             }
         }
 
-        val pipeline = RagPipeline(repository, trackingPassthrough)
+        val pipeline = createPipeline(repository, trackingPassthrough)
         val query = RagQuery(question = "What?", topK = 5, systemPrompt = "", modelOverride = null)
         pipeline.query(query)
 
@@ -266,7 +268,7 @@ class RagPipelineTest {
             ChatResponse(listOf(Generation(AssistantMessage("answer"))))
         }
 
-        val pipeline = RagPipeline(repository, capturingChatModel)
+        val pipeline = createPipeline(repository, capturingChatModel)
         val customPrompt = "You are a domain expert. Only use the context."
         val query = RagQuery(question = "What?", topK = 5, systemPrompt = customPrompt, modelOverride = null)
         pipeline.query(query)
@@ -277,5 +279,11 @@ class RagPipelineTest {
         assertThat(systemMessage).isNotNull()
         assertThat(systemMessage!!.text).isEqualTo(customPrompt)
         assertThat(systemMessage.text).doesNotContain(RagPipeline.DEFAULT_RAG_SYSTEM_PROMPT)
+    }
+
+    @Test
+    fun `RagQuery has rerankCandidates field that defaults to null`() {
+        val query = RagQuery(question = "test", topK = 5, systemPrompt = "", modelOverride = null)
+        assertThat(query.rerankCandidates).isNull()
     }
 }

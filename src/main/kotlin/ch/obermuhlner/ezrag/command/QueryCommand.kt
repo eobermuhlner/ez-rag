@@ -1,11 +1,14 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.EzRagCommand
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.RagPipeline
 import ch.obermuhlner.ezrag.rag.RagQuery
+import ch.obermuhlner.ezrag.rag.Reranker
 import org.springframework.ai.chat.model.ChatModel
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.beans.factory.annotation.Autowired
@@ -13,6 +16,7 @@ import org.springframework.stereotype.Component
 import picocli.CommandLine.Command
 import picocli.CommandLine.Option
 import picocli.CommandLine.Parameters
+import picocli.CommandLine.ParentCommand
 import java.io.InputStream
 import java.io.PrintWriter
 import java.nio.file.Path
@@ -35,6 +39,9 @@ class QueryCommand(
     private val startDirOverride: Path? = null,
 ) : Callable<Int> {
 
+    @ParentCommand
+    private var parent: EzRagCommand? = null
+
     @Autowired(required = false)
     private var springEmbeddingModel: EmbeddingModel? = null
 
@@ -43,6 +50,9 @@ class QueryCommand(
 
     @Autowired(required = false)
     private var springConfigService: ConfigService? = null
+
+    @Autowired(required = false)
+    private var springReranker: Reranker? = null
 
     @Parameters(index = "0..*", description = ["Question to ask. Multiple tokens are joined with spaces. Reads from stdin if omitted."])
     var questionArgs: List<String> = emptyList()
@@ -59,20 +69,25 @@ class QueryCommand(
     @Option(names = ["--store-dir"], description = ["Path to the store directory."])
     var storeDirOption: String? = null
 
-    // These fields are settable for tests and also used when a caller sets them directly.
-    // --model and --verbose are inherited from the parent EzRagCommand (ScopeType.INHERIT)
-    // and not re-declared here to avoid DuplicateOptionAnnotationsException.
+    // Fallback fields for unit tests (where @ParentCommand is not wired by picocli).
+    // In production, parent?.x takes precedence.
     var modelOverride: String? = null
     var verbose: Boolean = false
+    var rerankModel: String? = null
+    var rerankCandidates: Int? = null
 
     override fun call(): Int {
+        val verbose = parent?.verbose ?: this.verbose
+        val rerankModel = parent?.rerankModel ?: this.rerankModel
+        val rerankCandidates = parent?.rerankCandidates ?: this.rerankCandidates
+        val modelOverride = parent?.model ?: this.modelOverride
+
         val storeDir = storeDirOverride
             ?: storeDirOption?.let { Paths.get(it) }
             ?: springConfigService?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
         val storeFilePath = storeDir.resolve("vector-store.json")
 
-        // Check store existence first
         val storeFile = storeFilePath.toFile()
         if (!storeFile.exists()) {
             outputWriter.println(
@@ -81,7 +96,6 @@ class QueryCommand(
             return 1
         }
 
-        // Resolve the question
         val resolvedQuestion = if (questionArgs.isNotEmpty()) {
             questionArgs.joinToString(" ")
         } else {
@@ -93,7 +107,6 @@ class QueryCommand(
             stdin
         }
 
-        // Resolve the pipeline (injected or built from Spring beans)
         val pipeline = ragPipeline
             ?: run {
                 val embeddingModel = springEmbeddingModel
@@ -102,14 +115,23 @@ class QueryCommand(
                     ?: return exitWithError("No chat model configured.")
                 val repository = VectorStoreRepository(embeddingModel, storeFilePath)
                 repository.load()
-                RagPipeline(repository, chatModel)
+                val embeddingSearchPipeline = EmbeddingSearchPipeline(repository, embeddingModel, springReranker)
+                RagPipeline(embeddingSearchPipeline, chatModel)
             }
+
+        val effectiveRerankCandidates = if (springReranker != null || rerankModel?.isNotEmpty() == true) {
+            rerankCandidates ?: (topK * 3)
+        } else {
+            null
+        }
 
         val ragQuery = RagQuery(
             question = resolvedQuestion,
             topK = topK,
             systemPrompt = systemPromptOverride,
             modelOverride = modelOverride,
+            rerankCandidates = effectiveRerankCandidates,
+            verbose = verbose,
         )
 
         val result = pipeline.query(ragQuery)

@@ -1,6 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.RagPipeline
 import ch.obermuhlner.ezrag.rag.RagQuery
 import ch.obermuhlner.ezrag.rag.RagResult
@@ -54,7 +55,8 @@ class McpQueryToolTest {
     ): RagPipeline {
         val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir.resolve("store.json"))
         repo.load()
-        return object : RagPipeline(repo, stubChatModel) {
+        val searchPipeline = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
+        return object : RagPipeline(searchPipeline, stubChatModel) {
             override fun query(ragQuery: RagQuery): RagResult {
                 capturedQueries.add(ragQuery)
                 if (throwException != null) throw throwException

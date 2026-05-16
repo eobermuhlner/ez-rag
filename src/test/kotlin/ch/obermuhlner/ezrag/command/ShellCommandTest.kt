@@ -66,7 +66,8 @@ class ShellCommandTest {
         answer: String = "Stub answer",
     ): RagPipeline {
         val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
-        return object : RagPipeline(repo, stubChatModel) {
+        val searchPipeline = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
+        return object : RagPipeline(searchPipeline, stubChatModel) {
             override fun query(ragQuery: RagQuery): RagResult {
                 calls.add(ragQuery)
                 return RagResult(answer, emptyList())
@@ -247,8 +248,9 @@ class ShellCommandTest {
         val storeFilePath = tempDir.resolve("vector-store.json")
         createStoreFile(storeFilePath)
         val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        val searchPipeline0 = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
         var callIndex = 0
-        val pipeline = object : RagPipeline(repo, stubChatModel) {
+        val pipeline = object : RagPipeline(searchPipeline0, stubChatModel) {
             override fun query(ragQuery: RagQuery): RagResult {
                 val idx = callIndex++
                 if (idx == 0) throw RuntimeException("Simulated failure")
@@ -420,8 +422,9 @@ class ShellCommandTest {
         val storeFilePath = tempDir.resolve("vector-store.json")
         createStoreFile(storeFilePath)
         val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        val searchPipelineForVerbose = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
         val source = SourceReference("doc.txt", 0, 0.9, "excerpt")
-        val pipeline = object : RagPipeline(repo, stubChatModel) {
+        val pipeline = object : RagPipeline(searchPipelineForVerbose, stubChatModel) {
             override fun query(ragQuery: RagQuery): RagResult = RagResult("Answer", listOf(source))
         }
         val out = StringWriter()

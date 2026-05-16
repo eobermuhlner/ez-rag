@@ -17,7 +17,9 @@ class EzRagConfiguration(private val environment: Environment) {
             embeddingProvider = environment.getProperty("ez.rag.embeddingProvider"),
             model = environment.getProperty("ez.rag.model"),
             embeddingModel = environment.getProperty("ez.rag.embeddingModel"),
-            ollamaUrl = environment.getProperty("ez.rag.ollamaUrl")
+            ollamaUrl = environment.getProperty("ez.rag.ollamaUrl"),
+            rerankModel = environment.getProperty("ez.rag.rerankModel"),
+            rerankCandidates = environment.getProperty("ez.rag.rerankCandidates")?.toIntOrNull()
         )
         return ConfigService(
             configFileSource = { readConfigFile() },

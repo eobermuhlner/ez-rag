@@ -164,4 +164,96 @@ class ConfigServiceTest {
         )
         assertThat(service.resolveExplicitStoreDir()).isEqualTo("/from/env")
     }
+
+    // ---- rerankModel resolution tests ----
+
+    @Test
+    fun `rerankModel resolves to CLI flag when flag is set`() {
+        val service = ConfigService(
+            configFileSource = { EzRagConfig(rerankModel = "file-model") },
+            envVars = mapOf("RERANK_MODEL" to "env-model")
+        )
+        assertThat(service.resolve(CliFlags(rerankModel = "cli-model")).rerankModel).isEqualTo("cli-model")
+    }
+
+    @Test
+    fun `rerankModel resolves to env var when only env var is set`() {
+        val service = ConfigService(
+            configFileSource = { null },
+            envVars = mapOf("RERANK_MODEL" to "env-model")
+        )
+        assertThat(service.resolve().rerankModel).isEqualTo("env-model")
+    }
+
+    @Test
+    fun `rerankModel resolves to config file value when only file sets it`() {
+        val service = ConfigService(
+            configFileSource = { EzRagConfig(rerankModel = "file-model") },
+            envVars = emptyMap()
+        )
+        assertThat(service.resolve().rerankModel).isEqualTo("file-model")
+    }
+
+    @Test
+    fun `EzRagConfig rerankModel defaults to cross-encoder/ms-marco-MiniLM-L-6-v2`() {
+        assertThat(EzRagConfig().rerankModel).isEqualTo("cross-encoder/ms-marco-MiniLM-L-6-v2")
+    }
+
+    @Test
+    fun `rerankModel resolves to cross-encoder model when no source specifies it`() {
+        val service = ConfigService(
+            configFileSource = { null },
+            envVars = emptyMap()
+        )
+        assertThat(service.resolve().rerankModel).isEqualTo("cross-encoder/ms-marco-MiniLM-L-6-v2")
+    }
+
+    // ---- rerankCandidates resolution tests ----
+
+    @Test
+    fun `rerankCandidates defaults to topK times 3 when rerankModel is set but rerankCandidates is not`() {
+        val service = ConfigService(
+            configFileSource = { null },
+            envVars = mapOf("RERANK_MODEL" to "some-model")
+        )
+        val config = service.resolve(CliFlags(topK = 4))
+        assertThat(config.rerankCandidates).isEqualTo(12) // 4 * 3
+    }
+
+    @Test
+    fun `rerankCandidates defaults to topK times 3 using default topK=5 when rerankModel is set`() {
+        val service = ConfigService(
+            configFileSource = { null },
+            envVars = mapOf("RERANK_MODEL" to "some-model")
+        )
+        assertThat(service.resolve().rerankCandidates).isEqualTo(15) // 5 * 3
+    }
+
+    @Test
+    fun `rerankCandidates defaults to topK times 3 when no source specifies rerankModel`() {
+        val service = ConfigService(
+            configFileSource = { null },
+            envVars = emptyMap()
+        )
+        assertThat(service.resolve().rerankCandidates).isEqualTo(15) // default topK=5, 5*3=15
+    }
+
+    @Test
+    fun `rerankCandidates is null when rerankModel is explicitly disabled via env var`() {
+        val service = ConfigService(
+            configFileSource = { null },
+            envVars = mapOf("RERANK_MODEL" to "")
+        )
+        assertThat(service.resolve().rerankCandidates).isNull()
+    }
+
+    @Test
+    fun `rerankCandidates explicit CLI value overrides topK times 3 default`() {
+        val service = ConfigService(
+            configFileSource = { null },
+            envVars = mapOf("RERANK_MODEL" to "some-model")
+        )
+        val config = service.resolve(CliFlags(rerankCandidates = 20))
+        assertThat(config.rerankCandidates).isEqualTo(20)
+    }
 }

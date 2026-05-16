@@ -35,7 +35,9 @@ fun preParseProviderFlags(args: Array<String>): Map<String, String> {
         "--embedding-provider" to "ez.rag.embeddingProvider",
         "--model" to "ez.rag.model",
         "--embedding-model" to "ez.rag.embeddingModel",
-        "--ollama-url" to "ez.rag.ollamaUrl"
+        "--ollama-url" to "ez.rag.ollamaUrl",
+        "--rerank-model" to "ez.rag.rerankModel",
+        "--rerank-candidates" to "ez.rag.rerankCandidates"
     )
     val result = mutableMapOf<String, String>()
     var isMcpServer = false

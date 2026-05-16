@@ -12,5 +12,7 @@ data class CliFlags(
     val topK: Int? = null,
     val systemPrompt: String? = null,
     val outputFormat: String? = null,
-    val verbose: Boolean? = null
+    val verbose: Boolean? = null,
+    val rerankModel: String? = null,
+    val rerankCandidates: Int? = null
 )

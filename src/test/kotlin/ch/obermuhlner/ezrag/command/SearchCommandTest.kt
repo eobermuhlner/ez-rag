@@ -1,8 +1,10 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.rag.ChunkMatch
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
+import ch.obermuhlner.ezrag.rag.Reranker
 import ch.obermuhlner.ezrag.rag.SearchQuery
 import ch.obermuhlner.ezrag.rag.SearchResult
 import org.assertj.core.api.Assertions.assertThat
@@ -295,6 +297,57 @@ class SearchCommandTest {
         cmd2.questionArgs = listOf("test query")
         val exitCode2 = cmd2.call()
         assertThat(exitCode2).isEqualTo(0)
+    }
+
+    // -----------------------------------------------------------------------
+    // Regression: springReranker injected from config activates reranking
+    // even when --rerank-model is not passed on the CLI
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `springReranker from config activates reranking without CLI flag`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        createPopulatedRepository(storeFilePath)
+
+        val capturedQueries = mutableListOf<SearchQuery>()
+        val capturingPipeline = object : EmbeddingSearchPipeline(
+            VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() },
+            fakeEmbeddingModel
+        ) {
+            override fun search(query: SearchQuery): SearchResult {
+                capturedQueries.add(query)
+                return SearchResult(emptyList())
+            }
+        }
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = SearchCommand(
+            storeDirOverride = storeFilePath.parent,
+            searchPipeline = capturingPipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        cmd.questionArgs = listOf("test")
+        cmd.topK = 5
+        // rerankModel is NOT set — simulating config-file injection of the reranker
+
+        val stubReranker = object : Reranker {
+            override val name = "stub"
+            override fun rerank(query: String, candidates: List<ChunkMatch>) = candidates
+        }
+        val field = SearchCommand::class.java.getDeclaredField("springReranker")
+        field.isAccessible = true
+        field.set(cmd, stubReranker)
+
+        cmd.call()
+
+        assertThat(capturedQueries).hasSize(1)
+        assertThat(capturedQueries[0].rerankCandidates)
+            .describedAs("rerankCandidates should default to topK * 3 = 15")
+            .isEqualTo(15)
     }
 
     // -----------------------------------------------------------------------

@@ -9,6 +9,15 @@ class ConfigService(
     fun resolve(cliFlags: CliFlags = CliFlags()): EzRagConfig {
         val file = configFileSource() ?: EzRagConfig()
 
+        val topK = cliFlags.topK ?: envVars["TOP_K"]?.toIntOrNull() ?: file.topK
+        val rerankModel = cliFlags.rerankModel ?: envVars["RERANK_MODEL"] ?: file.rerankModel
+        val explicitRerankCandidates = cliFlags.rerankCandidates ?: envVars["RERANK_CANDIDATES"]?.toIntOrNull() ?: file.rerankCandidates
+        val rerankCandidates = if (rerankModel.isNotEmpty()) {
+            explicitRerankCandidates ?: (topK * 3)
+        } else {
+            null
+        }
+
         return EzRagConfig(
             provider = cliFlags.provider ?: startupFlags.provider ?: envVars["PROVIDER"] ?: file.provider,
             embeddingProvider = cliFlags.embeddingProvider ?: startupFlags.embeddingProvider ?: envVars["EMBEDDING_PROVIDER"] ?: file.embeddingProvider,
@@ -18,10 +27,12 @@ class ConfigService(
             storeDir = cliFlags.storeDir ?: envVars["STORE_DIR"] ?: file.storeDir ?: ".ez-rag",
             chunkSize = cliFlags.chunkSize ?: envVars["CHUNK_SIZE"]?.toIntOrNull() ?: file.chunkSize,
             chunkOverlap = cliFlags.chunkOverlap ?: envVars["CHUNK_OVERLAP"]?.toIntOrNull() ?: file.chunkOverlap,
-            topK = cliFlags.topK ?: envVars["TOP_K"]?.toIntOrNull() ?: file.topK,
+            topK = topK,
             systemPrompt = cliFlags.systemPrompt ?: envVars["SYSTEM_PROMPT"] ?: file.systemPrompt,
             outputFormat = cliFlags.outputFormat ?: envVars["OUTPUT_FORMAT"] ?: file.outputFormat,
-            verbose = cliFlags.verbose ?: envVars["VERBOSE"]?.toBooleanStrictOrNull() ?: file.verbose
+            verbose = cliFlags.verbose ?: envVars["VERBOSE"]?.toBooleanStrictOrNull() ?: file.verbose,
+            rerankModel = rerankModel,
+            rerankCandidates = rerankCandidates
         )
     }
 

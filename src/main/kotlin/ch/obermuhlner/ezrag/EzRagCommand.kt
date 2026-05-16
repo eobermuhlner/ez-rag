@@ -56,6 +56,12 @@ class EzRagCommand : Callable<Int> {
     @Option(names = ["--ollama-url"], description = ["Ollama base URL (default: http://localhost:11434)."], scope = ScopeType.INHERIT)
     var ollamaUrl: String? = null
 
+    @Option(names = ["--rerank-model"], description = ["Cross-encoder reranker model name (empty = reranking disabled)."], scope = ScopeType.INHERIT)
+    var rerankModel: String? = null
+
+    @Option(names = ["--rerank-candidates"], description = ["Number of candidates to fetch before reranking (default: topK * 3)."], scope = ScopeType.INHERIT)
+    var rerankCandidates: Int? = null
+
     override fun call(): Int {
         if (verbose) {
             (LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger).level = Level.DEBUG
