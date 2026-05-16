@@ -9,6 +9,7 @@ import org.springframework.ai.ollama.OllamaEmbeddingModel
 import org.springframework.ai.openai.OpenAiChatModel
 import org.springframework.ai.openai.OpenAiEmbeddingModel
 import org.springframework.ai.transformers.TransformersEmbeddingModel
+import ch.obermuhlner.ezrag.rag.PassthroughChatModel
 
 class ProviderConfigurationTest {
 
@@ -108,6 +109,14 @@ class ProviderConfigurationTest {
             .hasMessageContaining("embedding")
     }
 
+    // ---- Task 01-passthrough-provider: passthrough chat provider ----
+
+    @Test
+    fun `chatModel returns PassthroughChatModel when provider is passthrough`() {
+        val config = ProviderConfiguration(configServiceWith(provider = "passthrough", model = ""))
+        assertThat(config.chatModel()).isInstanceOf(PassthroughChatModel::class.java)
+    }
+
     @Test
     fun `chatModel throws IllegalArgumentException for unknown provider`() {
         val config = ProviderConfiguration(configServiceWith(provider = "not-a-provider"))
@@ -115,6 +124,7 @@ class ProviderConfigurationTest {
             .isInstanceOf(IllegalArgumentException::class.java)
             .hasMessageContaining("not-a-provider")
             .hasMessageContaining("openai")
+            .hasMessageContaining("passthrough")
     }
 
     @Test

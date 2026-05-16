@@ -2,6 +2,7 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.IngestService
 import org.springframework.ai.embedding.EmbeddingModel
+import org.springframework.ai.transformers.TransformersEmbeddingModel
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 import picocli.CommandLine.Command
@@ -27,6 +28,7 @@ class IngestCommand(
     private val chunkSize: Int? = null,
     private val chunkOverlap: Int? = null,
     private val verbose: Boolean = false,
+    private val modelCachePath: Path = Paths.get(System.getProperty("user.home"), ".ez-rag", "models"),
 ) : Callable<Int> {
 
     @Autowired(required = false)
@@ -48,6 +50,15 @@ class IngestCommand(
 
     fun call(files: List<File>): Int {
         val model = embeddingModel ?: springEmbeddingModel ?: return exitWithError("No embedding model configured.")
+
+        // First-run detection: print a one-line message if the ONNX model has not been downloaded yet
+        if (model is TransformersEmbeddingModel) {
+            val cacheDir = modelCachePath.toFile()
+            val cacheEmpty = !cacheDir.exists() || (cacheDir.isDirectory && (cacheDir.list()?.isEmpty() != false))
+            if (cacheEmpty) {
+                outputWriter.println("Downloading embedding model all-MiniLM-L6-v2 (first run, this may take a moment)…")
+            }
+        }
 
         // Pre-flight: verify embedding provider is usable before any file I/O
         try {

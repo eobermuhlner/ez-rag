@@ -16,6 +16,7 @@ import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
+import ch.obermuhlner.ezrag.rag.PassthroughChatModel
 import java.nio.file.Path
 
 class RagPipelineTest {
@@ -197,6 +198,56 @@ class RagPipelineTest {
             .firstOrNull()
         assertThat(systemMessage).isNotNull()
         assertThat(systemMessage!!.text).contains(RagPipeline.DEFAULT_RAG_SYSTEM_PROMPT)
+    }
+
+    @Test
+    fun `query with PassthroughChatModel returns contextText as answer and populates sources`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc = Document.builder()
+            .text("The capital of France is Paris.")
+            .metadata(mapOf("source" to "geography.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc))
+
+        var chatModelInvoked = false
+        val passthroughModel = PassthroughChatModel()
+        // Wrap PassthroughChatModel but track if call() is ever triggered (it should not be)
+        val pipeline = RagPipeline(repository, passthroughModel)
+        val query = RagQuery(question = "What is the capital of France?", topK = 5, systemPrompt = "", modelOverride = null)
+        val result = pipeline.query(query)
+
+        val expectedContextText = "--- Context: geography.txt ---\nThe capital of France is Paris."
+        assertThat(result.answer).isEqualTo(expectedContextText)
+        assertThat(result.sources).hasSize(1)
+        assertThat(result.sources.first().filePath).isEqualTo("geography.txt")
+        assertThat(result.sources.first().chunkIndex).isEqualTo(0)
+        assertThat(result.sources.first().excerpt).contains("The capital of France is Paris.")
+    }
+
+    @Test
+    fun `query with PassthroughChatModel never invokes chatModel call`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc = Document.builder()
+            .text("Some content.")
+            .metadata(mapOf("source" to "test.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc))
+
+        var chatModelCallInvoked = false
+        val trackingPassthrough = object : PassthroughChatModel() {
+            override fun call(prompt: Prompt): ChatResponse {
+                chatModelCallInvoked = true
+                return super.call(prompt)
+            }
+        }
+
+        val pipeline = RagPipeline(repository, trackingPassthrough)
+        val query = RagQuery(question = "What?", topK = 5, systemPrompt = "", modelOverride = null)
+        pipeline.query(query)
+
+        assertThat(chatModelCallInvoked).isFalse()
     }
 
     @Test

@@ -2,6 +2,7 @@ spring:
   main:
     banner-mode: off
     web-application-type: none
+    lazy-initialization: true
   autoconfigure:
     exclude:
       - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration

@@ -1,10 +1,10 @@
 package ch.obermuhlner.ezrag.config
 
 data class EzRagConfig(
-    val provider: String = "openai",
-    val embeddingProvider: String = "openai",
-    val model: String = "gpt-4o-mini",
-    val embeddingModel: String = "text-embedding-3-small",
+    val provider: String = "passthrough",
+    val embeddingProvider: String = "onnx",
+    val model: String = "",
+    val embeddingModel: String = "all-MiniLM-L6-v2",
     val ollamaUrl: String = "http://localhost:11434",
     val storePath: String = ".ez-rag/vector-store.json",
     val chunkSize: Int = 1000,

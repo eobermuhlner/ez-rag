@@ -1,6 +1,5 @@
-- fix very slow startup time
-- default configuration should allow using ez-rag immediately (e.g. ONNX embedding + dummy model). Will this be a problem later when implementing reranking which presumably uses the same model?
-- add BM25 search and hybrid search (default?)
-- add reranking search results
+- add optional reranking search results (using cross-encode model, configured independently)
 - add markdown chunking
 - add pdf to markdown converter
+- add local .ez-rag/config.yaml support (overriding defaults in ~/.ez-rag/config.yaml)
+- use LuceneVectorStore for semantic search instead of SimpleVectorStore

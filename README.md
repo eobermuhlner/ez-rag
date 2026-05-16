@@ -5,10 +5,8 @@ A command-line tool for RAG (retrieval-augmented generation). Ingest documents i
 ## Requirements
 
 - JDK 21 or later (the build scripts embed a JDK 21 toolchain as fallback)
-- One of the following to run queries:
-  - An `OPENAI_API_KEY` for OpenAI
-  - An `ANTHROPIC_API_KEY` for Anthropic
-  - A running [Ollama](https://ollama.ai) instance for fully local inference
+
+No API key is required for basic use. The default configuration uses a local ONNX embedding model (`all-MiniLM-L6-v2`) and returns retrieved context chunks directly instead of calling an LLM. To get LLM-generated answers, configure a provider explicitly (see [Providers](#providers)).
 
 ## Build and install
 
@@ -30,25 +28,34 @@ ez-rag --help
 
 ## Quick start
 
-```sh
-export OPENAI_API_KEY=sk-...
+No configuration needed — works out of the box:
 
-# Ingest a directory of documents
+```sh
+# Ingest a directory of documents (downloads embedding model on first run)
 ez-rag ingest ./docs
 
-# Ask a question
+# Retrieve relevant chunks (passthrough mode: no LLM required)
 ez-rag query "What is the project's license?"
 
 # Multi-word questions can be passed without quotes
 ez-rag query What is the project license?
+```
 
-# Use Anthropic for chat, OpenAI for embeddings
-ez-rag query --provider anthropic --embedding-provider openai "Summarize the architecture."
+To get LLM-generated answers, specify a provider:
 
-# Fully local setup with Ollama
+```sh
+export OPENAI_API_KEY=sk-...
+ez-rag query --provider openai "Summarize the architecture."
+
+export ANTHROPIC_API_KEY=sk-ant-...
+ez-rag query --provider anthropic "What are the main features?"
+
+# Fully local setup with Ollama (no API key)
 ez-rag ingest --embedding-provider ollama ./docs
 ez-rag query --provider ollama --embedding-provider ollama "What are the main features?"
+```
 
+```sh
 # Pipe a question from stdin
 echo "What is X?" | ez-rag search
 ```
@@ -80,8 +87,8 @@ These flags apply to all subcommands:
 
 | Flag                   | Default                  | Description                                    |
 |------------------------|--------------------------|------------------------------------------------|
-| `--provider`           | `openai`                 | Chat provider: `openai`, `anthropic`, `ollama` |
-| `--embedding-provider` | `openai`                 | Embedding provider: `openai`, `ollama`, `onnx` |
+| `--provider`           | `passthrough`            | Chat provider: `passthrough`, `openai`, `anthropic`, `ollama` |
+| `--embedding-provider` | `onnx`                   | Embedding provider: `onnx`, `openai`, `ollama` |
 | `--model`              | provider default         | Override the chat model name                   |
 | `--embedding-model`    | provider default         | Override the embedding model name              |
 | `--ollama-url`         | `http://localhost:11434` | Ollama base URL                                |
@@ -91,11 +98,12 @@ These flags apply to all subcommands:
 
 ### Chat providers
 
-| Provider    | Default model       | Environment variable         |
-|-------------|---------------------|------------------------------|
-| `openai`    | `gpt-4o-mini`       | `OPENAI_API_KEY`             |
-| `anthropic` | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY`          |
-| `ollama`    | `llama3.2`          | `OLLAMA_BASE_URL` (optional) |
+| Provider      | Default model       | Environment variable         | Notes                                               |
+|---------------|---------------------|------------------------------|-----------------------------------------------------|
+| `passthrough` | —                   | —                            | Default. Returns retrieved context chunks directly; no LLM call, no API key required. |
+| `openai`      | `gpt-4o-mini`       | `OPENAI_API_KEY`             |                                                     |
+| `anthropic`   | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY`          |                                                     |
+| `ollama`      | `llama3.2`          | `OLLAMA_BASE_URL` (optional) | Requires a running Ollama instance                  |
 
 ### Embedding providers
 
@@ -114,18 +122,18 @@ The ONNX provider requires no API key and sends no data to external services. It
 Persistent defaults can be set in `~/.ez-rag/config.yml` so you do not have to repeat flags on every invocation. CLI flags always override the config file.
 
 ```yaml
-provider: openai
-embedding-provider: onnx
-model: gpt-4o
-embedding-model: text-embedding-3-small
-ollama-url: http://localhost:11434
-store-path: .ez-rag/vector-store.json
-chunk-size: 1000
-chunk-overlap: 200
-top-k: 5
-system-prompt: ""
-output-format: text
-verbose: false
+#provider: openai           # default: passthrough
+#embedding-provider: onnx   # default: onnx
+#model: gpt-4o              # default: "" (ignored for passthrough)
+#embedding-model: text-embedding-3-small   # default: all-MiniLM-L6-v2
+#ollama-url: http://localhost:11434
+#store-path: .ez-rag/vector-store.json
+#chunk-size: 1000
+#chunk-overlap: 200
+#top-k: 5
+#system-prompt: ""
+#output-format: text
+#verbose: false
 ```
 
 All keys support both camelCase (`chunkSize`) and kebab-case (`chunk-size`) spelling.
@@ -168,14 +176,14 @@ Add the following to `.claude/mcp.json` in your project (create the file if it d
 }
 ```
 
-To use a specific provider or a non-default store location:
+To use an LLM provider or a non-default store location:
 
 ```json
 {
   "mcpServers": {
     "ez-rag": {
       "command": "ez-rag",
-      "args": ["mcp-server", "--provider", "anthropic", "--embedding-provider", "onnx", "--store", ".ez-rag/vector-store.json"]
+      "args": ["mcp-server", "--provider", "openai", "--store", ".ez-rag/vector-store.json"]
     }
   }
 }
@@ -185,8 +193,8 @@ To use a specific provider or a non-default store location:
 
 | Flag                   | Default                          | Description                                            |
 |------------------------|----------------------------------|--------------------------------------------------------|
-| `--provider`           | `openai`                         | Chat provider used by the `query` tool                 |
-| `--embedding-provider` | `openai`                         | Embedding provider used by all tools                   |
+| `--provider`           | `passthrough`                    | Chat provider used by the `query` tool                 |
+| `--embedding-provider` | `onnx`                           | Embedding provider used by all tools                   |
 | `--store`              | `.ez-rag/vector-store.json`      | Path to the vector store JSON file                     |
 | `--verbose` / `-v`     | off                              | Enable debug logging to stderr (does not affect stdout)|
 
@@ -222,7 +230,7 @@ Searches the vector store using embeddings and returns matching chunks. No LLM i
 
 #### `query`
 
-Retrieves relevant chunks and generates an answer using the configured LLM (RAG).
+Retrieves relevant chunks and returns an answer. With the default `passthrough` provider the context chunks are returned directly; with a real provider an LLM generates the answer.
 
 | Parameter  | Type   | Required | Default          | Description                          |
 |------------|--------|----------|------------------|--------------------------------------|
@@ -233,7 +241,7 @@ Retrieves relevant chunks and generates an answer using the configured LLM (RAG)
 
 | Return field | Type            | Description                                                              |
 |--------------|-----------------|--------------------------------------------------------------------------|
-| `answer`     | String          | LLM-generated answer                                                     |
+| `answer`     | String          | Generated answer, or context chunks if using the `passthrough` provider  |
 | `sources`    | List of objects | Each entry has `filePath`, `chunkIndex`, `similarityScore`, `excerpt`    |
 | `error`      | String or null  | Set when an error occurred                                               |
 

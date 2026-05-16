@@ -53,6 +53,10 @@ Always cite which document(s) your answer is based on."""
             "--- Context: ${doc.metadata["source"] ?: "unknown"} ---\n${doc.text}"
         }.joinToString("\n\n")
 
+        if (chatModel is PassthroughChatModel) {
+            return RagResult(answer = contextText, sources = sources)
+        }
+
         val userContent = "$contextText\n\n${ragQuery.question}"
 
         val prompt = Prompt(listOf(SystemMessage(effectiveSystemPrompt), UserMessage(userContent)))
