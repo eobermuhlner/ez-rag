@@ -133,6 +133,25 @@ class StatusCommandTest {
     }
 
     @Test
+    fun `status works without embedding model`(@TempDir tempDir: Path) {
+        val storePath = tempDir.resolve("vector-store.json")
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        repo.load()
+        repo.add(listOf(
+            Document.builder().text("Hello world content")
+                .metadata(mapOf("source" to "test.txt", "mtime" to 1000L)).build()
+        ))
+        repo.save()
+
+        val out = StringWriter()
+        val statusCommand = StatusCommand(embeddingModel = null, storePathOverride = storePath, outputWriter = PrintWriter(out))
+        val exitCode = statusCommand.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(out.toString()).contains("test.txt")
+    }
+
+    @Test
     fun `status text output lists files alphabetically`(@TempDir tempDir: Path) {
         val storePath = tempDir.resolve("vector-store.json")
         val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)

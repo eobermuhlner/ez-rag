@@ -2,7 +2,11 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.springframework.ai.document.Document
+import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
+import org.springframework.ai.embedding.EmbeddingRequest
+import org.springframework.ai.embedding.EmbeddingResponse
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 import picocli.CommandLine.Command
@@ -32,10 +36,7 @@ class StatusCommand(
     var outputFormat: String = "text"
 
     override fun call(): Int {
-        val model = embeddingModel ?: springEmbeddingModel ?: run {
-            errorWriter.println("Error: No embedding model configured.")
-            return 1
-        }
+        val model = embeddingModel ?: springEmbeddingModel ?: stubEmbeddingModel()
         val storePath = storePathOverride ?: Paths.get(".ez-rag/vector-store.json")
 
         val repository = VectorStoreRepository(model, storePath)
@@ -71,5 +72,15 @@ class StatusCommand(
         }
 
         return 0
+    }
+
+    private fun stubEmbeddingModel(): EmbeddingModel = object : EmbeddingModel {
+        override fun call(request: EmbeddingRequest): EmbeddingResponse =
+            EmbeddingResponse(request.instructions.mapIndexed { i, _ -> Embedding(FloatArray(0), i) })
+        override fun embed(document: Document): FloatArray = FloatArray(0)
+        override fun embed(text: String): FloatArray = FloatArray(0)
+        override fun embedForResponse(texts: List<String>): EmbeddingResponse =
+            EmbeddingResponse(texts.mapIndexed { i, _ -> Embedding(FloatArray(0), i) })
+        override fun dimensions(): Int = 0
     }
 }
