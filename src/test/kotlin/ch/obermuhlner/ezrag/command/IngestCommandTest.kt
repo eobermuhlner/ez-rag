@@ -152,4 +152,120 @@ class IngestCommandTest {
         val output = out.toString()
         assertThat(output).doesNotContain("Downloading embedding model")
     }
+
+    @Test
+    fun `default mode prints Ingesting line for each file`(@TempDir tempDir: Path) {
+        val file1 = tempDir.resolve("file1.txt").also { it.toFile().writeText("Hello world.") }
+        val file2 = tempDir.resolve("file2.txt").also { it.toFile().writeText("Another document.") }
+        val storePath = tempDir.resolve("vector-store.json")
+        val out = StringWriter()
+
+        val cmd = IngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storePathOverride = storePath,
+            outputWriter = PrintWriter(out, true),
+        )
+        cmd.call(listOf(file1.toFile(), file2.toFile()))
+
+        val output = out.toString()
+        assertThat(output).contains("Ingesting: $file1")
+        assertThat(output).contains("Ingesting: $file2")
+    }
+
+    @Test
+    fun `default mode prints Ingesting before summary line`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("file.txt").also { it.toFile().writeText("Hello world.") }
+        val storePath = tempDir.resolve("vector-store.json")
+        val out = StringWriter()
+
+        val cmd = IngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storePathOverride = storePath,
+            outputWriter = PrintWriter(out, true),
+        )
+        cmd.call(listOf(file.toFile()))
+
+        val output = out.toString()
+        val ingestingIdx = output.indexOf("Ingesting:")
+        val summaryIdx = output.indexOf("files ingested")
+        assertThat(ingestingIdx).isGreaterThanOrEqualTo(0)
+        assertThat(ingestingIdx).isLessThan(summaryIdx)
+    }
+
+    @Test
+    fun `default mode prints Skipping for already-ingested files`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("file.txt").also { it.toFile().writeText("Hello world.") }
+        val storePath = tempDir.resolve("vector-store.json")
+        val out = StringWriter()
+
+        val cmd = IngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storePathOverride = storePath,
+            outputWriter = PrintWriter(out, true),
+        )
+        cmd.call(listOf(file.toFile()))
+        out.buffer.setLength(0)
+        cmd.call(listOf(file.toFile()))
+
+        val output = out.toString()
+        assertThat(output).contains("Skipping: $file")
+        assertThat(output).contains("already ingested")
+    }
+
+    @Test
+    fun `quiet mode suppresses per-file lines`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("file.txt").also { it.toFile().writeText("Hello world.") }
+        val storePath = tempDir.resolve("vector-store.json")
+        val out = StringWriter()
+
+        val cmd = IngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storePathOverride = storePath,
+            outputWriter = PrintWriter(out, true),
+            quiet = true,
+        )
+        cmd.call(listOf(file.toFile()))
+
+        val output = out.toString()
+        assertThat(output).doesNotContain("Ingesting:")
+        assertThat(output).contains("files ingested")
+    }
+
+    @Test
+    fun `verbose mode prints chunk details`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("file.txt").also { it.toFile().writeText("Hello world. This is a test.") }
+        val storePath = tempDir.resolve("vector-store.json")
+        val out = StringWriter()
+
+        val cmd = IngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storePathOverride = storePath,
+            outputWriter = PrintWriter(out, true),
+            verbose = true,
+        )
+        cmd.call(listOf(file.toFile()))
+
+        val output = out.toString()
+        assertThat(output).contains("Chunk 0")
+        assertThat(output).containsPattern(Regex("\\[\\d+ tokens\\]").toPattern())
+    }
+
+    @Test
+    fun `--details flag prints chunk details`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("file.txt").also { it.toFile().writeText("Hello world. This is a test.") }
+        val storePath = tempDir.resolve("vector-store.json")
+        val out = StringWriter()
+
+        val cmd = IngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storePathOverride = storePath,
+            outputWriter = PrintWriter(out, true),
+        )
+        cmd.detailsOption = true
+        cmd.call(listOf(file.toFile()))
+
+        val output = out.toString()
+        assertThat(output).contains("Chunk 0")
+        assertThat(output).containsPattern(Regex("\\[\\d+ tokens\\]").toPattern())
+    }
 }

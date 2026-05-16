@@ -277,7 +277,7 @@ class IngestIntegrationTest {
     }
 
     @Test
-    fun `verbose ingest produces Loading and Chunk lines`(@TempDir tempDir: Path) {
+    fun `verbose ingest produces Ingesting and Chunk lines`(@TempDir tempDir: Path) {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText(
             "Hello world. This is a test document for verbose output. " +
@@ -296,8 +296,8 @@ class IngestIntegrationTest {
 
         assertThat(exitCode).isEqualTo(0)
         val output = out.toString()
-        assertThat(output).containsPattern("Loading:.*sample\\.txt")
-        assertThat(output).containsPattern("Chunk \\d+:.*token")
+        assertThat(output).containsPattern("Ingesting:.*sample\\.txt")
+        assertThat(output).containsPattern("Chunk \\d+ \\[\\d+ tokens\\]:")
     }
 
     @Test

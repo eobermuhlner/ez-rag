@@ -68,7 +68,7 @@ echo "What is X?" | ez-rag search
 
 | Command                        | Description                                                                                        |
 |--------------------------------|----------------------------------------------------------------------------------------------------|
-| `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`.    |
+| `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`. Prints each file as it is ingested. |
 | `query [<word>...]`            | Retrieve relevant chunks and answer using an LLM. Reads question from positional args or stdin.    |
 | `status`                       | Show the vector store path, chunk count, and list of ingested documents.                           |
 | `search [<word>...]`           | Pure embedding search returning raw chunks without LLM involvement. Reads question from positional args or stdin. |
@@ -76,6 +76,37 @@ echo "What is X?" | ez-rag search
 | `shell`                        | _(not yet implemented)_ Interactive REPL mode.                                                     |
 
 Every command accepts `--help` for details.
+
+## Ingest-specific flags
+
+| Flag             | Description                                                                                   |
+|------------------|-----------------------------------------------------------------------------------------------|
+| `--quiet` / `-q` | Suppress per-file output; print only the final summary line.                                  |
+| `--details`      | Print chunk details (token count and text preview) for each ingested file.                    |
+
+By default, `ingest` prints one line per file as it processes it:
+
+```
+Ingesting: docs/getting-started.md
+Ingesting: docs/configuration.md
+Skipping: docs/old-guide.md (already ingested)
+2 files ingested, 14 chunks created, 1 skipped
+```
+
+Pass `--quiet` to suppress everything except the summary:
+
+```
+2 files ingested, 14 chunks created, 1 skipped
+```
+
+Pass `--details` to also print chunk token counts and text previews, useful for tuning `--chunk-size`:
+
+```
+Ingesting: docs/getting-started.md
+  Chunk 0 [312 tokens]: "Introduction This guide walks you through…"
+  Chunk 1 [287 tokens]: "Configuration All settings can be overrid…"
+1 files ingested, 2 chunks created, 0 skipped
+```
 
 ## Search-specific flags
 

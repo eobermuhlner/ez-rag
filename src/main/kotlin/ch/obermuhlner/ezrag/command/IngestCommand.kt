@@ -28,6 +28,7 @@ class IngestCommand(
     private val chunkSize: Int? = null,
     private val chunkOverlap: Int? = null,
     private val verbose: Boolean = false,
+    private val quiet: Boolean = false,
     private val modelCachePath: Path = Paths.get(System.getProperty("user.home"), ".ez-rag", "models"),
 ) : Callable<Int> {
 
@@ -45,6 +46,12 @@ class IngestCommand(
 
     @Option(names = ["--chunk-overlap"], description = ["Chunk overlap in tokens (default: 200)."])
     var chunkOverlapOption: Int? = null
+
+    @Option(names = ["--quiet", "-q"], description = ["Suppress per-file output; show only the summary line."])
+    var quietOption: Boolean = false
+
+    @Option(names = ["--details"], description = ["Print chunk details (token count and text preview) for each ingested file."])
+    var detailsOption: Boolean = false
 
     override fun call(): Int = call(paths)
 
@@ -75,12 +82,22 @@ class IngestCommand(
 
         val service = IngestService(model, resolvedStorePath, resolvedChunkSize, resolvedChunkOverlap, warningWriter)
 
-        if (verbose) {
-            service.onFileLoaded = { path, chunks ->
-                outputWriter.println("Loading: $path")
+        val isQuiet = quiet || quietOption
+        val isVerbose = verbose || detailsOption
+
+        if (!isQuiet) {
+            service.onFileIngesting = { path -> outputWriter.println("Ingesting: $path") }
+            service.onFileSkipped = { path, reason -> outputWriter.println("Skipping: $path ($reason)") }
+        }
+
+        if (isVerbose) {
+            service.onFileLoaded = { _, chunks ->
                 chunks.forEachIndexed { index, chunk ->
                     val tokenCount = chunk.text?.split(Regex("\\s+"))?.size ?: 0
-                    outputWriter.println("Chunk $index: $tokenCount tokens")
+                    val text = chunk.text ?: ""
+                    val preview = if (text.length > 60) text.take(60).replace('\n', ' ') + "…"
+                                  else text.replace('\n', ' ')
+                    outputWriter.println("  Chunk $index [$tokenCount tokens]: \"$preview\"")
                 }
             }
         }

@@ -20,10 +20,8 @@ open class IngestService(
     private val warningWriter: PrintWriter = PrintWriter(System.err, true),
 ) {
 
-    /**
-     * Optional callback invoked for each file loaded and its chunks, for verbose output.
-     * Parameters: (filePath, chunks)
-     */
+    var onFileIngesting: ((Path) -> Unit)? = null
+    var onFileSkipped: ((Path, String) -> Unit)? = null
     var onFileLoaded: ((Path, List<Document>) -> Unit)? = null
 
     open fun ingest(files: List<File>): IngestResult {
@@ -60,9 +58,11 @@ open class IngestService(
             val mtime = path.toFile().lastModified()
             val sourceKey = path.toString()
             if (repository.isAlreadyIngested(sourceKey, mtime)) {
+                onFileSkipped?.invoke(path, "already ingested")
                 skipped++
                 continue
             }
+            onFileIngesting?.invoke(path)
             val documents = loader.load(path)
             val chunks = withMtime(chunker.split(documents), mtime)
             onFileLoaded?.invoke(path, chunks)
