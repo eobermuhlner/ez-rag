@@ -1,5 +1,8 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.config.CredentialSource
+import ch.obermuhlner.ezrag.config.Credentials
+import ch.obermuhlner.ezrag.config.CredentialsService
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.ai.document.Document
@@ -27,10 +30,14 @@ class StatusCommand(
     private val storePathOverride: Path? = null,
     private val outputWriter: PrintWriter = PrintWriter(System.out, true),
     private val errorWriter: PrintWriter = PrintWriter(System.err, true),
+    private val credentials: Credentials = allUnsetCredentials(),
 ) : Callable<Int> {
 
     @Autowired(required = false)
     private var springEmbeddingModel: EmbeddingModel? = null
+
+    @Autowired(required = false)
+    private var springCredentialsService: CredentialsService? = null
 
     @Option(names = ["--output-format"], description = ["Output format: text, json."])
     var outputFormat: String = "text"
@@ -38,6 +45,8 @@ class StatusCommand(
     override fun call(): Int {
         val model = embeddingModel ?: springEmbeddingModel ?: stubEmbeddingModel()
         val storePath = storePathOverride ?: Paths.get(".ez-rag/vector-store.json")
+        // Use injected credentials (for tests), or resolve from Spring service (production), or fall back to all-unset.
+        val resolvedCredentials = springCredentialsService?.resolve() ?: credentials
 
         val repository = VectorStoreRepository(model, storePath)
 
@@ -59,7 +68,11 @@ class StatusCommand(
             val result = mapOf(
                 "storePath" to metadata.storePath,
                 "chunkCount" to metadata.chunkCount,
-                "documents" to docsArray
+                "documents" to docsArray,
+                "credentials" to mapOf(
+                    "openaiApiKey" to credentialSourceString(resolvedCredentials.openaiApiKeySource),
+                    "anthropicApiKey" to credentialSourceString(resolvedCredentials.anthropicApiKeySource),
+                )
             )
             outputWriter.println(mapper.writeValueAsString(result))
         } else {
@@ -69,9 +82,19 @@ class StatusCommand(
             for (doc in metadata.documents) {
                 outputWriter.println("  ${doc.path}  (${doc.chunkCount} chunks)")
             }
+            outputWriter.println()
+            outputWriter.println("Credentials:")
+            outputWriter.println("  openai-api-key: ${credentialSourceString(resolvedCredentials.openaiApiKeySource)}")
+            outputWriter.println("  anthropic-api-key: ${credentialSourceString(resolvedCredentials.anthropicApiKeySource)}")
         }
 
         return 0
+    }
+
+    private fun credentialSourceString(source: CredentialSource): String = when (source) {
+        is CredentialSource.EnvVar -> "set (env var ${source.name})"
+        is CredentialSource.File -> "set (${source.path})"
+        is CredentialSource.Unset -> "not set"
     }
 
     private fun stubEmbeddingModel(): EmbeddingModel = object : EmbeddingModel {
@@ -82,5 +105,14 @@ class StatusCommand(
         override fun embedForResponse(texts: List<String>): EmbeddingResponse =
             EmbeddingResponse(texts.mapIndexed { i, _ -> Embedding(FloatArray(0), i) })
         override fun dimensions(): Int = 0
+    }
+
+    companion object {
+        fun allUnsetCredentials() = Credentials(
+            openaiApiKey = null,
+            openaiApiKeySource = CredentialSource.Unset,
+            anthropicApiKey = null,
+            anthropicApiKeySource = CredentialSource.Unset,
+        )
     }
 }

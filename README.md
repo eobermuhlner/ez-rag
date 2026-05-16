@@ -44,11 +44,15 @@ ez-rag query What is the project license?
 To get LLM-generated answers, specify a provider:
 
 ```sh
+# Using environment variables (works anywhere, including CI/CD)
 export OPENAI_API_KEY=sk-...
 ez-rag query --provider openai "Summarize the architecture."
 
 export ANTHROPIC_API_KEY=sk-ant-...
 ez-rag query --provider anthropic "What are the main features?"
+
+# Or store the key in a credentials file (see API keys section below)
+ez-rag query --provider openai "Summarize the architecture."
 
 # Fully local setup with Ollama (no API key)
 ez-rag ingest --embedding-provider ollama ./docs
@@ -98,12 +102,12 @@ These flags apply to all subcommands:
 
 ### Chat providers
 
-| Provider      | Default model       | Environment variable         | Notes                                               |
-|---------------|---------------------|------------------------------|-----------------------------------------------------|
-| `passthrough` | —                   | —                            | Default. Returns retrieved context chunks directly; no LLM call, no API key required. |
-| `openai`      | `gpt-4o-mini`       | `OPENAI_API_KEY`             |                                                     |
-| `anthropic`   | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY`          |                                                     |
-| `ollama`      | `llama3.2`          | `OLLAMA_BASE_URL` (optional) | Requires a running Ollama instance                  |
+| Provider      | Default model       | API key (env var or credentials file) | Notes                                               |
+|---------------|---------------------|---------------------------------------|-----------------------------------------------------|
+| `passthrough` | —                   | —                                     | Default. Returns retrieved context chunks directly; no LLM call, no API key required. |
+| `openai`      | `gpt-4o-mini`       | `OPENAI_API_KEY`                      |                                                     |
+| `anthropic`   | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY`                   |                                                     |
+| `ollama`      | `llama3.2`          | `OLLAMA_BASE_URL` (optional)          | Requires a running Ollama instance                  |
 
 ### Embedding providers
 
@@ -116,6 +120,56 @@ These flags apply to all subcommands:
 Anthropic has no embedding API. If you use `--provider anthropic`, set `--embedding-provider openai` or `--embedding-provider onnx`.
 
 The ONNX provider requires no API key and sends no data to external services. It is suitable for air-gapped or privacy-sensitive environments.
+
+## API keys
+
+API keys can be provided in three ways, in priority order:
+
+1. **Environment variable** — `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. Always wins; suitable for CI/CD.
+2. **Project-local credentials file** — `.ez-rag/credentials.yml` in the current working directory. Overrides the home file.
+3. **Home credentials file** — `~/.ez-rag/credentials.yml`. Personal default applied to all projects.
+
+### Credentials file format
+
+Create `~/.ez-rag/credentials.yml` (or `.ez-rag/credentials.yml` in your project):
+
+```yaml
+openai-api-key: sk-...
+anthropic-api-key: sk-ant-...
+```
+
+Both kebab-case (`openai-api-key`) and camelCase (`openaiApiKey`) spellings are accepted.
+
+### Security
+
+Restrict the file to owner-read-only to avoid a warning:
+
+```sh
+chmod 600 ~/.ez-rag/credentials.yml
+```
+
+If the file is readable by group or others, ez-rag prints a warning with the exact `chmod` command to fix it, then continues.
+
+### Project-local credentials and `.gitignore`
+
+When ez-rag reads a project-local credentials file for the first time, it automatically appends `.ez-rag/credentials.yml` to the project's `.gitignore` (if the file exists) and prints a notice. This prevents accidental key commits.
+
+### Diagnosing credential configuration
+
+`ez-rag status` shows where each key is loaded from without revealing the key value:
+
+```
+openai-api-key:     set (env var OPENAI_API_KEY)
+anthropic-api-key:  set (~/.ez-rag/credentials.yml)
+```
+
+If a required key is missing, ez-rag prints an actionable error naming both the environment variable and the credentials file path:
+
+```
+Missing API key for provider 'openai'.
+Set the OPENAI_API_KEY environment variable, or add 'openai-api-key' to
+~/.ez-rag/credentials.yml or .ez-rag/credentials.yml.
+```
 
 ## Configuration file
 

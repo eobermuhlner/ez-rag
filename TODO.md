@@ -1,5 +1,4 @@
-- improve API key management. env vars are not ideal. Consider adding to ~/.ez-rag/config.yaml or a dedicated credentials file. Is this best practive?
-- search parent dirs for vector store file if not found in current dir
+- search parent dirs for vector store file if not found in current dir. add `init` subcommand to create empty .ezrag directory.
 - add optional reranking search results (using cross-encode model, configured independently)
 - add markdown chunking
 - add pdf to markdown converter

@@ -20,8 +20,8 @@ import org.springframework.test.context.junit.jupiter.SpringExtension
 @ExtendWith(SpringExtension::class)
 @Import(EzRagConfiguration::class, ProviderConfiguration::class, McpServerCommand::class)
 @TestPropertySource(properties = [
-    "ez.rag.provider=openai",
-    "ez.rag.embeddingProvider=openai",
+    "ez.rag.provider=passthrough",
+    "ez.rag.embeddingProvider=onnx",
     "spring.ai.mcp.server.enabled=false"
 ])
 class McpServerCommandTest {

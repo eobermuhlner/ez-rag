@@ -17,8 +17,8 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ExtendWith(SpringExtension::class)
 @Import(EzRagConfiguration::class, ProviderConfiguration::class, IngestCommand::class, StatusCommand::class)
 @TestPropertySource(properties = [
-    "ez.rag.provider=openai",
-    "ez.rag.embeddingProvider=openai"
+    "ez.rag.provider=passthrough",
+    "ez.rag.embeddingProvider=onnx"
 ])
 class SpringWiringTest {
 

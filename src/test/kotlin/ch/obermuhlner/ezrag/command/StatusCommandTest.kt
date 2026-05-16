@@ -1,5 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.config.CredentialSource
+import ch.obermuhlner.ezrag.config.Credentials
 import ch.obermuhlner.ezrag.ingestion.IngestIntegrationTest
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -151,8 +153,174 @@ class StatusCommandTest {
         assertThat(out.toString()).contains("test.txt")
     }
 
+    // ---- Credentials section tests ----
+
+    private fun buildStoreWithOneFile(tempDir: Path): Path {
+        val storePath = tempDir.resolve("vector-store.json")
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        repo.load()
+        repo.add(listOf(
+            Document.builder().text("Some content")
+                .metadata(mapOf("source" to "test.txt", "mtime" to 1000L)).build()
+        ))
+        repo.save()
+        return storePath
+    }
+
     @Test
-    fun `status text output lists files alphabetically`(@TempDir tempDir: Path) {
+    fun `text output shows openai-api-key sourced from env var`(@TempDir tempDir: Path) {
+        val storePath = buildStoreWithOneFile(tempDir)
+        val credentials = Credentials(
+            openaiApiKey = "sk-secret",
+            openaiApiKeySource = CredentialSource.EnvVar("OPENAI_API_KEY"),
+            anthropicApiKey = null,
+            anthropicApiKeySource = CredentialSource.Unset,
+        )
+        val out = StringWriter()
+        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        cmd.call()
+        val output = out.toString()
+        assertThat(output).contains("openai-api-key:")
+        assertThat(output).contains("set (env var OPENAI_API_KEY)")
+        assertThat(output).doesNotContain("sk-secret")
+    }
+
+    @Test
+    fun `text output shows openai-api-key sourced from file`(@TempDir tempDir: Path) {
+        val storePath = buildStoreWithOneFile(tempDir)
+        val credentials = Credentials(
+            openaiApiKey = "sk-secret",
+            openaiApiKeySource = CredentialSource.File("/home/user/.ez-rag/credentials.yml"),
+            anthropicApiKey = null,
+            anthropicApiKeySource = CredentialSource.Unset,
+        )
+        val out = StringWriter()
+        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        cmd.call()
+        val output = out.toString()
+        assertThat(output).contains("openai-api-key:")
+        assertThat(output).contains("set (/home/user/.ez-rag/credentials.yml)")
+        assertThat(output).doesNotContain("sk-secret")
+    }
+
+    @Test
+    fun `text output shows openai-api-key not set when unset`(@TempDir tempDir: Path) {
+        val storePath = buildStoreWithOneFile(tempDir)
+        val credentials = Credentials(
+            openaiApiKey = null,
+            openaiApiKeySource = CredentialSource.Unset,
+            anthropicApiKey = null,
+            anthropicApiKeySource = CredentialSource.Unset,
+        )
+        val out = StringWriter()
+        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        cmd.call()
+        val output = out.toString()
+        assertThat(output).contains("openai-api-key: not set")
+    }
+
+    @Test
+    fun `text output shows anthropic-api-key sourced from env var`(@TempDir tempDir: Path) {
+        val storePath = buildStoreWithOneFile(tempDir)
+        val credentials = Credentials(
+            openaiApiKey = null,
+            openaiApiKeySource = CredentialSource.Unset,
+            anthropicApiKey = "ant-secret",
+            anthropicApiKeySource = CredentialSource.EnvVar("ANTHROPIC_API_KEY"),
+        )
+        val out = StringWriter()
+        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        cmd.call()
+        val output = out.toString()
+        assertThat(output).contains("anthropic-api-key:")
+        assertThat(output).contains("set (env var ANTHROPIC_API_KEY)")
+        assertThat(output).doesNotContain("ant-secret")
+    }
+
+    @Test
+    fun `text output shows anthropic-api-key sourced from file`(@TempDir tempDir: Path) {
+        val storePath = buildStoreWithOneFile(tempDir)
+        val credentials = Credentials(
+            openaiApiKey = null,
+            openaiApiKeySource = CredentialSource.Unset,
+            anthropicApiKey = "ant-secret",
+            anthropicApiKeySource = CredentialSource.File(".ez-rag/credentials.yml"),
+        )
+        val out = StringWriter()
+        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        cmd.call()
+        val output = out.toString()
+        assertThat(output).contains("anthropic-api-key:")
+        assertThat(output).contains("set (.ez-rag/credentials.yml)")
+        assertThat(output).doesNotContain("ant-secret")
+    }
+
+    @Test
+    fun `text output shows anthropic-api-key not set when unset`(@TempDir tempDir: Path) {
+        val storePath = buildStoreWithOneFile(tempDir)
+        val credentials = Credentials(
+            openaiApiKey = null,
+            openaiApiKeySource = CredentialSource.Unset,
+            anthropicApiKey = null,
+            anthropicApiKeySource = CredentialSource.Unset,
+        )
+        val out = StringWriter()
+        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        cmd.call()
+        val output = out.toString()
+        assertThat(output).contains("anthropic-api-key: not set")
+    }
+
+    @Test
+    fun `JSON output contains credentials object with source strings`(@TempDir tempDir: Path) {
+        val storePath = buildStoreWithOneFile(tempDir)
+        val credentials = Credentials(
+            openaiApiKey = "sk-secret",
+            openaiApiKeySource = CredentialSource.EnvVar("OPENAI_API_KEY"),
+            anthropicApiKey = "ant-secret",
+            anthropicApiKeySource = CredentialSource.File("/home/user/.ez-rag/credentials.yml"),
+        )
+        val out = StringWriter()
+        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        cmd.outputFormat = "json"
+        cmd.call()
+        val json = out.toString().trim()
+        val mapper = ObjectMapper()
+        val node = mapper.readTree(json)
+        assertThat(node.has("credentials")).isTrue()
+        val creds = node.get("credentials")
+        assertThat(creds.has("openaiApiKey")).isTrue()
+        assertThat(creds.has("anthropicApiKey")).isTrue()
+        assertThat(creds.get("openaiApiKey").asText()).isEqualTo("set (env var OPENAI_API_KEY)")
+        assertThat(creds.get("anthropicApiKey").asText()).isEqualTo("set (/home/user/.ez-rag/credentials.yml)")
+        // No actual key values
+        assertThat(json).doesNotContain("sk-secret")
+        assertThat(json).doesNotContain("ant-secret")
+    }
+
+    @Test
+    fun `JSON output shows not set for unset keys`(@TempDir tempDir: Path) {
+        val storePath = buildStoreWithOneFile(tempDir)
+        val credentials = Credentials(
+            openaiApiKey = null,
+            openaiApiKeySource = CredentialSource.Unset,
+            anthropicApiKey = null,
+            anthropicApiKeySource = CredentialSource.Unset,
+        )
+        val out = StringWriter()
+        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        cmd.outputFormat = "json"
+        cmd.call()
+        val json = out.toString().trim()
+        val mapper = ObjectMapper()
+        val node = mapper.readTree(json)
+        val creds = node.get("credentials")
+        assertThat(creds.get("openaiApiKey").asText()).isEqualTo("not set")
+        assertThat(creds.get("anthropicApiKey").asText()).isEqualTo("not set")
+    }
+
+    @Test
+    fun `text output lists files alphabetically`(@TempDir tempDir: Path) {
         val storePath = tempDir.resolve("vector-store.json")
         val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
         repo.load()

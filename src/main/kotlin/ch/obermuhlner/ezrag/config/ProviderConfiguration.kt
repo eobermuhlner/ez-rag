@@ -20,15 +20,31 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
 @Configuration
-class ProviderConfiguration(private val configService: ConfigService) {
+class ProviderConfiguration(
+    private val configService: ConfigService,
+    private val credentialsService: CredentialsService,
+) {
+
+    private fun requireApiKey(key: String?, source: CredentialSource, envVarName: String): String {
+        if (source is CredentialSource.Unset) {
+            throw IllegalStateException(
+                "API key '$envVarName' is not set. " +
+                "Set it via the environment variable $envVarName, " +
+                "or add it to .ez-rag/credentials.yml (project-local) " +
+                "or ~/.ez-rag/credentials.yml (home directory)."
+            )
+        }
+        return key ?: ""
+    }
 
     @Bean
     fun chatModel(): ChatModel {
         val config = configService.resolve()
         val modelName = config.model
+        val credentials = credentialsService.resolve()
         return when (config.provider) {
             "openai" -> {
-                val apiKey = System.getenv("OPENAI_API_KEY") ?: ""
+                val apiKey = requireApiKey(credentials.openaiApiKey, credentials.openaiApiKeySource, "OPENAI_API_KEY")
                 val openAiApi = OpenAiApi.builder()
                     .apiKey(apiKey)
                     .build()
@@ -38,7 +54,7 @@ class ProviderConfiguration(private val configService: ConfigService) {
                     .build()
             }
             "anthropic" -> {
-                val apiKey = System.getenv("ANTHROPIC_API_KEY") ?: ""
+                val apiKey = requireApiKey(credentials.anthropicApiKey, credentials.anthropicApiKeySource, "ANTHROPIC_API_KEY")
                 val anthropicApi = AnthropicApi.builder()
                     .apiKey(apiKey)
                     .build()
@@ -67,9 +83,10 @@ class ProviderConfiguration(private val configService: ConfigService) {
     fun embeddingModel(): EmbeddingModel {
         val config = configService.resolve()
         val modelName = config.embeddingModel
+        val credentials = credentialsService.resolve()
         return when (config.embeddingProvider) {
             "openai" -> {
-                val apiKey = System.getenv("OPENAI_API_KEY") ?: ""
+                val apiKey = requireApiKey(credentials.openaiApiKey, credentials.openaiApiKeySource, "OPENAI_API_KEY")
                 val openAiApi = OpenAiApi.builder()
                     .apiKey(apiKey)
                     .build()
