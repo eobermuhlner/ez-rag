@@ -38,10 +38,21 @@ open class IngestService(
         var skipped = 0
 
         val resolvedPaths = files.flatMap { file ->
-            if (file.isDirectory) {
-                directoryWalker.walk(file.toPath())
-            } else {
-                listOf(file.toPath())
+            when {
+                file.isDirectory -> directoryWalker.walk(file.toPath())
+                !file.exists() -> {
+                    warningWriter.println("Warning: Path does not exist: $file")
+                    emptyList()
+                }
+                else -> {
+                    val ext = file.name.substringAfterLast('.', "").lowercase()
+                    if (ext !in DirectoryWalker.SUPPORTED_EXTENSIONS) {
+                        warningWriter.println("Warning: Skipping unsupported file type: $file")
+                        emptyList()
+                    } else {
+                        listOf(file.toPath())
+                    }
+                }
             }
         }
 
@@ -55,6 +66,10 @@ open class IngestService(
             val documents = loader.load(path)
             val chunks = withMtime(chunker.split(documents), mtime)
             onFileLoaded?.invoke(path, chunks)
+            if (chunks.isEmpty()) {
+                warningWriter.println("Warning: No chunks produced for: $path")
+                continue
+            }
             repository.add(chunks)
             filesIngested++
             chunksCreated += chunks.size

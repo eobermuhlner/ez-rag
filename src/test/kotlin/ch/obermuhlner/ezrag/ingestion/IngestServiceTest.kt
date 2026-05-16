@@ -8,6 +8,8 @@ import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.nio.file.Path
 
 class IngestServiceTest {
@@ -82,5 +84,47 @@ class IngestServiceTest {
         assertThat(result.filesIngested).isEqualTo(3)
         assertThat(result.chunksCreated).isEqualTo(10)
         assertThat(result.skipped).isEqualTo(2)
+    }
+
+    @Test
+    fun `ingest warns and skips non-existent path`(@TempDir tempDir: Path) {
+        val nonExistent = tempDir.resolve("does-not-exist").toFile()
+        val storePath = tempDir.resolve("vector-store.json")
+        val warnings = StringWriter()
+        val service = IngestService(fakeEmbeddingModel, storePath, warningWriter = PrintWriter(warnings, true))
+
+        val result = service.ingest(listOf(nonExistent))
+
+        assertThat(result.filesIngested).isEqualTo(0)
+        assertThat(result.chunksCreated).isEqualTo(0)
+        assertThat(warnings.toString()).contains("does-not-exist")
+    }
+
+    @Test
+    fun `ingest warns and skips file with unsupported extension`(@TempDir tempDir: Path) {
+        val unsupported = tempDir.resolve("data.csv")
+        unsupported.toFile().writeText("col1,col2\nval1,val2")
+        val storePath = tempDir.resolve("vector-store.json")
+        val warnings = StringWriter()
+        val service = IngestService(fakeEmbeddingModel, storePath, warningWriter = PrintWriter(warnings, true))
+
+        val result = service.ingest(listOf(unsupported.toFile()))
+
+        assertThat(result.filesIngested).isEqualTo(0)
+        assertThat(result.chunksCreated).isEqualTo(0)
+        assertThat(warnings.toString()).contains("data.csv")
+    }
+
+    @Test
+    fun `ingest skips file that produces no chunks without throwing`(@TempDir tempDir: Path) {
+        val emptyFile = tempDir.resolve("empty.txt")
+        emptyFile.toFile().writeText("")
+        val storePath = tempDir.resolve("vector-store.json")
+        val service = IngestService(fakeEmbeddingModel, storePath)
+
+        val result = service.ingest(listOf(emptyFile.toFile()))
+
+        assertThat(result.filesIngested).isEqualTo(0)
+        assertThat(result.chunksCreated).isEqualTo(0)
     }
 }
