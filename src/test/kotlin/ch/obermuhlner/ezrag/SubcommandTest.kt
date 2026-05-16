@@ -17,12 +17,19 @@ class SubcommandTest {
     fun `help lists all subcommands`() {
         commandLine.execute("--help")
         val output = out.toString()
+        assertThat(output).contains("init")
         assertThat(output).contains("ingest")
         assertThat(output).contains("query")
         assertThat(output).contains("search")
         assertThat(output).contains("status")
         assertThat(output).contains("mcp-server")
         assertThat(output).contains("shell")
+    }
+
+    @Test
+    fun `init help exits 0`() {
+        val exitCode = commandLine.execute("init", "--help")
+        assertThat(exitCode).isEqualTo(0)
     }
 
     @Test

@@ -37,8 +37,8 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `add documents and save creates the store file`(@TempDir tempDir: Path) {
-        val storePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
         repository.load()
 
         val document = Document.builder()
@@ -48,16 +48,16 @@ class VectorStoreRepositoryTest {
         repository.add(listOf(document))
         repository.save()
 
-        assertThat(storePath.toFile()).exists()
-        assertThat(storePath.toFile().length()).isGreaterThan(0)
+        assertThat(storeFilePath.toFile()).exists()
+        assertThat(storeFilePath.toFile().length()).isGreaterThan(0)
     }
 
     @Test
     fun `load from existing file preserves documents`(@TempDir tempDir: Path) {
-        val storePath = tempDir.resolve("vector-store.json")
+        val storeFilePath = tempDir.resolve("vector-store.json")
 
         // First run: add documents and save
-        val repo1 = VectorStoreRepository(embeddingModel, storePath)
+        val repo1 = VectorStoreRepository(embeddingModel, storeFilePath)
         repo1.load()
         val doc = Document.builder()
             .text("Hello world")
@@ -67,28 +67,28 @@ class VectorStoreRepositoryTest {
         repo1.save()
 
         // Second run: load the saved store
-        val repo2 = VectorStoreRepository(embeddingModel, storePath)
+        val repo2 = VectorStoreRepository(embeddingModel, storeFilePath)
         repo2.load()
 
         // The store file should still exist and be valid
-        assertThat(storePath.toFile()).exists()
+        assertThat(storeFilePath.toFile()).exists()
     }
 
     @Test
     fun `load works when store file does not exist`(@TempDir tempDir: Path) {
-        val storePath = tempDir.resolve("non-existent-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("non-existent-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
 
         // Should not throw
         repository.load()
 
-        assertThat(storePath.toFile()).doesNotExist()
+        assertThat(storeFilePath.toFile()).doesNotExist()
     }
 
     @Test
     fun `isAlreadyIngested returns true for matching path and mtime`(@TempDir tempDir: Path) {
-        val storePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
         repository.load()
 
         val document = Document.builder()
@@ -102,8 +102,8 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `isAlreadyIngested returns false for matching path but different mtime`(@TempDir tempDir: Path) {
-        val storePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
         repository.load()
 
         val document = Document.builder()
@@ -117,8 +117,8 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `isAlreadyIngested returns false when no documents have been added`(@TempDir tempDir: Path) {
-        val storePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
         repository.load()
 
         assertThat(repository.isAlreadyIngested("file.txt", 1000L)).isFalse()
@@ -126,8 +126,8 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `getMetadata returns correct per-file and total counts`(@TempDir tempDir: Path) {
-        val storePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
         repository.load()
 
         val docsForA = (1..3).map { i ->

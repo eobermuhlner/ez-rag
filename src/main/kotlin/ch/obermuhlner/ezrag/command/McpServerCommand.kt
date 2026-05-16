@@ -1,5 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.config.ConfigService
+import ch.obermuhlner.ezrag.config.EzRagDirResolver
 import ch.obermuhlner.ezrag.ingestion.IngestService
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
@@ -33,8 +35,11 @@ class McpServerCommand : Callable<Int> {
     @Autowired(required = false)
     private var springChatModel: ChatModel? = null
 
-    @Option(names = ["--store"], description = ["Path to the vector store JSON file."])
-    var storePathOption: String? = null
+    @Autowired(required = false)
+    private var springConfigService: ConfigService? = null
+
+    @Option(names = ["--store-dir"], description = ["Path to the store directory."])
+    var storeDirOption: String? = null
 
     /**
      * Provides the MCP tool callbacks. Registers the status tool and additional tools
@@ -46,10 +51,12 @@ class McpServerCommand : Callable<Int> {
         val embeddingModel = springEmbeddingModel
             ?: return ToolCallbackProvider { emptyArray<ToolCallback>() }
 
-        val storePath = storePathOption?.let { Paths.get(it) }
-            ?: Paths.get(".ez-rag/vector-store.json")
+        val storeDir = storeDirOption?.let { Paths.get(it) }
+            ?: springConfigService?.resolveExplicitStoreDir()?.let { Paths.get(it) }
+            ?: EzRagDirResolver().resolve(Paths.get("").toAbsolutePath())
+        val storeFilePath = storeDir.resolve("vector-store.json")
 
-        val repository = VectorStoreRepository(embeddingModel, storePath)
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
         repository.load()
 
         val chatModel = springChatModel
@@ -57,7 +64,7 @@ class McpServerCommand : Callable<Int> {
         val searchTool = McpSearchTool(EmbeddingSearchPipeline(repository, embeddingModel))
         val queryTool = chatModel?.let { McpQueryTool(RagPipeline(repository, it)) }
 
-        val ingestTool = McpIngestTool(embeddingModel, storePath)
+        val ingestTool = McpIngestTool(embeddingModel, storeFilePath)
 
         val tools = buildList {
             add(statusTool)

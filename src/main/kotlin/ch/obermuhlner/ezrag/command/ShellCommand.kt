@@ -27,7 +27,7 @@ import java.util.concurrent.Callable
 )
 @Component
 class ShellCommand(
-    private val storePathOverride: Path? = null,
+    private val storeDirOverride: Path? = null,
     private val ragPipeline: RagPipeline? = null,
     private val embeddingSearchPipeline: EmbeddingSearchPipeline? = null,
     private val vectorStoreRepository: VectorStoreRepository? = null,
@@ -43,8 +43,8 @@ class ShellCommand(
     @Autowired(required = false)
     private var springChatModel: ChatModel? = null
 
-    @Option(names = ["--store"], description = ["Path to the vector store JSON file."])
-    var storePathOption: String? = null
+    @Option(names = ["--store-dir"], description = ["Path to the store directory."])
+    var storeDirOption: String? = null
 
     @Option(names = ["--top-k"], description = ["Number of chunks to retrieve (default: 5)."])
     var topK: Int = 5
@@ -56,14 +56,15 @@ class ShellCommand(
     var verbose: Boolean = false
 
     override fun call(): Int {
-        val storePath = storePathOverride
-            ?: storePathOption?.let { Paths.get(it) }
-            ?: Paths.get(".ez-rag/vector-store.json")
+        val storeDir = storeDirOverride
+            ?: storeDirOption?.let { Paths.get(it) }
+            ?: Paths.get(".ez-rag")
+        val storeFilePath = storeDir.resolve("vector-store.json")
 
-        val storeFile = storePath.toFile()
+        val storeFile = storeFilePath.toFile()
         if (!storeFile.exists()) {
             outputWriter.println(
-                "Vector store not found at ${storePath.toAbsolutePath()}. Run 'ez-rag ingest' first."
+                "Vector store not found at ${storeFilePath.toAbsolutePath()}. Run 'ez-rag ingest' first."
             )
             return 1
         }
@@ -75,7 +76,7 @@ class ShellCommand(
                 ?: return exitWithError("No embedding model configured.")
             val chatModel = springChatModel
                 ?: return exitWithError("No chat model configured.")
-            val repository = VectorStoreRepository(embeddingModel, storePath)
+            val repository = VectorStoreRepository(embeddingModel, storeFilePath)
             repository.load()
             Triple(
                 RagPipeline(repository, chatModel),

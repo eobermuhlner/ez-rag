@@ -1,6 +1,8 @@
-- search parent dirs for vector store file if not found in current dir. add `init` subcommand to create empty .ezrag directory.
+- add sub-command to delete document
+- add sub-command(s) to view document metadata and raw chunk content
 - add optional reranking search results (using cross-encode model, configured independently)
 - add markdown chunking
 - add pdf to markdown converter
 - add local .ez-rag/config.yaml support (overriding defaults in ~/.ez-rag/config.yaml)
 - use LuceneVectorStore for semantic search instead of SimpleVectorStore
+- sub-command `shell` should support multi-message history and follow-up questions (maintaining conversation state across iterations)

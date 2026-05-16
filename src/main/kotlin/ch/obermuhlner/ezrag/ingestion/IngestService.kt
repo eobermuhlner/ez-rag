@@ -14,7 +14,7 @@ import java.nio.file.Path
  */
 open class IngestService(
     private val embeddingModel: EmbeddingModel,
-    private val storePath: Path,
+    private val storeFilePath: Path,
     private val chunkSize: Int = 1000,
     private val chunkOverlap: Int = 200,
     private val warningWriter: PrintWriter = PrintWriter(System.err, true),
@@ -27,7 +27,7 @@ open class IngestService(
     open fun ingest(files: List<File>): IngestResult {
         val loader = DocumentLoader()
         val chunker = DocumentChunker(chunkSize, chunkOverlap)
-        val repository = VectorStoreRepository(embeddingModel, storePath)
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
         val directoryWalker = DirectoryWalker(warningWriter)
         repository.load()
 

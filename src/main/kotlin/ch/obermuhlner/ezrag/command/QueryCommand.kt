@@ -1,5 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.config.ConfigService
+import ch.obermuhlner.ezrag.config.EzRagDirResolver
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.RagPipeline
@@ -24,12 +26,13 @@ import java.util.concurrent.Callable
 )
 @Component
 class QueryCommand(
-    private val storePathOverride: Path? = null,
+    private val storeDirOverride: Path? = null,
     private val ragPipeline: RagPipeline? = null,
     private val outputFormatter: OutputFormatter = OutputFormatter(),
     private val outputWriter: PrintWriter = PrintWriter(System.out, true),
     private val errorWriter: PrintWriter = PrintWriter(System.err, true),
     private val inputStream: InputStream = System.`in`,
+    private val startDirOverride: Path? = null,
 ) : Callable<Int> {
 
     @Autowired(required = false)
@@ -37,6 +40,9 @@ class QueryCommand(
 
     @Autowired(required = false)
     private var springChatModel: ChatModel? = null
+
+    @Autowired(required = false)
+    private var springConfigService: ConfigService? = null
 
     @Parameters(index = "0..*", description = ["Question to ask. Multiple tokens are joined with spaces. Reads from stdin if omitted."])
     var questionArgs: List<String> = emptyList()
@@ -50,8 +56,8 @@ class QueryCommand(
     @Option(names = ["--output"], description = ["Output format: text (default) or json."])
     var outputFormat: String = "text"
 
-    @Option(names = ["--store"], description = ["Path to the vector store JSON file."])
-    var storePathOption: String? = null
+    @Option(names = ["--store-dir"], description = ["Path to the store directory."])
+    var storeDirOption: String? = null
 
     // These fields are settable for tests and also used when a caller sets them directly.
     // --model and --verbose are inherited from the parent EzRagCommand (ScopeType.INHERIT)
@@ -60,15 +66,17 @@ class QueryCommand(
     var verbose: Boolean = false
 
     override fun call(): Int {
-        val storePath = storePathOverride
-            ?: storePathOption?.let { Paths.get(it) }
-            ?: Paths.get(".ez-rag/vector-store.json")
+        val storeDir = storeDirOverride
+            ?: storeDirOption?.let { Paths.get(it) }
+            ?: springConfigService?.resolveExplicitStoreDir()?.let { Paths.get(it) }
+            ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
+        val storeFilePath = storeDir.resolve("vector-store.json")
 
         // Check store existence first
-        val storeFile = storePath.toFile()
+        val storeFile = storeFilePath.toFile()
         if (!storeFile.exists()) {
             outputWriter.println(
-                "Vector store not found at ${storePath.toAbsolutePath()}. Run 'ez-rag ingest' first."
+                "Vector store not found at ${storeFilePath.toAbsolutePath()}. Run 'ez-rag ingest' first."
             )
             return 1
         }
@@ -92,7 +100,7 @@ class QueryCommand(
                     ?: return exitWithError("No embedding model configured.")
                 val chatModel = springChatModel
                     ?: return exitWithError("No chat model configured.")
-                val repository = VectorStoreRepository(embeddingModel, storePath)
+                val repository = VectorStoreRepository(embeddingModel, storeFilePath)
                 repository.load()
                 RagPipeline(repository, chatModel)
             }

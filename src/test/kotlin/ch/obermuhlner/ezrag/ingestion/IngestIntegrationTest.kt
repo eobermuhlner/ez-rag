@@ -23,7 +23,7 @@ import java.time.Instant
 
 class IngestIntegrationTest {
 
-    private fun createCommandLine(storePath: Path, embeddingModel: EmbeddingModel): CommandLine {
+    private fun createCommandLine(storeFilePath: Path, embeddingModel: EmbeddingModel): CommandLine {
         val ingestCommand = IngestCommand(embeddingModel)
         val ezRagCommand = EzRagCommand()
         val cmdLine = CommandLine(ezRagCommand)
@@ -58,14 +58,14 @@ class IngestIntegrationTest {
         sampleFile.toFile().writeText("Hello world. This is a test document for ingestion.")
 
         val storeDir = tempDir.resolve("store")
-        val storePath = storeDir.resolve("vector-store.json")
+        val storeFilePath = storeDir.resolve("vector-store.json")
 
-        val ingestCommand = IngestCommand(fakeEmbeddingModel, storePath)
+        val ingestCommand = IngestCommand(fakeEmbeddingModel, storeDir)
         val exitCode = ingestCommand.call(listOf(sampleFile.toFile()))
 
         assertThat(exitCode).isEqualTo(0)
-        assertThat(storePath.toFile()).exists()
-        assertThat(storePath.toFile().length()).isGreaterThan(0)
+        assertThat(storeFilePath.toFile()).exists()
+        assertThat(storeFilePath.toFile().length()).isGreaterThan(0)
     }
 
     @Test
@@ -73,11 +73,11 @@ class IngestIntegrationTest {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for ingestion.")
 
-        val storePath = tempDir.resolve("vector-store.json")
-        val ingestCommand = IngestCommand(fakeEmbeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val ingestCommand = IngestCommand(fakeEmbeddingModel, tempDir)
         ingestCommand.call(listOf(sampleFile.toFile()))
 
-        val json = storePath.toFile().readText()
+        val json = storeFilePath.toFile().readText()
         val mapper = ObjectMapper()
         val node = mapper.readTree(json)
         assertThat(node).isNotNull()
@@ -88,9 +88,8 @@ class IngestIntegrationTest {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for ingestion.")
 
-        val storePath = tempDir.resolve("vector-store.json")
         val out = StringWriter()
-        val ingestCommand = IngestCommand(fakeEmbeddingModel, storePath, PrintWriter(out))
+        val ingestCommand = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out))
         ingestCommand.call(listOf(sampleFile.toFile()))
 
         val output = out.toString()
@@ -107,14 +106,13 @@ class IngestIntegrationTest {
 
         val storeDir = tempDir.resolve("store")
         storeDir.toFile().mkdirs() // directory already exists
-        val storePath = storeDir.resolve("vector-store.json")
 
-        val ingestCommand = IngestCommand(fakeEmbeddingModel, storePath)
+        val ingestCommand = IngestCommand(fakeEmbeddingModel, storeDir)
 
         // First ingest
         val exitCode1 = ingestCommand.call(listOf(sampleFile.toFile()))
         // Second ingest with new command instance (new store state)
-        val ingestCommand2 = IngestCommand(fakeEmbeddingModel, storePath)
+        val ingestCommand2 = IngestCommand(fakeEmbeddingModel, storeDir)
         val exitCode2 = ingestCommand2.call(listOf(sampleFile.toFile()))
 
         assertThat(exitCode1).isEqualTo(0)
@@ -135,10 +133,9 @@ class IngestIntegrationTest {
 
         docsDir.resolve("file.xyz").toFile().writeText("unsupported content")
 
-        val storePath = tempDir.resolve("vector-store.json")
         val out = StringWriter()
         val warn = StringWriter()
-        val ingestCommand = IngestCommand(fakeEmbeddingModel, storePath, PrintWriter(out), PrintWriter(warn))
+        val ingestCommand = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out), PrintWriter(warn))
         val exitCode = ingestCommand.call(listOf(docsDir.toFile()))
 
         assertThat(exitCode).isEqualTo(0)
@@ -154,18 +151,16 @@ class IngestIntegrationTest {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for deduplication.")
 
-        val storePath = tempDir.resolve("vector-store.json")
-
         // First ingest
         val out1 = StringWriter()
-        val ingestCommand1 = IngestCommand(fakeEmbeddingModel, storePath, PrintWriter(out1))
+        val ingestCommand1 = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out1))
         val exitCode1 = ingestCommand1.call(listOf(sampleFile.toFile()))
         assertThat(exitCode1).isEqualTo(0)
         assertThat(out1.toString()).contains("1 files ingested")
 
         // Second ingest without modifying the file
         val out2 = StringWriter()
-        val ingestCommand2 = IngestCommand(fakeEmbeddingModel, storePath, PrintWriter(out2))
+        val ingestCommand2 = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out2))
         val exitCode2 = ingestCommand2.call(listOf(sampleFile.toFile()))
         assertThat(exitCode2).isEqualTo(0)
         val summary2 = out2.toString()
@@ -179,11 +174,11 @@ class IngestIntegrationTest {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for deduplication.")
 
-        val storePath = tempDir.resolve("vector-store.json")
+        val storeFilePath = tempDir.resolve("vector-store.json")
 
         // First ingest
         val out1 = StringWriter()
-        val ingestCommand1 = IngestCommand(fakeEmbeddingModel, storePath, PrintWriter(out1))
+        val ingestCommand1 = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out1))
         ingestCommand1.call(listOf(sampleFile.toFile()))
         val summary1 = out1.toString()
         // Extract chunk count from first run
@@ -192,14 +187,14 @@ class IngestIntegrationTest {
 
         // Second ingest without modifying the file
         val out2 = StringWriter()
-        val ingestCommand2 = IngestCommand(fakeEmbeddingModel, storePath, PrintWriter(out2))
+        val ingestCommand2 = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out2))
         ingestCommand2.call(listOf(sampleFile.toFile()))
         // File was skipped, so chunks created = 0
         assertThat(out2.toString()).contains("0 chunks created")
 
         // Verify the store file still exists and the JSON shows the same chunk count
-        assertThat(storePath.toFile()).exists()
-        val json = storePath.toFile().readText()
+        assertThat(storeFilePath.toFile()).exists()
+        val json = storeFilePath.toFile().readText()
         val mapper = ObjectMapper()
         val node = mapper.readTree(json)
         // SimpleVectorStore serializes as a map of id -> content
@@ -211,11 +206,9 @@ class IngestIntegrationTest {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for mtime check.")
 
-        val storePath = tempDir.resolve("vector-store.json")
-
         // First ingest
         val out1 = StringWriter()
-        val ingestCommand1 = IngestCommand(fakeEmbeddingModel, storePath, PrintWriter(out1))
+        val ingestCommand1 = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out1))
         ingestCommand1.call(listOf(sampleFile.toFile()))
         assertThat(out1.toString()).contains("1 files ingested")
 
@@ -225,7 +218,7 @@ class IngestIntegrationTest {
 
         // Second ingest — should NOT be skipped because mtime changed
         val out2 = StringWriter()
-        val ingestCommand2 = IngestCommand(fakeEmbeddingModel, storePath, PrintWriter(out2))
+        val ingestCommand2 = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out2))
         val exitCode2 = ingestCommand2.call(listOf(sampleFile.toFile()))
         assertThat(exitCode2).isEqualTo(0)
         assertThat(out2.toString()).contains("1 files ingested")
@@ -241,17 +234,17 @@ class IngestIntegrationTest {
         sampleFile.toFile().writeText(multiParaContent)
 
         // Ingest with default settings (1000 tokens, 200 overlap)
-        val storePath1 = tempDir.resolve("store-default.json")
+        val storeDir1 = tempDir.resolve("store-default")
         val out1 = StringWriter()
-        val ingestCommandDefault = IngestCommand(fakeEmbeddingModel, storePath1, PrintWriter(out1))
+        val ingestCommandDefault = IngestCommand(fakeEmbeddingModel, storeDir1, PrintWriter(out1))
         ingestCommandDefault.call(listOf(sampleFile.toFile()))
         val defaultChunkPattern = Regex("(\\d+) chunks created")
         val defaultChunks = defaultChunkPattern.find(out1.toString())!!.groupValues[1].toInt()
 
         // Ingest with small chunk size (200 tokens, 50 overlap)
-        val storePath2 = tempDir.resolve("store-small.json")
+        val storeDir2 = tempDir.resolve("store-small")
         val out2 = StringWriter()
-        val ingestCommandSmall = IngestCommand(fakeEmbeddingModel, storePath2, PrintWriter(out2),
+        val ingestCommandSmall = IngestCommand(fakeEmbeddingModel, storeDir2, PrintWriter(out2),
             chunkSize = 200, chunkOverlap = 50)
         ingestCommandSmall.call(listOf(sampleFile.toFile()))
         val smallChunkPattern = Regex("(\\d+) chunks created")
@@ -261,14 +254,15 @@ class IngestIntegrationTest {
     }
 
     @Test
-    fun `custom store path writes store to specified path and not to default path`(@TempDir tempDir: Path) {
+    fun `custom store dir writes store to specified directory and not to default path`(@TempDir tempDir: Path) {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for custom store path.")
 
-        val customStorePath = tempDir.resolve("custom-test.json")
+        val customStoreDir = tempDir.resolve("custom-store")
+        val customStorePath = customStoreDir.resolve("vector-store.json")
         val defaultStorePath = tempDir.resolve(".ez-rag").resolve("vector-store.json")
 
-        val ingestCommand = IngestCommand(fakeEmbeddingModel, customStorePath)
+        val ingestCommand = IngestCommand(fakeEmbeddingModel, customStoreDir)
         val exitCode = ingestCommand.call(listOf(sampleFile.toFile()))
 
         assertThat(exitCode).isEqualTo(0)
@@ -284,11 +278,10 @@ class IngestIntegrationTest {
             "It has enough content to produce at least one chunk."
         )
 
-        val storePath = tempDir.resolve("vector-store.json")
         val out = StringWriter()
         val ingestCommand = IngestCommand(
             embeddingModel = fakeEmbeddingModel,
-            storePathOverride = storePath,
+            storeDirOverride = tempDir,
             outputWriter = PrintWriter(out),
             verbose = true
         )
@@ -306,13 +299,12 @@ class IngestIntegrationTest {
         sampleFile.toFile().writeText("Hello world.")
 
         val storeDir = tempDir.resolve(".ez-rag")
-        val storePath = storeDir.resolve("vector-store.json")
 
         val out = StringWriter()
         // Pass null embedding model to simulate missing/misconfigured provider
         val ingestCommand = IngestCommand(
             embeddingModel = null,
-            storePathOverride = storePath,
+            storeDirOverride = storeDir,
             outputWriter = PrintWriter(out)
         )
         val exitCode = ingestCommand.call(listOf(sampleFile.toFile()))
@@ -331,7 +323,6 @@ class IngestIntegrationTest {
         sampleFile.toFile().writeText("Hello world.")
 
         val storeDir = tempDir.resolve(".ez-rag")
-        val storePath = storeDir.resolve("vector-store.json")
 
         // Simulate a misconfigured provider (e.g., missing API key) that throws on any embed call
         val brokenEmbeddingModel: EmbeddingModel = object : EmbeddingModel {
@@ -349,7 +340,7 @@ class IngestIntegrationTest {
         val out = StringWriter()
         val ingestCommand = IngestCommand(
             embeddingModel = brokenEmbeddingModel,
-            storePathOverride = storePath,
+            storeDirOverride = storeDir,
             outputWriter = PrintWriter(out)
         )
         val exitCode = ingestCommand.call(listOf(sampleFile.toFile()))

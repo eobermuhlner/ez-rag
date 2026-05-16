@@ -14,7 +14,7 @@ class McpStatusToolTest {
     fun `status returns StoreStatus mapped from VectorStoreRepository getMetadata`() {
         val mockRepository = mock(VectorStoreRepository::class.java)
         val metadata = StoreMetadata(
-            storePath = "/path/to/store.json",
+            storeFilePath = "/path/to/store.json",
             chunkCount = 42,
             documents = listOf(
                 StoreDocumentInfo(path = "doc1.txt", chunkCount = 20),
@@ -26,7 +26,7 @@ class McpStatusToolTest {
         val tool = McpStatusTool(mockRepository)
         val result = tool.status()
 
-        assertThat(result.storePath).isEqualTo("/path/to/store.json")
+        assertThat(result.storeFilePath).isEqualTo("/path/to/store.json")
         assertThat(result.chunkCount).isEqualTo(42)
         assertThat(result.documents).hasSize(2)
         assertThat(result.documents[0].path).isEqualTo("doc1.txt")

@@ -1,8 +1,10 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.CredentialSource
 import ch.obermuhlner.ezrag.config.Credentials
 import ch.obermuhlner.ezrag.config.CredentialsService
+import ch.obermuhlner.ezrag.config.EzRagDirResolver
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.ai.document.Document
@@ -27,32 +29,43 @@ import java.util.concurrent.Callable
 @Component
 class StatusCommand(
     private val embeddingModel: EmbeddingModel? = null,
-    private val storePathOverride: Path? = null,
+    private val storeDirOverride: Path? = null,
     private val outputWriter: PrintWriter = PrintWriter(System.out, true),
     private val errorWriter: PrintWriter = PrintWriter(System.err, true),
     private val credentials: Credentials = allUnsetCredentials(),
+    private val startDirOverride: Path? = null,
 ) : Callable<Int> {
 
     @Autowired(required = false)
     private var springEmbeddingModel: EmbeddingModel? = null
 
     @Autowired(required = false)
+    private var springConfigService: ConfigService? = null
+
+    @Autowired(required = false)
     private var springCredentialsService: CredentialsService? = null
+
+    @Option(names = ["--store-dir"], description = ["Path to the store directory."])
+    var storeDirOption: String? = null
 
     @Option(names = ["--output-format"], description = ["Output format: text, json."])
     var outputFormat: String = "text"
 
     override fun call(): Int {
         val model = embeddingModel ?: springEmbeddingModel ?: stubEmbeddingModel()
-        val storePath = storePathOverride ?: Paths.get(".ez-rag/vector-store.json")
+        val storeDir = storeDirOverride
+            ?: storeDirOption?.let { Paths.get(it) }
+            ?: springConfigService?.resolveExplicitStoreDir()?.let { Paths.get(it) }
+            ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
+        val storeFilePath = storeDir.resolve("vector-store.json")
         // Use injected credentials (for tests), or resolve from Spring service (production), or fall back to all-unset.
         val resolvedCredentials = springCredentialsService?.resolve() ?: credentials
 
-        val repository = VectorStoreRepository(model, storePath)
+        val repository = VectorStoreRepository(model, storeFilePath)
 
         if (!repository.storeExists()) {
             outputWriter.println(
-                "No vector store found at ${storePath.toAbsolutePath()}. Run 'ez-rag ingest' first."
+                "No vector store found at ${storeFilePath.toAbsolutePath()}. Run 'ez-rag ingest' first."
             )
             return 1
         }
@@ -66,7 +79,7 @@ class StatusCommand(
                 mapOf("path" to doc.path, "chunkCount" to doc.chunkCount)
             }
             val result = mapOf(
-                "storePath" to metadata.storePath,
+                "storeFilePath" to metadata.storeFilePath,
                 "chunkCount" to metadata.chunkCount,
                 "documents" to docsArray,
                 "credentials" to mapOf(
@@ -76,7 +89,7 @@ class StatusCommand(
             )
             outputWriter.println(mapper.writeValueAsString(result))
         } else {
-            outputWriter.println("Store: ${metadata.storePath}")
+            outputWriter.println("Store: ${metadata.storeFilePath}")
             outputWriter.println("Chunks: ${metadata.chunkCount}")
             outputWriter.println()
             for (doc in metadata.documents) {

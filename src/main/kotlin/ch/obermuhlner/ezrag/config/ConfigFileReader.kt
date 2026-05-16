@@ -9,13 +9,15 @@ fun readConfigFile(path: String = System.getProperty("user.home") + "/.ez-rag/co
 
     val data: Map<String, Any> = file.inputStream().use { Yaml().load(it) } ?: return null
 
+    // Use null for unset optional fields so ConfigService can distinguish "not configured"
+    // from "configured to the default value". ConfigService applies its own defaults.
     return EzRagConfig(
         provider = data.string("provider") ?: "openai",
         embeddingProvider = data.string("embeddingProvider") ?: data.string("embedding-provider") ?: "openai",
         model = data.string("model") ?: "gpt-4o-mini",
         embeddingModel = data.string("embeddingModel") ?: data.string("embedding-model") ?: "text-embedding-3-small",
         ollamaUrl = data.string("ollamaUrl") ?: data.string("ollama-url") ?: "http://localhost:11434",
-        storePath = data.string("storePath") ?: data.string("store-path") ?: ".ez-rag/vector-store.json",
+        storeDir = data.string("storeDir") ?: data.string("store-dir"),
         chunkSize = data.int("chunkSize") ?: data.int("chunk-size") ?: 1000,
         chunkOverlap = data.int("chunkOverlap") ?: data.int("chunk-overlap") ?: 200,
         topK = data.int("topK") ?: data.int("top-k") ?: 5,

@@ -40,8 +40,8 @@ class StatusCommandTest {
         override fun dimensions(): Int = 4
     }
 
-    private fun ingestFile(file: Path, storePath: Path) {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+    private fun ingestFile(file: Path, storeDir: Path) {
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir.resolve("vector-store.json"))
         repo.load()
         val doc = Document.builder()
             .text(file.toFile().readText())
@@ -58,10 +58,10 @@ class StatusCommandTest {
         fileA.toFile().writeText("Content for file A. More text to ensure a chunk is created.")
         fileB.toFile().writeText("Content for file B. Different content for second file.")
 
-        val storePath = tempDir.resolve("vector-store.json")
+        val storeFilePath = tempDir.resolve("vector-store.json")
 
         // Ingest both files via VectorStoreRepository directly
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
         repo.load()
         repo.add(listOf(
             Document.builder().text(fileA.toFile().readText())
@@ -74,13 +74,13 @@ class StatusCommandTest {
         repo.save()
 
         val out = StringWriter()
-        val statusCommand = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out))
+        val statusCommand = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
         val exitCode = statusCommand.call()
 
         assertThat(exitCode).isEqualTo(0)
         val output = out.toString()
         assertThat(output).contains("Store:")
-        assertThat(output).contains(storePath.toAbsolutePath().toString())
+        assertThat(output).contains(storeFilePath.toAbsolutePath().toString())
         assertThat(output).contains("Chunks:")
         assertThat(output).contains(fileA.toString())
         assertThat(output).contains(fileB.toString())
@@ -91,8 +91,8 @@ class StatusCommandTest {
         val fileA = tempDir.resolve("a.txt")
         fileA.toFile().writeText("Content for file A. More text here.")
 
-        val storePath = tempDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
         repo.load()
         repo.add(listOf(
             Document.builder().text(fileA.toFile().readText())
@@ -101,7 +101,7 @@ class StatusCommandTest {
         repo.save()
 
         val out = StringWriter()
-        val statusCommand = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out))
+        val statusCommand = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
         statusCommand.outputFormat = "json"
         val exitCode = statusCommand.call()
 
@@ -109,8 +109,8 @@ class StatusCommandTest {
         val json = out.toString().trim()
         val mapper = ObjectMapper()
         val node = mapper.readTree(json)
-        assertThat(node.has("storePath")).isTrue()
-        assertThat(node.get("storePath").asText()).isNotBlank()
+        assertThat(node.has("storeFilePath")).isTrue()
+        assertThat(node.get("storeFilePath").asText()).isNotBlank()
         assertThat(node.has("chunkCount")).isTrue()
         assertThat(node.get("chunkCount").asInt()).isGreaterThanOrEqualTo(1)
         assertThat(node.has("documents")).isTrue()
@@ -122,22 +122,23 @@ class StatusCommandTest {
 
     @Test
     fun `status exits non-zero and shows error when no store exists`(@TempDir tempDir: Path) {
-        val storePath = tempDir.resolve("nonexistent-vector-store.json")
+        val nonExistentStoreDir = tempDir.resolve("nonexistent")
+        val expectedStorePath = nonExistentStoreDir.resolve("vector-store.json")
 
         val out = StringWriter()
-        val statusCommand = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out))
+        val statusCommand = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = nonExistentStoreDir, outputWriter = PrintWriter(out))
         val exitCode = statusCommand.call()
 
         assertThat(exitCode).isNotEqualTo(0)
         val output = out.toString()
-        assertThat(output).contains(storePath.toAbsolutePath().toString())
+        assertThat(output).contains(expectedStorePath.toAbsolutePath().toString())
         assertThat(output).contains("ez-rag ingest")
     }
 
     @Test
     fun `status works without embedding model`(@TempDir tempDir: Path) {
-        val storePath = tempDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
         repo.load()
         repo.add(listOf(
             Document.builder().text("Hello world content")
@@ -146,7 +147,7 @@ class StatusCommandTest {
         repo.save()
 
         val out = StringWriter()
-        val statusCommand = StatusCommand(embeddingModel = null, storePathOverride = storePath, outputWriter = PrintWriter(out))
+        val statusCommand = StatusCommand(embeddingModel = null, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
         val exitCode = statusCommand.call()
 
         assertThat(exitCode).isEqualTo(0)
@@ -156,20 +157,20 @@ class StatusCommandTest {
     // ---- Credentials section tests ----
 
     private fun buildStoreWithOneFile(tempDir: Path): Path {
-        val storePath = tempDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
         repo.load()
         repo.add(listOf(
             Document.builder().text("Some content")
                 .metadata(mapOf("source" to "test.txt", "mtime" to 1000L)).build()
         ))
         repo.save()
-        return storePath
+        return tempDir
     }
 
     @Test
     fun `text output shows openai-api-key sourced from env var`(@TempDir tempDir: Path) {
-        val storePath = buildStoreWithOneFile(tempDir)
+        val storeFilePath = buildStoreWithOneFile(tempDir)
         val credentials = Credentials(
             openaiApiKey = "sk-secret",
             openaiApiKeySource = CredentialSource.EnvVar("OPENAI_API_KEY"),
@@ -177,7 +178,7 @@ class StatusCommandTest {
             anthropicApiKeySource = CredentialSource.Unset,
         )
         val out = StringWriter()
-        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = storeFilePath, outputWriter = PrintWriter(out), credentials = credentials)
         cmd.call()
         val output = out.toString()
         assertThat(output).contains("openai-api-key:")
@@ -187,7 +188,7 @@ class StatusCommandTest {
 
     @Test
     fun `text output shows openai-api-key sourced from file`(@TempDir tempDir: Path) {
-        val storePath = buildStoreWithOneFile(tempDir)
+        val storeFilePath = buildStoreWithOneFile(tempDir)
         val credentials = Credentials(
             openaiApiKey = "sk-secret",
             openaiApiKeySource = CredentialSource.File("/home/user/.ez-rag/credentials.yml"),
@@ -195,7 +196,7 @@ class StatusCommandTest {
             anthropicApiKeySource = CredentialSource.Unset,
         )
         val out = StringWriter()
-        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = storeFilePath, outputWriter = PrintWriter(out), credentials = credentials)
         cmd.call()
         val output = out.toString()
         assertThat(output).contains("openai-api-key:")
@@ -205,7 +206,7 @@ class StatusCommandTest {
 
     @Test
     fun `text output shows openai-api-key not set when unset`(@TempDir tempDir: Path) {
-        val storePath = buildStoreWithOneFile(tempDir)
+        val storeFilePath = buildStoreWithOneFile(tempDir)
         val credentials = Credentials(
             openaiApiKey = null,
             openaiApiKeySource = CredentialSource.Unset,
@@ -213,7 +214,7 @@ class StatusCommandTest {
             anthropicApiKeySource = CredentialSource.Unset,
         )
         val out = StringWriter()
-        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = storeFilePath, outputWriter = PrintWriter(out), credentials = credentials)
         cmd.call()
         val output = out.toString()
         assertThat(output).contains("openai-api-key: not set")
@@ -221,7 +222,7 @@ class StatusCommandTest {
 
     @Test
     fun `text output shows anthropic-api-key sourced from env var`(@TempDir tempDir: Path) {
-        val storePath = buildStoreWithOneFile(tempDir)
+        val storeFilePath = buildStoreWithOneFile(tempDir)
         val credentials = Credentials(
             openaiApiKey = null,
             openaiApiKeySource = CredentialSource.Unset,
@@ -229,7 +230,7 @@ class StatusCommandTest {
             anthropicApiKeySource = CredentialSource.EnvVar("ANTHROPIC_API_KEY"),
         )
         val out = StringWriter()
-        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = storeFilePath, outputWriter = PrintWriter(out), credentials = credentials)
         cmd.call()
         val output = out.toString()
         assertThat(output).contains("anthropic-api-key:")
@@ -239,7 +240,7 @@ class StatusCommandTest {
 
     @Test
     fun `text output shows anthropic-api-key sourced from file`(@TempDir tempDir: Path) {
-        val storePath = buildStoreWithOneFile(tempDir)
+        val storeFilePath = buildStoreWithOneFile(tempDir)
         val credentials = Credentials(
             openaiApiKey = null,
             openaiApiKeySource = CredentialSource.Unset,
@@ -247,7 +248,7 @@ class StatusCommandTest {
             anthropicApiKeySource = CredentialSource.File(".ez-rag/credentials.yml"),
         )
         val out = StringWriter()
-        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = storeFilePath, outputWriter = PrintWriter(out), credentials = credentials)
         cmd.call()
         val output = out.toString()
         assertThat(output).contains("anthropic-api-key:")
@@ -257,7 +258,7 @@ class StatusCommandTest {
 
     @Test
     fun `text output shows anthropic-api-key not set when unset`(@TempDir tempDir: Path) {
-        val storePath = buildStoreWithOneFile(tempDir)
+        val storeFilePath = buildStoreWithOneFile(tempDir)
         val credentials = Credentials(
             openaiApiKey = null,
             openaiApiKeySource = CredentialSource.Unset,
@@ -265,7 +266,7 @@ class StatusCommandTest {
             anthropicApiKeySource = CredentialSource.Unset,
         )
         val out = StringWriter()
-        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = storeFilePath, outputWriter = PrintWriter(out), credentials = credentials)
         cmd.call()
         val output = out.toString()
         assertThat(output).contains("anthropic-api-key: not set")
@@ -273,7 +274,7 @@ class StatusCommandTest {
 
     @Test
     fun `JSON output contains credentials object with source strings`(@TempDir tempDir: Path) {
-        val storePath = buildStoreWithOneFile(tempDir)
+        val storeFilePath = buildStoreWithOneFile(tempDir)
         val credentials = Credentials(
             openaiApiKey = "sk-secret",
             openaiApiKeySource = CredentialSource.EnvVar("OPENAI_API_KEY"),
@@ -281,7 +282,7 @@ class StatusCommandTest {
             anthropicApiKeySource = CredentialSource.File("/home/user/.ez-rag/credentials.yml"),
         )
         val out = StringWriter()
-        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = storeFilePath, outputWriter = PrintWriter(out), credentials = credentials)
         cmd.outputFormat = "json"
         cmd.call()
         val json = out.toString().trim()
@@ -300,7 +301,7 @@ class StatusCommandTest {
 
     @Test
     fun `JSON output shows not set for unset keys`(@TempDir tempDir: Path) {
-        val storePath = buildStoreWithOneFile(tempDir)
+        val storeFilePath = buildStoreWithOneFile(tempDir)
         val credentials = Credentials(
             openaiApiKey = null,
             openaiApiKeySource = CredentialSource.Unset,
@@ -308,7 +309,7 @@ class StatusCommandTest {
             anthropicApiKeySource = CredentialSource.Unset,
         )
         val out = StringWriter()
-        val cmd = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out), credentials = credentials)
+        val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = storeFilePath, outputWriter = PrintWriter(out), credentials = credentials)
         cmd.outputFormat = "json"
         cmd.call()
         val json = out.toString().trim()
@@ -320,9 +321,42 @@ class StatusCommandTest {
     }
 
     @Test
+    fun `status invoked from subdirectory finds store in parent directory`(@TempDir tempDir: Path) {
+        // Create the .ez-rag/ store in tempDir (the "project root")
+        val ezRagDir = tempDir.resolve(".ez-rag")
+        ezRagDir.toFile().mkdirs()
+        val storeFilePath = ezRagDir.resolve("vector-store.json")
+
+        // Populate the store
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        repo.load()
+        repo.add(listOf(
+            Document.builder().text("Content from parent store")
+                .metadata(mapOf("source" to "parent.txt", "mtime" to 1000L)).build()
+        ))
+        repo.save()
+
+        // Create a subdirectory to simulate running from a child directory
+        val subDir = tempDir.resolve("sub")
+        subDir.toFile().mkdirs()
+
+        val out = StringWriter()
+        val cmd = StatusCommand(
+            embeddingModel = fakeEmbeddingModel,
+            // No storeDirOverride — let resolver walk up from subDir
+            startDirOverride = subDir,
+            outputWriter = PrintWriter(out),
+        )
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(out.toString()).contains("parent.txt")
+    }
+
+    @Test
     fun `text output lists files alphabetically`(@TempDir tempDir: Path) {
-        val storePath = tempDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
         repo.load()
         // Add files out of alphabetical order
         repo.add(listOf(
@@ -336,7 +370,7 @@ class StatusCommandTest {
         repo.save()
 
         val out = StringWriter()
-        val statusCommand = StatusCommand(fakeEmbeddingModel, storePath, PrintWriter(out))
+        val statusCommand = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
         statusCommand.call()
 
         val output = out.toString()

@@ -6,3 +6,5 @@ build/
 *.war
 *.log
 .ez-rag/
+
+.ez-rag/vector-store.json

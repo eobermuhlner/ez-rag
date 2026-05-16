@@ -44,14 +44,14 @@ class McpIngestToolTest {
         resultToReturn: IngestResult = IngestResult(0, 0, 0),
         throwException: Exception? = null
     ): McpIngestTool {
-        val storePath = tempDir.resolve("store.json")
+        val storeFilePath = tempDir.resolve("store.json")
         return McpIngestTool(
             embeddingModel = fakeEmbeddingModel,
-            storePath = storePath,
+            storeFilePath = storeFilePath,
             ingestServiceFactory = { chunkSize, chunkOverlap ->
                 capturedChunkSizes.add(chunkSize)
                 capturedChunkOverlaps.add(chunkOverlap)
-                object : IngestService(fakeEmbeddingModel, storePath, chunkSize, chunkOverlap) {
+                object : IngestService(fakeEmbeddingModel, storeFilePath, chunkSize, chunkOverlap) {
                     override fun ingest(files: List<File>): IngestResult {
                         capturedFiles.add(files)
                         if (throwException != null) throw throwException
@@ -106,12 +106,12 @@ class McpIngestToolTest {
     fun `after successful ingest the vector store file is updated on disk`(@TempDir tempDir: Path) {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world for ingest disk persistence test.")
-        val storePath = tempDir.resolve("store.json")
+        val storeFilePath = tempDir.resolve("store.json")
 
-        val tool = McpIngestTool(fakeEmbeddingModel, storePath)
+        val tool = McpIngestTool(fakeEmbeddingModel, storeFilePath)
         tool.ingest(sampleFile.toString(), null, null)
 
-        assertThat(storePath.toFile()).exists()
+        assertThat(storeFilePath.toFile()).exists()
     }
 
     @Test

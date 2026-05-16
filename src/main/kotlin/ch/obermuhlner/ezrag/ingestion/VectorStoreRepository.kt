@@ -8,14 +8,14 @@ import java.nio.file.Path
 data class StoreDocumentInfo(val path: String, val chunkCount: Int)
 
 data class StoreMetadata(
-    val storePath: String,
+    val storeFilePath: String,
     val chunkCount: Int,
     val documents: List<StoreDocumentInfo>
 )
 
 class VectorStoreRepository(
     private val embeddingModel: EmbeddingModel,
-    private val storePath: Path,
+    private val storeFilePath: Path,
 ) {
 
     private lateinit var vectorStore: SimpleVectorStore
@@ -24,7 +24,7 @@ class VectorStoreRepository(
 
     fun load() {
         vectorStore = SimpleVectorStore.builder(embeddingModel).build()
-        val file = storePath.toFile()
+        val file = storeFilePath.toFile()
         if (file.exists()) {
             vectorStore.load(file)
             populateIngestedFilesFromStore()
@@ -41,18 +41,18 @@ class VectorStoreRepository(
     }
 
     fun save() {
-        val dir = storePath.parent?.toFile()
+        val dir = storeFilePath.parent?.toFile()
         if (dir != null && !dir.exists()) {
             dir.mkdirs()
         }
-        vectorStore.save(storePath.toFile())
+        vectorStore.save(storeFilePath.toFile())
     }
 
     fun isAlreadyIngested(sourcePath: String, mtime: Long): Boolean {
         return ingestedFiles.contains(Pair(sourcePath, mtime))
     }
 
-    fun storeExists(): Boolean = storePath.toFile().exists()
+    fun storeExists(): Boolean = storeFilePath.toFile().exists()
 
     fun getStore(): SimpleVectorStore = vectorStore
 
@@ -74,7 +74,7 @@ class VectorStoreRepository(
             .sortedBy { it.key }
             .map { StoreDocumentInfo(path = it.key, chunkCount = it.value) }
         return StoreMetadata(
-            storePath = storePath.toAbsolutePath().toString(),
+            storeFilePath = storeFilePath.toAbsolutePath().toString(),
             chunkCount = totalChunks,
             documents = documents
         )

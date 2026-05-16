@@ -65,24 +65,24 @@ class RagQueryIntegrationTest {
     // Helpers
     // -----------------------------------------------------------------------
 
-    /** Runs IngestCommand against [files] writing to [storePath]. Returns exit code. */
-    private fun ingest(files: List<java.io.File>, storePath: Path): Int {
-        val cmd = IngestCommand(embeddingModel = fakeEmbeddingModel, storePathOverride = storePath)
+    /** Runs IngestCommand against [files] writing to [storeFilePath]. Returns exit code. */
+    private fun ingest(files: List<java.io.File>, storeFilePath: Path): Int {
+        val cmd = IngestCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = storeFilePath.parent)
         return cmd.call(files)
     }
 
     /** Builds a QueryCommand wired to real disk and stub pipeline components. */
     private fun buildQueryCommand(
-        storePath: Path,
+        storeFilePath: Path,
         out: StringWriter,
         err: StringWriter,
         inputStream: ByteArrayInputStream = ByteArrayInputStream(ByteArray(0)),
     ): QueryCommand {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
         repo.load()
         val pipeline = RagPipeline(repo, stubChatModel)
         return QueryCommand(
-            storePathOverride = storePath,
+            storeDirOverride = storeFilePath.parent,
             ragPipeline = pipeline,
             outputFormatter = OutputFormatter(),
             outputWriter = PrintWriter(out, true),
@@ -100,12 +100,12 @@ class RagQueryIntegrationTest {
         val sampleFile = tempDir.resolve("sample.txt").toFile()
         sampleFile.writeText("The project uses a microservices architecture with Docker containers.")
 
-        val storePath = tempDir.resolve("vector-store.json")
-        assertThat(ingest(listOf(sampleFile), storePath)).isEqualTo(0)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        assertThat(ingest(listOf(sampleFile), storeFilePath)).isEqualTo(0)
 
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = buildQueryCommand(storePath, out, err)
+        val cmd = buildQueryCommand(storeFilePath, out, err)
         cmd.questionArgs = listOf("What architecture is used?")
 
         val exitCode = cmd.call()
@@ -123,12 +123,12 @@ class RagQueryIntegrationTest {
         val sampleFile = tempDir.resolve("design.txt").toFile()
         sampleFile.writeText("The system relies on event-driven communication between services.")
 
-        val storePath = tempDir.resolve("vector-store.json")
-        ingest(listOf(sampleFile), storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        ingest(listOf(sampleFile), storeFilePath)
 
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = buildQueryCommand(storePath, out, err)
+        val cmd = buildQueryCommand(storeFilePath, out, err)
         cmd.questionArgs = listOf("How do services communicate?")
 
         cmd.call()
@@ -147,12 +147,12 @@ class RagQueryIntegrationTest {
         val sampleFile = tempDir.resolve("architecture.txt").toFile()
         sampleFile.writeText("Kubernetes orchestrates all container workloads in the platform.")
 
-        val storePath = tempDir.resolve("vector-store.json")
-        ingest(listOf(sampleFile), storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        ingest(listOf(sampleFile), storeFilePath)
 
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = buildQueryCommand(storePath, out, err)
+        val cmd = buildQueryCommand(storeFilePath, out, err)
         cmd.questionArgs = listOf("What orchestrates containers?")
         cmd.outputFormat = "json"
 
@@ -180,11 +180,11 @@ class RagQueryIntegrationTest {
 
     @Test
     fun `querying with no store file exits non-zero and output contains ingest`(@TempDir tempDir: Path) {
-        val storePath = tempDir.resolve("nonexistent-store.json")
+        val storeFilePath = tempDir.resolve("nonexistent-store.json")
 
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = buildQueryCommand(storePath, out, err)
+        val cmd = buildQueryCommand(storeFilePath, out, err)
         cmd.questionArgs = listOf("What is the architecture?")
 
         val exitCode = cmd.call()
@@ -202,8 +202,8 @@ class RagQueryIntegrationTest {
         val sampleFile = tempDir.resolve("notes.txt").toFile()
         sampleFile.writeText("The platform supports Java, Kotlin, and Python runtimes.")
 
-        val storePath = tempDir.resolve("vector-store.json")
-        ingest(listOf(sampleFile), storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        ingest(listOf(sampleFile), storeFilePath)
 
         val multiLineQuestion = """
             What languages are supported?
@@ -214,7 +214,7 @@ class RagQueryIntegrationTest {
         val inputStream = ByteArrayInputStream(multiLineQuestion.toByteArray(Charsets.UTF_8))
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = buildQueryCommand(storePath, out, err, inputStream)
+        val cmd = buildQueryCommand(storeFilePath, out, err, inputStream)
         // No --question set; reading from stdin
 
         val exitCode = cmd.call()

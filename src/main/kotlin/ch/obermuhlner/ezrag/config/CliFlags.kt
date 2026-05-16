@@ -6,7 +6,7 @@ data class CliFlags(
     val model: String? = null,
     val embeddingModel: String? = null,
     val ollamaUrl: String? = null,
-    val storePath: String? = null,
+    val storeDir: String? = null,
     val chunkSize: Int? = null,
     val chunkOverlap: Int? = null,
     val topK: Int? = null,

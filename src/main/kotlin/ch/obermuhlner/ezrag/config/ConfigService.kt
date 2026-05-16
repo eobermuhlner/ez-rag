@@ -15,7 +15,7 @@ class ConfigService(
             model = cliFlags.model ?: startupFlags.model ?: envVars["MODEL"] ?: file.model,
             embeddingModel = cliFlags.embeddingModel ?: startupFlags.embeddingModel ?: envVars["EMBEDDING_MODEL"] ?: file.embeddingModel,
             ollamaUrl = cliFlags.ollamaUrl ?: startupFlags.ollamaUrl ?: envVars["OLLAMA_BASE_URL"] ?: file.ollamaUrl,
-            storePath = cliFlags.storePath ?: envVars["STORE_PATH"] ?: file.storePath,
+            storeDir = cliFlags.storeDir ?: envVars["STORE_DIR"] ?: file.storeDir ?: ".ez-rag",
             chunkSize = cliFlags.chunkSize ?: envVars["CHUNK_SIZE"]?.toIntOrNull() ?: file.chunkSize,
             chunkOverlap = cliFlags.chunkOverlap ?: envVars["CHUNK_OVERLAP"]?.toIntOrNull() ?: file.chunkOverlap,
             topK = cliFlags.topK ?: envVars["TOP_K"]?.toIntOrNull() ?: file.topK,
@@ -23,5 +23,17 @@ class ConfigService(
             outputFormat = cliFlags.outputFormat ?: envVars["OUTPUT_FORMAT"] ?: file.outputFormat,
             verbose = cliFlags.verbose ?: envVars["VERBOSE"]?.toBooleanStrictOrNull() ?: file.verbose
         )
+    }
+
+    /**
+     * Returns the explicitly configured store directory, or null if no explicit configuration
+     * was provided (meaning the parent directory walk should be used).
+     *
+     * Priority: CLI cliFlags.storeDir > STORE_DIR env var > config file storeDir (only when
+     * the config file exists and sets the key — uses raw file value to avoid default confusion).
+     */
+    fun resolveExplicitStoreDir(cliFlags: CliFlags = CliFlags()): String? {
+        val rawFileStoreDir = configFileSource()?.storeDir
+        return cliFlags.storeDir ?: envVars["STORE_DIR"] ?: rawFileStoreDir
     }
 }

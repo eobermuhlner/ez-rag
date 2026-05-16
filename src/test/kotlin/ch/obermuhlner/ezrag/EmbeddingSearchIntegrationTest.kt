@@ -47,22 +47,22 @@ class EmbeddingSearchIntegrationTest {
         override fun dimensions(): Int = 4
     }
 
-    private fun ingest(files: List<java.io.File>, storePath: Path): Int {
-        val cmd = IngestCommand(embeddingModel = fakeEmbeddingModel, storePathOverride = storePath)
+    private fun ingest(files: List<java.io.File>, storeFilePath: Path): Int {
+        val cmd = IngestCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = storeFilePath.parent)
         return cmd.call(files)
     }
 
     private fun buildSearchCommand(
-        storePath: Path,
+        storeFilePath: Path,
         out: StringWriter,
         err: StringWriter,
         inputStream: ByteArrayInputStream = ByteArrayInputStream(ByteArray(0)),
     ): SearchCommand {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storePath)
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
         repo.load()
         val pipeline = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
         return SearchCommand(
-            storePathOverride = storePath,
+            storeDirOverride = storeFilePath.parent,
             searchPipeline = pipeline,
             repositoryForVerbose = repo,
             outputFormatter = OutputFormatter(),
@@ -86,12 +86,12 @@ class EmbeddingSearchIntegrationTest {
             "Each service communicates via REST APIs and message queues."
         )
 
-        val storePath = tempDir.resolve("vector-store.json")
-        assertThat(ingest(listOf(sampleFile), storePath)).isEqualTo(0)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        assertThat(ingest(listOf(sampleFile), storeFilePath)).isEqualTo(0)
 
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = buildSearchCommand(storePath, out, err)
+        val cmd = buildSearchCommand(storeFilePath, out, err)
         cmd.questionArgs = listOf("architecture")
 
         val exitCode = cmd.call()
@@ -113,12 +113,12 @@ class EmbeddingSearchIntegrationTest {
         val sampleFile = tempDir.resolve("data.txt").toFile()
         sampleFile.writeText("Machine learning models process embeddings efficiently.")
 
-        val storePath = tempDir.resolve("vector-store.json")
-        ingest(listOf(sampleFile), storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        ingest(listOf(sampleFile), storeFilePath)
 
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = buildSearchCommand(storePath, out, err)
+        val cmd = buildSearchCommand(storeFilePath, out, err)
         cmd.questionArgs = listOf("embeddings")
         cmd.outputFormat = "json"
 

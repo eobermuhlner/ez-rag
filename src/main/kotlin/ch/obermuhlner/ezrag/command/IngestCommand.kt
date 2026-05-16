@@ -1,5 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.config.ConfigService
+import ch.obermuhlner.ezrag.config.EzRagDirResolver
 import ch.obermuhlner.ezrag.ingestion.IngestService
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.transformers.TransformersEmbeddingModel
@@ -22,7 +24,7 @@ import java.util.concurrent.Callable
 @Component
 class IngestCommand(
     private val embeddingModel: EmbeddingModel? = null,
-    private val storePathOverride: Path? = null,
+    private val storeDirOverride: Path? = null,
     private val outputWriter: PrintWriter = PrintWriter(System.out, true),
     private val warningWriter: PrintWriter = PrintWriter(System.err, true),
     private val chunkSize: Int? = null,
@@ -30,16 +32,21 @@ class IngestCommand(
     private val verbose: Boolean = false,
     private val quiet: Boolean = false,
     private val modelCachePath: Path = Paths.get(System.getProperty("user.home"), ".ez-rag", "models"),
+    private val startDirOverride: Path? = null,
+    private val configServiceOverride: ConfigService? = null,
 ) : Callable<Int> {
 
     @Autowired(required = false)
     private var springEmbeddingModel: EmbeddingModel? = null
 
+    @Autowired(required = false)
+    private var springConfigService: ConfigService? = null
+
     @Parameters(arity = "1..*", description = ["Files or directories to ingest."])
     var paths: List<File> = emptyList()
 
-    @Option(names = ["--store"], description = ["Path to the vector store JSON file."])
-    var storePathOption: String? = null
+    @Option(names = ["--store-dir"], description = ["Path to the store directory."])
+    var storeDirOption: String? = null
 
     @Option(names = ["--chunk-size"], description = ["Chunk size in tokens (default: 1000)."])
     var chunkSizeOption: Int? = null
@@ -74,9 +81,11 @@ class IngestCommand(
             return exitWithError("Embedding provider is not configured correctly: ${e.message}")
         }
 
-        val resolvedStorePath = storePathOverride
-            ?: storePathOption?.let { Paths.get(it) }
-            ?: Paths.get(".ez-rag/vector-store.json")
+        val resolvedStoreDir = storeDirOverride
+            ?: storeDirOption?.let { Paths.get(it) }
+            ?: (configServiceOverride ?: springConfigService)?.resolveExplicitStoreDir()?.let { Paths.get(it) }
+            ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
+        val resolvedStorePath = resolvedStoreDir.resolve("vector-store.json")
         val resolvedChunkSize = chunkSize ?: chunkSizeOption ?: 1000
         val resolvedChunkOverlap = chunkOverlap ?: chunkOverlapOption ?: 200
 

@@ -71,4 +71,62 @@ class GitIgnoreUpdaterTest {
 
         assertThat(sw.toString()).isEmpty()
     }
+
+    // ---- ensureEntry (generalized API) tests ----
+
+    @Test
+    fun `ensureEntry adds vector-store entry when gitignore exists and entry is absent`(@TempDir tempDir: Path) {
+        val gitignore = tempDir.resolve(".gitignore").toFile()
+        gitignore.writeText("target/\n*.log\n")
+        val (_, pw) = makeWriter()
+
+        GitIgnoreUpdater(pw).ensureEntry(tempDir.toFile(), ".ez-rag/vector-store.json")
+
+        assertThat(gitignore.readText()).contains(".ez-rag/vector-store.json")
+    }
+
+    @Test
+    fun `ensureEntry prints notice when adding vector-store entry`(@TempDir tempDir: Path) {
+        val gitignore = tempDir.resolve(".gitignore").toFile()
+        gitignore.writeText("target/\n")
+        val (sw, pw) = makeWriter()
+
+        GitIgnoreUpdater(pw).ensureEntry(tempDir.toFile(), ".ez-rag/vector-store.json")
+
+        assertThat(sw.toString()).isNotBlank()
+    }
+
+    @Test
+    fun `ensureEntry does not duplicate vector-store entry when already present`(@TempDir tempDir: Path) {
+        val gitignore = tempDir.resolve(".gitignore").toFile()
+        gitignore.writeText(".ez-rag/vector-store.json\n")
+        val (_, pw) = makeWriter()
+
+        GitIgnoreUpdater(pw).ensureEntry(tempDir.toFile(), ".ez-rag/vector-store.json")
+
+        val count = gitignore.readLines().count { it.trim() == ".ez-rag/vector-store.json" }
+        assertThat(count).isEqualTo(1)
+    }
+
+    @Test
+    fun `ensureEntry does not print notice when vector-store entry is already present`(@TempDir tempDir: Path) {
+        val gitignore = tempDir.resolve(".gitignore").toFile()
+        gitignore.writeText(".ez-rag/vector-store.json\n")
+        val (sw, pw) = makeWriter()
+
+        GitIgnoreUpdater(pw).ensureEntry(tempDir.toFile(), ".ez-rag/vector-store.json")
+
+        assertThat(sw.toString()).isEmpty()
+    }
+
+    @Test
+    fun `ensureEntry does nothing when gitignore does not exist`(@TempDir tempDir: Path) {
+        val gitignore = tempDir.resolve(".gitignore").toFile()
+        val (sw, pw) = makeWriter()
+
+        GitIgnoreUpdater(pw).ensureEntry(tempDir.toFile(), ".ez-rag/vector-store.json")
+
+        assertThat(gitignore.exists()).isFalse()
+        assertThat(sw.toString()).isEmpty()
+    }
 }

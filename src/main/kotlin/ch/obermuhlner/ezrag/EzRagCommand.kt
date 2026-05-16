@@ -1,5 +1,6 @@
 package ch.obermuhlner.ezrag
 
+import ch.obermuhlner.ezrag.command.InitCommand
 import ch.obermuhlner.ezrag.command.IngestCommand
 import ch.obermuhlner.ezrag.command.McpServerCommand
 import ch.obermuhlner.ezrag.command.QueryCommand
@@ -21,6 +22,7 @@ import java.util.concurrent.Callable
     commandListHeading = "Subcommands:%n",
     description = ["A command-line tool for RAG (retrieval-augmented generation)."],
     subcommands = [
+        InitCommand::class,
         IngestCommand::class,
         QueryCommand::class,
         SearchCommand::class,

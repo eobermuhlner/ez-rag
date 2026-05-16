@@ -40,8 +40,8 @@ class IngestServiceTest {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for ingestion.")
 
-        val storePath = tempDir.resolve("vector-store.json")
-        val service = IngestService(fakeEmbeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val service = IngestService(fakeEmbeddingModel, storeFilePath)
 
         val result = service.ingest(listOf(sampleFile.toFile()))
 
@@ -55,14 +55,14 @@ class IngestServiceTest {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for deduplication.")
 
-        val storePath = tempDir.resolve("vector-store.json")
+        val storeFilePath = tempDir.resolve("vector-store.json")
 
-        val service1 = IngestService(fakeEmbeddingModel, storePath)
+        val service1 = IngestService(fakeEmbeddingModel, storeFilePath)
         val result1 = service1.ingest(listOf(sampleFile.toFile()))
         assertThat(result1.filesIngested).isEqualTo(1)
         assertThat(result1.skipped).isEqualTo(0)
 
-        val service2 = IngestService(fakeEmbeddingModel, storePath)
+        val service2 = IngestService(fakeEmbeddingModel, storeFilePath)
         val result2 = service2.ingest(listOf(sampleFile.toFile()))
         assertThat(result2.filesIngested).isEqualTo(0)
         assertThat(result2.chunksCreated).isEqualTo(0)
@@ -89,9 +89,9 @@ class IngestServiceTest {
     @Test
     fun `ingest warns and skips non-existent path`(@TempDir tempDir: Path) {
         val nonExistent = tempDir.resolve("does-not-exist").toFile()
-        val storePath = tempDir.resolve("vector-store.json")
+        val storeFilePath = tempDir.resolve("vector-store.json")
         val warnings = StringWriter()
-        val service = IngestService(fakeEmbeddingModel, storePath, warningWriter = PrintWriter(warnings, true))
+        val service = IngestService(fakeEmbeddingModel, storeFilePath, warningWriter = PrintWriter(warnings, true))
 
         val result = service.ingest(listOf(nonExistent))
 
@@ -104,9 +104,9 @@ class IngestServiceTest {
     fun `ingest warns and skips file with unsupported extension`(@TempDir tempDir: Path) {
         val unsupported = tempDir.resolve("data.csv")
         unsupported.toFile().writeText("col1,col2\nval1,val2")
-        val storePath = tempDir.resolve("vector-store.json")
+        val storeFilePath = tempDir.resolve("vector-store.json")
         val warnings = StringWriter()
-        val service = IngestService(fakeEmbeddingModel, storePath, warningWriter = PrintWriter(warnings, true))
+        val service = IngestService(fakeEmbeddingModel, storeFilePath, warningWriter = PrintWriter(warnings, true))
 
         val result = service.ingest(listOf(unsupported.toFile()))
 
@@ -119,8 +119,8 @@ class IngestServiceTest {
     fun `ingest skips file that produces no chunks without throwing`(@TempDir tempDir: Path) {
         val emptyFile = tempDir.resolve("empty.txt")
         emptyFile.toFile().writeText("")
-        val storePath = tempDir.resolve("vector-store.json")
-        val service = IngestService(fakeEmbeddingModel, storePath)
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val service = IngestService(fakeEmbeddingModel, storeFilePath)
 
         val result = service.ingest(listOf(emptyFile.toFile()))
 
