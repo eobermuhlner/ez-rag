@@ -71,7 +71,7 @@ class BM25RepositoryTest {
     }
 
     @Test
-    fun `getMetadata returns documentCount and positive indexSizeBytes after indexing`(@TempDir storeDir: Path) {
+    fun `getMetadata returns chunkCount and positive indexSizeBytes after indexing`(@TempDir storeDir: Path) {
         val repo = BM25Repository(storeDir, "standard")
         repo.index(listOf(
             makeDocument("First chunk content", "a.txt", chunkIndex = 0),
@@ -84,7 +84,7 @@ class BM25RepositoryTest {
         val meta = repo2.getMetadata()
         repo2.close()
 
-        assertThat(meta.documentCount).isEqualTo(3)
+        assertThat(meta.chunkCount).isEqualTo(3)
         assertThat(meta.indexSizeBytes).isGreaterThan(0)
     }
 }

@@ -110,7 +110,7 @@ class StatusCommand(
                 "staleDocumentCount" to metadata.staleDocumentCount,
                 "lastIngestTime" to lastIngestTimeValue,
                 "bm25" to mapOf(
-                    "documentCount" to bm25Metadata.documentCount,
+                    "chunkCount" to bm25Metadata.chunkCount,
                     "indexSizeBytes" to bm25Metadata.indexSizeBytes,
                 ),
                 "configuration" to configMap,
@@ -135,7 +135,7 @@ class StatusCommand(
             } else {
                 outputWriter.println("Last ingest time: none")
             }
-            outputWriter.println("BM25 documents: ${bm25Metadata.documentCount}  index size: ${formatBytes(bm25Metadata.indexSizeBytes)}")
+            outputWriter.println("BM25 chunks: ${bm25Metadata.chunkCount}  index size: ${formatBytes(bm25Metadata.indexSizeBytes)}")
             outputWriter.println()
             outputWriter.println("Configuration:")
             outputWriter.println("  storeDir: ${resolvedConfig.storeDir ?: ""}")

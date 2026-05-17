@@ -21,7 +21,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 data class BM25IndexMetadata(
-    val documentCount: Int,
+    val chunkCount: Int,
     val indexSizeBytes: Long
 )
 
@@ -147,7 +147,7 @@ class BM25Repository(
                         .walkTopDown()
                         .filter { it.isFile }
                         .sumOf { it.length() }
-                    BM25IndexMetadata(documentCount = docCount, indexSizeBytes = sizeBytes)
+                    BM25IndexMetadata(chunkCount = docCount, indexSizeBytes = sizeBytes)
                 }
             }
         } catch (_: Exception) {

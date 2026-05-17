@@ -17,6 +17,7 @@ java {
 
 application {
     mainClass.set("ch.obermuhlner.ezrag.EzRagApplicationKt")
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 
 repositories {

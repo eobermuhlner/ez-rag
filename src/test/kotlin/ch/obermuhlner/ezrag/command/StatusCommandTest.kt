@@ -632,11 +632,11 @@ class StatusCommandTest {
         val exitCode = cmd.call()
 
         assertThat(exitCode).isEqualTo(0)
-        assertThat(out.toString()).containsPattern("(?i)bm25 documents.*1|bm25.*document.*1")
+        assertThat(out.toString()).containsPattern("(?i)bm25 chunks.*1|bm25.*chunk.*1")
     }
 
     @Test
-    fun `JSON output contains bm25 object with documentCount and indexSizeBytes after ingest`(@TempDir tempDir: Path) {
+    fun `JSON output contains bm25 object with chunkCount and indexSizeBytes after ingest`(@TempDir tempDir: Path) {
         buildStoreWithOneFile(tempDir)
         BM25Repository(tempDir, "standard").use { bm25 ->
             bm25.index(listOf(
@@ -654,14 +654,14 @@ class StatusCommandTest {
         val node = ObjectMapper().readTree(out.toString().trim())
         assertThat(node.has("bm25")).isTrue()
         val bm25Node = node.get("bm25")
-        assertThat(bm25Node.has("documentCount")).isTrue()
-        assertThat(bm25Node.get("documentCount").asInt()).isEqualTo(1)
+        assertThat(bm25Node.has("chunkCount")).isTrue()
+        assertThat(bm25Node.get("chunkCount").asInt()).isEqualTo(1)
         assertThat(bm25Node.has("indexSizeBytes")).isTrue()
         assertThat(bm25Node.get("indexSizeBytes").asLong()).isGreaterThan(0L)
     }
 
     @Test
-    fun `text output shows BM25 documents 0 and exits 0 when no Lucene index exists`(@TempDir tempDir: Path) {
+    fun `text output shows BM25 chunks 0 and exits 0 when no Lucene index exists`(@TempDir tempDir: Path) {
         // Only build the vector store; do NOT create the Lucene index
         buildStoreWithOneFile(tempDir)
 
@@ -670,6 +670,6 @@ class StatusCommandTest {
         val exitCode = cmd.call()
 
         assertThat(exitCode).isEqualTo(0)
-        assertThat(out.toString()).containsPattern("(?i)bm25 documents.*0|bm25.*0")
+        assertThat(out.toString()).containsPattern("(?i)bm25 chunks.*0|bm25.*chunk.*0")
     }
 }

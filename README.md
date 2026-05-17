@@ -75,7 +75,7 @@ echo "What is X?" | ez-rag search
 | `show <file>`                  | Show per-chunk metadata (and optionally raw text) for an ingested file. Useful for debugging retrieval. |
 | `query [<word>...]`            | Retrieve relevant chunks and answer using an LLM. Reads question from positional args or stdin.    |
 | `status`                       | Show store health, aggregate counts, active configuration, and credential status.                  |
-| `search [<word>...]`           | Pure embedding search returning raw chunks without LLM involvement. Reads question from positional args or stdin. |
+| `search [<word>...]`           | Search returning raw chunks without LLM involvement. Defaults to hybrid (BM25 + embedding) mode; override with `--mode`. Reads question from positional args or stdin. |
 | `eval <corpus-dir>`            | Evaluate retrieval quality against a corpus of scenarios. Exits 1 if any threshold fails.          |
 | `mcp-server`                   | Run as an MCP server over stdio (for Claude Code and other agentic tools).                         |
 | `shell`                        | _(not yet implemented)_ Interactive REPL mode.                                                     |
@@ -100,7 +100,7 @@ Output (already exists):
 .ez-rag/ already exists at /path/to/project/.ez-rag
 ```
 
-`init` also adds `.ez-rag/vector-store.json` to the project's `.gitignore` (if the file exists) so the vector store is never accidentally committed. Running `ingest` without calling `init` first works too — the directory is created automatically.
+`init` also adds `.ez-rag/` to the project's `.gitignore` (if the file exists) so the entire store directory (vector store and Lucene index) is never accidentally committed. Running `ingest` without calling `init` first works too — the directory is created automatically.
 
 ## Ingest-specific flags
 
@@ -274,6 +274,7 @@ Documents: 2
 Size: 142 KB
 Stale documents: 0
 Last ingest time: 2026-05-17T10:30:00Z
+BM25 chunks: 14  index size: 48321 bytes
 
 Configuration:
   storeDir:
@@ -399,13 +400,54 @@ thresholds:               # optional; eval exits 1 if any threshold is missed
 | `MRR`        | Mean Reciprocal Rank. For each question, the score is 1/rank of the first relevant result (1.0 if rank 1, 0.5 if rank 2, 0.33 if rank 3, 0 if not found). Averaged across all questions. Sensitive to ordering — a high MRR means relevant chunks tend to appear first. |
 | `Hit@3`      | Same as Recall@3 when each question has a single expected source. Differs when a question has multiple expected sources: Recall@3 counts partial credit, Hit@3 is binary (1 if any expected source is found, 0 otherwise). |
 
+## Hybrid search
+
+By default, `search` uses **hybrid mode**: it runs both a BM25 keyword search (powered by Lucene) and a vector similarity search in parallel, then fuses the two result lists using Reciprocal Rank Fusion (RRF). This combines the precision of keyword matching with the semantic coverage of embeddings.
+
+```sh
+# Default — hybrid (BM25 + embedding, RRF fusion)
+ez-rag search "What is the chunk size?"
+
+# Keyword-only BM25 search (no embedding model involved)
+ez-rag search --mode bm25 "chunk size"
+
+# Embedding-only vector similarity search
+ez-rag search --mode embedding "chunk size"
+```
+
+The JSON output includes a `"mode"` field showing which pipeline produced the results:
+
+```json
+{
+  "mode": "hybrid",
+  "chunks": [...]
+}
+```
+
+The BM25 index lives in `<storeDir>/lucene/` alongside the vector store. It is populated automatically during `ingest` — no extra steps needed.
+
+### Choosing an analyzer
+
+The BM25 index uses a Lucene analyzer to tokenize text. The default is `standard` (Unicode-aware word splitting). Use `english` for English-language content to enable stemming (e.g. "running" matches "run"):
+
+```sh
+ez-rag --analyzer english search "running processes"
+```
+
+Or set it persistently in `~/.ez-rag/config.yml`:
+
+```yaml
+analyzer: english
+```
+
 ## Search-specific flags
 
-| Flag            | Default | Description                                      |
-|-----------------|---------|--------------------------------------------------|
-| `--top-k N`     | `5`     | Maximum number of chunks to return               |
-| `--min-score T` | `0.0`   | Minimum similarity score; lower-scoring chunks are filtered out |
-| `--output`      | `text`  | Output format: `text` or `json`                  |
+| Flag            | Default    | Description                                                          |
+|-----------------|------------|----------------------------------------------------------------------|
+| `--mode`        | `hybrid`   | Search mode: `hybrid` (BM25 + embedding), `bm25`, or `embedding`    |
+| `--top-k N`     | `5`        | Maximum number of chunks to return                                   |
+| `--min-score T` | `0.0`      | Minimum similarity score; lower-scoring chunks are filtered out      |
+| `--output`      | `text`     | Output format: `text` or `json`                                      |
 
 ## Global flags
 
@@ -420,6 +462,8 @@ These flags apply to all subcommands:
 | `--rerank-model`          | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Cross-encoder reranker model name. Set to `""` to disable reranking. |
 | `--rerank-candidates`     | `topK * 3`               | Number of candidates fetched before reranking. Only relevant when `--rerank-model` is set. |
 | `--ollama-url`            | `http://localhost:11434` | Ollama base URL                                |
+| `--search-mode`           | `hybrid`                 | Search mode: `hybrid` (BM25 + embedding), `bm25`, or `embedding` |
+| `--analyzer`              | `standard`               | Lucene analyzer for BM25: `standard` or `english` (enables stemming) |
 | `--verbose` / `-v`        | off                      | Enable debug logging; for `query`, also prints each source file path, similarity score, and chunk index to stderr. When reranking is active also prints reranker name and candidate pool size. |
 
 ## Providers
@@ -514,13 +558,24 @@ Persistent defaults can be set in `~/.ez-rag/config.yml` so you do not have to r
 #verbose: false
 rerank-model: cross-encoder/ms-marco-MiniLM-L-6-v2   # default: cross-encoder/ms-marco-MiniLM-L-6-v2 (reranking enabled by default)
 #rerank-candidates: 15   # default: topK * 3 when rerank-model is set
+#search-mode: hybrid      # default: hybrid (options: hybrid, bm25, embedding)
+#analyzer: standard       # default: standard (options: standard, english, …)
 ```
 
 All keys support both camelCase (`chunkSize`) and kebab-case (`chunk-size`) spelling.
 
 ## Vector store
 
-Documents are stored in a `SimpleVectorStore` JSON file. The default location is `.ez-rag/vector-store.json` relative to the current working directory, following the same convention as `.git/` and `.claude/`. Override the path with `--store <path>` or the `store-path` config key.
+The default store directory is `.ez-rag/` relative to the current working directory, following the same convention as `.git/` and `.claude/`. Override it with `--store <path>` or the `store-path` config key.
+
+Inside the store directory:
+
+| Path | Contents |
+|------|----------|
+| `vector-store.json` | Embedding vectors and chunk metadata |
+| `lucene/` | Lucene BM25 keyword index |
+
+Both are populated automatically by `ingest` and kept in sync by `delete`. The entire `.ez-rag/` directory should be excluded from version control — `ez-rag init` adds it to `.gitignore` automatically.
 
 ## RAG settings
 
@@ -657,7 +712,7 @@ No input parameters.
 
 #### `search`
 
-Searches the vector store using embeddings and returns matching chunks. No LLM is involved.
+Hybrid search (BM25 + embedding, RRF fusion). No LLM is involved. Equivalent to `--mode hybrid`.
 
 | Parameter  | Type   | Required | Default | Description                                    |
 |------------|--------|----------|---------|------------------------------------------------|
@@ -668,6 +723,38 @@ Searches the vector store using embeddings and returns matching chunks. No LLM i
 | Return field | Type            | Description                                 |
 |--------------|-----------------|---------------------------------------------|
 | `chunks`     | List of objects | Each entry has `filePath`, `chunkIndex`, `score`, `content` |
+| `mode`       | String          | Always `"hybrid"`                           |
+| `error`      | String or null  | Set when an error occurred                  |
+
+#### `search_bm25`
+
+Keyword-only BM25 search using the Lucene index. No embedding model involved. Equivalent to `--mode bm25`.
+
+| Parameter  | Type   | Required | Default | Description                       |
+|------------|--------|----------|---------|-----------------------------------|
+| `question` | String | yes      | —       | The keyword query                 |
+| `topK`     | Int    | no       | `5`     | Maximum number of chunks to return|
+
+| Return field | Type            | Description                                 |
+|--------------|-----------------|---------------------------------------------|
+| `chunks`     | List of objects | Each entry has `filePath`, `chunkIndex`, `score`, `content` |
+| `mode`       | String          | Always `"bm25"`                             |
+| `error`      | String or null  | Set when an error occurred                  |
+
+#### `search_embedding`
+
+Embedding-only vector similarity search. No BM25 index involved. Equivalent to `--mode embedding`.
+
+| Parameter  | Type   | Required | Default | Description                                    |
+|------------|--------|----------|---------|------------------------------------------------|
+| `question` | String | yes      | —       | The search question or query text              |
+| `topK`     | Int    | no       | `5`     | Maximum number of chunks to return             |
+| `minScore` | Double | no       | `0.0`   | Minimum similarity score threshold (0.0–1.0)   |
+
+| Return field | Type            | Description                                 |
+|--------------|-----------------|---------------------------------------------|
+| `chunks`     | List of objects | Each entry has `filePath`, `chunkIndex`, `score`, `content` |
+| `mode`       | String          | Always `"embedding"`                        |
 | `error`      | String or null  | Set when an error occurred                  |
 
 #### `query`
