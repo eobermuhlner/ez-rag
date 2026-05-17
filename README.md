@@ -319,7 +319,13 @@ multi-chunk       14         0.93      0.63    0.93    PASS
 Overall           42         0.96      0.71    0.96
 ```
 
-How to read the output:
+How to read the numbers:
+
+- **Recall@3** ranges from 0.0 to 1.0. `0.94` means 94 % of questions had their expected chunk somewhere in the top 3 results; `1.00` means every question's answer was found. A value below 1.0 means some questions missed entirely — no amount of re-ranking can fix that.
+- **MRR** also ranges from 0.0 to 1.0, but penalises answers that appear at rank 2 or 3. `1.00` would mean every answer appeared at rank 1. `0.63` means relevant chunks are typically found at rank 1–2 but not always first. The gap between Recall@3 and MRR is the key signal: `hard-negatives` has Recall@3 `1.00` but MRR `0.88`, meaning all answers are found but some land at rank 2 or 3 rather than rank 1.
+- **Hit@3** equals Recall@3 in these examples because each question has a single expected source. It would diverge only if a question listed multiple expected sources (Hit@3 is binary; Recall@3 gives partial credit).
+
+How to read the rows:
 
 - Each scenario row covers **all questions** in that scenario directory, regardless of document role.
 - The indented `hard-negative` sub-row covers only the **subset of questions whose expected source is a hard-negative document**. It has no Questions count (it is a subset, not an independent scenario) and no Status (thresholds apply to the scenario as a whole, not the subset).
