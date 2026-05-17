@@ -59,7 +59,7 @@ tasks.withType<Test> {
         if (tags != null) {
             includeTags(tags)
         } else {
-            excludeTags("integration")
+            excludeTags("integration", "eval")
         }
     }
 }

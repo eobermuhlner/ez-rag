@@ -1,6 +1,7 @@
 package ch.obermuhlner.ezrag
 
 import ch.obermuhlner.ezrag.command.DeleteCommand
+import ch.obermuhlner.ezrag.command.EvalCommand
 import ch.obermuhlner.ezrag.command.InitCommand
 import ch.obermuhlner.ezrag.command.IngestCommand
 import ch.obermuhlner.ezrag.command.ListCommand
@@ -35,6 +36,7 @@ import java.util.concurrent.Callable
         StatusCommand::class,
         McpServerCommand::class,
         ShellCommand::class,
+        EvalCommand::class,
     ]
 )
 @Component

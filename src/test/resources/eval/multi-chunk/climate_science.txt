@@ -1,0 +1,103 @@
+Climate science is the study of Earth's climate system, including the atmosphere, oceans, land surface, and ice. Understanding climate change requires integrating knowledge from multiple disciplines including physics, chemistry, ecology, and oceanography.
+
+The Climate System
+
+Earth's climate is driven primarily by energy from the Sun. Approximately 30 percent of incoming solar radiation is reflected back to space by clouds, ice, and the land surface. The remaining 70 percent is absorbed by the Earth system and must eventually be radiated back to space as infrared radiation.
+
+The greenhouse effect is fundamental to Earth's habitable climate. Greenhouse gases in the atmosphere, including water vapor, carbon dioxide, methane, and nitrous oxide, absorb outgoing infrared radiation and re-emit it in all directions, including back toward Earth's surface. This process keeps Earth about 33 degrees Celsius warmer than it would otherwise be.
+
+The carbon cycle describes how carbon moves through Earth's systems. Carbon is stored in the atmosphere as carbon dioxide, in living organisms, in soils, in the ocean, and in rocks. Photosynthesis removes carbon dioxide from the atmosphere, while respiration and decomposition return it. The ocean absorbs roughly 25 to 30 percent of human carbon dioxide emissions, slowing the rate of atmospheric accumulation.
+
+Human Activities and Climate Change
+
+Since the Industrial Revolution, human activities have significantly altered Earth's climate. The burning of fossil fuels releases carbon dioxide that was stored underground for millions of years. Since pre-industrial times, atmospheric carbon dioxide concentrations have risen from about 280 parts per million to over 420 parts per million, a level unprecedented in at least 800,000 years of ice core records.
+
+Deforestation is the second largest source of human greenhouse gas emissions after fossil fuel combustion. Forests act as carbon sinks, absorbing carbon dioxide during growth. When forests are cleared and burned, this stored carbon is released. Additionally, cleared land no longer provides the ecosystem services of living forests.
+
+Agriculture contributes to climate change through multiple pathways. Livestock, particularly cattle, produce methane during digestion in a process called enteric fermentation. Rice cultivation in flooded paddies also produces methane. Nitrogen fertilizers emit nitrous oxide, a potent greenhouse gas with about 270 times the warming potential of carbon dioxide over a 100-year period.
+
+Observed Changes
+
+Global average surface temperature has risen approximately 1.1 degrees Celsius above pre-industrial levels. This warming is not uniform: the Arctic is warming at more than twice the global average rate, a phenomenon called Arctic amplification. Land areas are warming faster than oceans.
+
+Sea level rise results from two main factors: thermal expansion of seawater as it warms, and the melting of land ice including glaciers and ice sheets. Global mean sea level has risen about 20 centimeters since 1900, and the rate of rise has accelerated in recent decades. The Greenland and Antarctic ice sheets, which together hold enough ice to raise sea level by about 65 meters, are losing mass at increasing rates.
+
+Changes in precipitation patterns are also occurring. While global average precipitation has increased slightly as the atmosphere warms and holds more moisture, this is not evenly distributed. Some regions are experiencing more intense rainfall events and flooding, while others face increasing drought. The frequency and intensity of extreme weather events including heat waves, heavy precipitation, and tropical cyclones have changed.
+
+The ocean plays a critical role in the climate system. It has absorbed more than 90 percent of the excess heat trapped by greenhouse gases since the mid-20th century. This ocean warming has profound consequences: coral reefs, which support about 25 percent of marine species, are highly sensitive to temperature increases and are experiencing mass bleaching events at unprecedented frequency.
+
+Ocean acidification is another consequence of absorbing atmospheric carbon dioxide. When CO2 dissolves in seawater, it forms carbonic acid, lowering ocean pH. The ocean has already become about 30 percent more acidic since the Industrial Revolution. This threatens marine organisms that build shells and skeletons from calcium carbonate, including many mollusks, some plankton species, and coral.
+
+Climate Projections and Impacts
+
+Climate projections are developed using sophisticated computer models called General Circulation Models or Earth System Models. These models divide the Earth into three-dimensional grid cells and simulate physical, chemical, and biological processes over time. Multiple models are run with different assumptions about future greenhouse gas emissions to produce a range of projections.
+
+The Paris Agreement, adopted in 2015, established international goals of limiting global warming to well below 2 degrees Celsius above pre-industrial levels, with efforts to limit warming to 1.5 degrees Celsius. Current national commitments are projected to result in warming of about 2.5 to 3 degrees Celsius by 2100.
+
+The impacts of climate change are wide-ranging and interconnected. Food security is threatened by shifts in growing seasons, changing precipitation patterns, and more frequent extreme weather. By mid-century, yields of major crops including wheat, rice, and maize are projected to decline in many regions.
+
+Human health impacts include increased heat stress, changing distributions of vector-borne diseases as mosquito ranges expand, reduced air quality from more frequent wildfires, and mental health effects from climate disasters. Water scarcity will intensify in already water-stressed regions as glaciers retreat and precipitation patterns shift.
+
+Biodiversity is threatened both by climate change itself and by human responses to it. Many species are shifting their ranges toward poles and to higher elevations, but they may not be able to migrate fast enough to track their climate niches. Ocean acidification threatens marine biodiversity across the food web.
+
+Mitigation and Adaptation
+
+Mitigation refers to actions that reduce greenhouse gas emissions or enhance carbon sinks. The primary mitigation strategies include transitioning from fossil fuels to renewable energy sources such as solar and wind power, improving energy efficiency across all sectors, protecting and restoring forests, and developing carbon capture technologies.
+
+The cost of renewable energy has declined dramatically. Solar photovoltaic electricity is now the cheapest source of electricity in history in many markets. Wind energy has also become highly competitive. Electric vehicles are rapidly gaining market share as battery costs decline.
+
+Adaptation refers to adjustments in ecological, social, or economic systems in response to actual or expected climatic changes. Examples include building sea walls and flood defenses, developing drought-resistant crops, improving early warning systems for extreme weather, and updating building codes for higher temperatures.
+
+Climate justice is an important dimension of climate policy. The countries and communities that have contributed least to climate change are often most vulnerable to its impacts. Small island nations face existential threats from sea level rise. The principle of common but differentiated responsibilities recognizes that wealthy nations, which industrialized first, bear greater responsibility for both causing climate change and financing responses.
+
+International cooperation is essential for addressing climate change effectively. No single country can solve the problem alone, and the benefits of a stable climate are shared globally. The UN Framework Convention on Climate Change (UNFCCC) process, which includes the annual Conference of Parties (COP) meetings, provides the primary forum for international climate negotiations.
+
+The solutions to climate change exist and are becoming increasingly affordable. The challenge is deploying them rapidly enough and equitably enough to avoid the worst impacts while managing the inevitable changes that are already locked in by historical emissions.
+
+Paleoclimate and Earth's Climate History
+
+Paleoclimatology is the study of past climates using proxy records — natural archives that preserve climate information from before the era of direct measurements. Ice cores drilled from the Antarctic and Greenland ice sheets provide the most detailed long-term record: layers of ice trap air bubbles from ancient atmospheres, and the chemical composition of the ice reflects past temperatures. The longest Antarctic ice cores extend back 800,000 years and reveal eight glacial-interglacial cycles.
+
+Ice ages, also called glacial periods, are periods when Earth's climate cools significantly and ice sheets expand to cover large areas of the Northern Hemisphere. The most recent major ice age ended about 11,700 years ago, marking the beginning of the Holocene epoch. During the Last Glacial Maximum (about 20,000 years ago), ice sheets covered much of North America and Europe, sea levels were about 120 meters lower than today, and large areas of what are now ocean floors were dry land. Humans crossed from Asia to North America via a land bridge across what is now the Bering Strait.
+
+The glacial-interglacial cycles are driven by Milankovitch cycles — periodic changes in Earth's orbit and axial tilt. Eccentricity (the shape of Earth's orbit) cycles on roughly 100,000-year periods. Obliquity (the tilt of Earth's axis) cycles on roughly 41,000-year periods. Precession (the wobble of Earth's axis) cycles on roughly 26,000-year periods. These orbital variations change the seasonal and latitudinal distribution of solar energy received by Earth. Feedback mechanisms, particularly changes in ice albedo (reflectivity) and greenhouse gas concentrations, amplify the relatively small forcing from orbital changes into full glacial cycles.
+
+The Medieval Warm Period (roughly 900 to 1300 AD) was a period of relatively warmer temperatures in parts of the North Atlantic region, enabling Viking colonization of Greenland and, briefly, North America. The Little Ice Age (roughly 1300 to 1850 AD) was a period of cooler temperatures that caused crop failures, famines, and hardship in many parts of Europe. Evidence for both events comes from historical records, tree rings, lake sediments, and ice cores. Critically, neither was global in extent or magnitude; they were regional variations overlaid on a broadly stable Holocene climate. Current warming, in contrast, is global, rapid, and clearly driven by human greenhouse gas emissions.
+
+Ocean Circulation and Climate
+
+The ocean's thermohaline circulation, also called the global ocean conveyor belt, is a system of ocean currents driven by differences in water temperature (thermo) and salinity (haline). In the North Atlantic, warm surface waters flow northward from the tropics, giving up heat to the atmosphere and warming Western Europe. As these waters cool and become denser (and saltier due to evaporation during the journey), they sink to the deep ocean near Greenland and Iceland. This deep, cold water then flows southward along the ocean floor, eventually rising to the surface again in a process called upwelling. The entire cycle takes about 1,000 years to complete.
+
+The Atlantic Meridional Overturning Circulation (AMOC) is the component of thermohaline circulation in the Atlantic Ocean. Research suggests that AMOC has been weakening in recent decades due to freshwater input from melting ice sheets and glaciers, which reduces the density of surface waters and inhibits sinking. A weakening or collapse of AMOC would have dramatic consequences for European climate, potentially bringing much colder winters to Northwestern Europe despite overall global warming. AMOC is considered one of several potential climate tipping points — thresholds beyond which changes become self-sustaining and potentially irreversible.
+
+The El Niño–Southern Oscillation (ENSO) is a climate pattern in the tropical Pacific that alternates between El Niño (warm) and La Niña (cool) phases on irregular intervals of two to seven years. During El Niño, warm water pools in the central and eastern tropical Pacific, altering weather patterns worldwide: it brings droughts to Australia and Southeast Asia, heavy rainfall to South America's Pacific coast, and milder winters to North America. During La Niña, cooler water pools in the central Pacific and opposite patterns tend to occur. ENSO is the single largest source of year-to-year variability in global weather patterns.
+
+Climate Tipping Points and Feedback Loops
+
+A tipping point in the climate system is a threshold at which a small additional forcing causes a qualitative change in state that may be difficult or impossible to reverse. Several Earth system components are thought to have tipping points that are approaching or may be crossed within this century if warming continues.
+
+Permafrost covers about 25 percent of the Northern Hemisphere's land surface and contains vast quantities of organic carbon — dead plant material accumulated over thousands of years that is frozen in the ground. As temperatures warm, permafrost thaws and this organic matter decomposes, releasing carbon dioxide and methane. This creates a positive feedback loop: warming releases greenhouse gases, which cause more warming, which thaws more permafrost. The permafrost carbon feedback is estimated to contain roughly twice the amount of carbon currently in the atmosphere and represents one of the most significant potential amplifiers of human-caused climate change.
+
+The Amazon rainforest is the world's largest tropical forest and plays a critical role in the global carbon cycle, storing approximately 90 to 140 billion metric tons of carbon. Deforestation, combined with climate change-driven drought, is causing parts of the Amazon to shift from a carbon sink to a carbon source. Researchers have identified a tipping point of approximately 20 to 25 percent of Amazon deforestation beyond which large portions of the forest may transition to savanna — a largely irreversible change with major consequences for biodiversity, regional climate, and the global carbon cycle. As of the early 2020s, approximately 17 to 18 percent of the Amazon had been deforested.
+
+Coral reefs are severely threatened by both ocean warming (which causes bleaching) and ocean acidification (which impairs calcification). The 2015-2016 El Niño caused the longest and most widespread coral bleaching event on record, killing a significant portion of the Great Barrier Reef. If global warming reaches 2 degrees Celsius, virtually all coral reefs are projected to be severely degraded. Coral reef loss would be catastrophic for marine biodiversity and for the hundreds of millions of people who depend on reefs for food, coastal protection, and tourism.
+
+The Greenland Ice Sheet and West Antarctic Ice Sheet both contain enough ice to raise global sea levels by seven meters and three to five meters respectively if they were to melt completely. While complete melting would take centuries to millennia, destabilization processes such as marine ice sheet instability (where the geometry of ice sheets makes them vulnerable to accelerating collapse) could lock in significant future sea level rise even with warming limited to 1.5 to 2 degrees Celsius.
+
+Climate Policy and Energy Transition
+
+Decarbonizing the global economy requires a rapid energy transition away from fossil fuels. The electricity sector, which currently accounts for about 25 percent of global greenhouse gas emissions, is the most tractable for rapid decarbonization because solar, wind, hydro, and nuclear power are all mature, cost-effective alternatives to coal and gas. The Intergovernmental Panel on Climate Change (IPCC) has concluded that solar and wind energy need to scale up massively — potentially by factors of 4 to 6 — by 2030 to put the world on track for 1.5 degrees Celsius of warming.
+
+Carbon pricing — either through a carbon tax or a cap-and-trade system — is considered by economists to be among the most efficient policies for reducing emissions. A carbon price puts a direct cost on greenhouse gas emissions, incentivizing businesses and consumers to reduce them. The European Union Emissions Trading System (EU ETS), launched in 2005, is the world's largest carbon market. Sweden's carbon tax, introduced in 1991, is one of the highest in the world, and Sweden has successfully reduced emissions while maintaining economic growth.
+
+Carbon dioxide removal (CDR) technologies aim to take carbon out of the atmosphere and store it durably. Natural approaches include reforestation and afforestation, improved agricultural soil management, and protection of coastal blue carbon ecosystems (mangroves, salt marshes, seagrasses). Technological approaches include direct air capture (DAC), which uses machines to filter CO2 from ambient air and store it underground, and bioenergy with carbon capture and storage (BECCS), which burns biomass for energy while capturing and storing the resulting emissions. CDR is likely to be needed to offset residual emissions in sectors that are difficult to fully decarbonize.
+
+Climate Finance and Equity
+
+Addressing climate change requires enormous financial flows to accelerate clean energy deployment and help vulnerable countries adapt. The 2009 Copenhagen Accord established a goal of developed countries mobilizing 100 billion dollars per year by 2020 to support developing countries in addressing climate change. This goal was not fully met on schedule, contributing to tensions in international negotiations. The Glasgow Climate Pact (2021) reaffirmed commitment to the 100 billion dollar goal and established processes for setting a new, higher climate finance target.
+
+Loss and damage refers to the impacts of climate change that cannot be avoided through mitigation or adaptation — harm that is already occurring or inevitable. At COP27 in Sharm el-Sheikh (2022), countries agreed to establish a dedicated fund to help developing nations deal with loss and damage from climate change. This was a landmark decision that acknowledged rich countries' historical responsibility for the emissions causing these impacts.
+
+Nature-based solutions (NbS) use ecosystems to address climate change both for mitigation (by storing carbon) and adaptation (by reducing climate risks). Examples include restoring mangrove forests that protect coastlines from storm surge and sequester carbon, rewilding areas to restore natural fire cycles, and sustainable forest management. NbS are considered important components of climate strategies but cannot substitute for deep emission reductions from the energy sector.
+
+The global transition to clean energy is already underway but must accelerate dramatically. Renewable energy capacity has grown faster than most projections, electric vehicle adoption is accelerating, and the economics of clean energy continue to improve. However, total greenhouse gas emissions continue to rise globally, and the pace of change remains far short of what climate science indicates is necessary to avoid the most severe consequences of climate change.

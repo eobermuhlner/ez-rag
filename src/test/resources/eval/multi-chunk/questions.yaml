@@ -1,0 +1,67 @@
+documents:
+  - file: history_of_computing.txt
+    role: relevant
+  - file: climate_science.txt
+    role: relevant
+
+questions:
+  - id: q1
+    question: "Who invented the first programmable mechanical computer and worked with the world's first programmer Ada Lovelace?"
+    expected_sources: ["history_of_computing.txt"]
+    expected_chunk_contains: ["Ada Lovelace, working with Babbage"]
+  - id: q2
+    question: "What is the von Neumann architecture and why is it significant?"
+    expected_sources: ["history_of_computing.txt"]
+    expected_chunk_contains: ["von Neumann architecture, where both data and program instructions are stored"]
+  - id: q3
+    question: "What is Moore's Law and who observed it?"
+    expected_sources: ["history_of_computing.txt"]
+    expected_chunk_contains: ["Gordon Moore, co-founder of Intel"]
+  - id: q4
+    question: "What is ocean acidification and how does it affect marine life?"
+    expected_sources: ["climate_science.txt"]
+    expected_chunk_contains: ["Ocean acidification is another consequence"]
+  - id: q5
+    question: "What is Arctic amplification in climate science?"
+    expected_sources: ["climate_science.txt"]
+    expected_chunk_contains: ["Arctic amplification"]
+  - id: q6
+    question: "What are the two main factors causing sea level rise?"
+    expected_sources: ["climate_science.txt"]
+    expected_chunk_contains: ["Sea level rise results from two main factors"]
+  - id: q7
+    question: "What was ARPANET and how did it lead to the modern Internet?"
+    expected_sources: ["history_of_computing.txt"]
+    expected_chunk_contains: ["ARPANET, funded by the U.S. Defense Advanced Research Projects Agency"]
+  - id: q8
+    question: "What is the Atlantic Meridional Overturning Circulation and why might its weakening affect European climate?"
+    expected_sources: ["climate_science.txt"]
+    expected_chunk_contains: ["Atlantic Meridional Overturning Circulation (AMOC)"]
+  - id: q9
+    question: "What are Milankovitch cycles and how do they drive ice ages?"
+    expected_sources: ["climate_science.txt"]
+    expected_chunk_contains: ["Milankovitch cycles"]
+  - id: q10
+    question: "What is permafrost and why is its thawing considered a dangerous climate feedback loop?"
+    expected_sources: ["climate_science.txt"]
+    expected_chunk_contains: ["Permafrost covers about 25 percent"]
+  - id: q11
+    question: "Who created the Unix operating system and what were its key concepts?"
+    expected_sources: ["history_of_computing.txt"]
+    expected_chunk_contains: ["Unix was developed at Bell Labs beginning in 1969"]
+  - id: q12
+    question: "What was the transformer architecture and what paper introduced it?"
+    expected_sources: ["history_of_computing.txt"]
+    expected_chunk_contains: ["transformer architecture, introduced in the 2017 paper"]
+  - id: q13
+    question: "What is the El Niño–Southern Oscillation and how does it affect global weather?"
+    expected_sources: ["climate_science.txt"]
+    expected_chunk_contains: ["El Niño–Southern Oscillation (ENSO)"]
+  - id: q14
+    question: "What is Linux and who created it?"
+    expected_sources: ["history_of_computing.txt"]
+    expected_chunk_contains: ["Linux, created by Linus Torvalds"]
+
+thresholds:
+  recall_at_k: 0.80
+  hit_rate_at_k: 0.80

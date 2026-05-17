@@ -1,0 +1,67 @@
+documents:
+  - file: python_language.txt
+    role: relevant
+  - file: java_language.txt
+    role: relevant
+  - file: ruby_language.txt
+    role: hard-negative
+  - file: javascript_language.txt
+    role: distractor
+  - file: go_language.txt
+    role: distractor
+  - file: rust_language.txt
+    role: distractor
+
+questions:
+  - id: q1
+    question: "What is Python's design philosophy and what does it emphasize?"
+    expected_sources: ["python_language.txt"]
+    expected_chunk_contains: ["Python's design philosophy emphasizes code readability"]
+  - id: q2
+    question: "What is the Python Global Interpreter Lock (GIL) and what does it limit?"
+    expected_sources: ["python_language.txt"]
+    expected_chunk_contains: ["Global Interpreter Lock (GIL) is a mutex"]
+  - id: q3
+    question: "What is the principle of write once run anywhere in Java?"
+    expected_sources: ["java_language.txt"]
+    expected_chunk_contains: ["write once, run anywhere"]
+  - id: q4
+    question: "What is the Java Virtual Machine and why is it important for Java programs?"
+    expected_sources: ["java_language.txt"]
+    expected_chunk_contains: ["Java Virtual Machine (JVM)"]
+  - id: q5
+    question: "What is the principle of least astonishment in Ruby programming language design?"
+    expected_sources: ["ruby_language.txt"]
+    expected_chunk_contains: ["principle of least astonishment"]
+  - id: q6
+    question: "How does Python's asyncio module support concurrent programming?"
+    expected_sources: ["python_language.txt"]
+    expected_chunk_contains: ["asyncio module"]
+  - id: q7
+    question: "What is Python's LEGB rule for variable scoping?"
+    expected_sources: ["python_language.txt"]
+    expected_chunk_contains: ["LEGB rule"]
+  - id: q8
+    question: "What are Java lambda expressions and when were they introduced?"
+    expected_sources: ["java_language.txt"]
+    expected_chunk_contains: ["Lambda expressions, introduced in Java 8"]
+  - id: q9
+    question: "What is Java's garbage collection and what does the G1 collector do?"
+    expected_sources: ["java_language.txt"]
+    expected_chunk_contains: ["G1 GC"]
+  - id: q10
+    question: "How do Ruby mixins and the Enumerable module work?"
+    expected_sources: ["ruby_language.txt"]
+    expected_chunk_contains: ["Enumerable module"]
+  - id: q11
+    question: "What are Ruby blocks, procs, and lambdas and how do they differ?"
+    expected_sources: ["ruby_language.txt"]
+    expected_chunk_contains: ["Procs and lambdas are both first-class function objects in Ruby"]
+  - id: q12
+    question: "What is Ruby on Rails and what convention does it follow?"
+    expected_sources: ["ruby_language.txt"]
+    expected_chunk_contains: ["Ruby on Rails"]
+
+thresholds:
+  recall_at_k: 0.75
+  hit_rate_at_k: 0.75

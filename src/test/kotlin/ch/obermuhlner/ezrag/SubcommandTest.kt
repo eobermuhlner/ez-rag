@@ -25,6 +25,7 @@ class SubcommandTest {
         assertThat(output).contains("status")
         assertThat(output).contains("mcp-server")
         assertThat(output).contains("shell")
+        assertThat(output).contains("eval")
     }
 
     @Test
@@ -66,6 +67,12 @@ class SubcommandTest {
     @Test
     fun `shell help exits 0`() {
         val exitCode = commandLine.execute("shell", "--help")
+        assertThat(exitCode).isEqualTo(0)
+    }
+
+    @Test
+    fun `eval help exits 0`() {
+        val exitCode = commandLine.execute("eval", "--help")
         assertThat(exitCode).isEqualTo(0)
     }
 

@@ -68,6 +68,7 @@ echo "What is X?" | ez-rag search
 
 | Command                        | Description                                                                                        |
 |--------------------------------|----------------------------------------------------------------------------------------------------|
+| `init`                         | Initialize a `.ez-rag/` workspace in the current directory and add the store to `.gitignore`.      |
 | `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`. Prints each file as it is ingested. |
 | `delete <file> [<file>...]`    | Remove one or more ingested documents from the vector store without touching other content.        |
 | `list`                         | List all ingested documents with chunk counts and staleness flags. Use `--output-format json` for machine-readable output with absolute paths. |
@@ -75,10 +76,31 @@ echo "What is X?" | ez-rag search
 | `query [<word>...]`            | Retrieve relevant chunks and answer using an LLM. Reads question from positional args or stdin.    |
 | `status`                       | Show store health, aggregate counts, active configuration, and credential status.                  |
 | `search [<word>...]`           | Pure embedding search returning raw chunks without LLM involvement. Reads question from positional args or stdin. |
+| `eval <corpus-dir>`            | Evaluate retrieval quality against a corpus of scenarios. Exits 1 if any threshold fails.          |
 | `mcp-server`                   | Run as an MCP server over stdio (for Claude Code and other agentic tools).                         |
 | `shell`                        | _(not yet implemented)_ Interactive REPL mode.                                                     |
 
 Every command accepts `--help` for details.
+
+### init
+
+Initialize a `.ez-rag/` workspace in the current directory:
+
+```sh
+ez-rag init
+```
+
+Output (first run):
+```
+Initialized .ez-rag/ in /path/to/project/.ez-rag
+```
+
+Output (already exists):
+```
+.ez-rag/ already exists at /path/to/project/.ez-rag
+```
+
+`init` also adds `.ez-rag/vector-store.json` to the project's `.gitignore` (if the file exists) so the vector store is never accidentally committed. Running `ingest` without calling `init` first works too — the directory is created automatically.
 
 ## Ingest-specific flags
 
@@ -276,6 +298,93 @@ ez-rag status --output-format json
 | Flag                | Description                                             |
 |---------------------|---------------------------------------------------------|
 | `--output-format`   | Output format: `text` (default) or `json`.              |
+
+### eval
+
+Evaluate retrieval quality against a corpus of scenarios:
+
+```sh
+ez-rag eval ./my-corpus
+```
+
+Output:
+```
+Scenario          Questions  Recall@5  MRR    Hit@5   Status
+────────────────────────────────────────────────────────────
+factual           8          1.00      0.94   1.00    PASS
+hard-negatives    6          0.83      0.79   0.83    PASS
+  hard-negative              0.67      0.58   0.67
+multi-chunk       5          1.00      1.00   1.00    PASS
+────────────────────────────────────────────────────────────
+Overall           19         0.94      0.91   0.94
+```
+
+Exit code is `0` when all thresholds pass (or no thresholds are defined), `1` when any threshold fails. This makes `eval` suitable for use in CI pipelines.
+
+Pass `--format json` for machine-readable output:
+
+```sh
+ez-rag eval --format json ./my-corpus
+```
+
+| Flag       | Description                               |
+|------------|-------------------------------------------|
+| `--format` | Output format: `text` (default) or `json`.|
+
+#### Corpus format
+
+A corpus is a directory containing one or more scenario subdirectories. Each subdirectory must contain a `questions.yaml` file and the document files it references.
+
+```
+my-corpus/
+  factual/
+    questions.yaml
+    planets.txt
+    capitals.txt
+    elements.txt
+    cooking_distractor.txt
+```
+
+`questions.yaml` format:
+
+```yaml
+documents:
+  - file: planets.txt
+    role: relevant          # relevant | distractor | hard-negative
+  - file: capitals.txt
+    role: relevant
+  - file: cooking_distractor.txt
+    role: distractor        # included in the store but not an expected source
+
+questions:
+  - id: q1
+    question: "What is the capital of France?"
+    expected_sources: ["capitals.txt"]
+  - id: q2
+    question: "What is the largest planet in the solar system?"
+    expected_sources: ["planets.txt"]
+
+thresholds:               # optional; eval exits 1 if any threshold is missed
+  recall_at_k: 0.9
+  mrr: 0.8
+  hit_rate_at_k: 0.9
+```
+
+**Document roles:**
+
+| Role            | Description                                                                                         |
+|-----------------|-----------------------------------------------------------------------------------------------------|
+| `relevant`      | Contains answer content; retrieved chunks from these files count as hits.                           |
+| `distractor`    | Ingested into the store but not expected as a source; tests that irrelevant content is not returned. |
+| `hard-negative` | Similar to the query topics but does not contain the answer; the hardest kind of distractor. Hard-negative metrics are reported separately as an indented sub-row. |
+
+**Metrics:**
+
+| Metric       | Description                                                                           |
+|--------------|---------------------------------------------------------------------------------------|
+| `Recall@5`   | Fraction of questions where at least one expected source chunk appears in the top 5.  |
+| `MRR`        | Mean Reciprocal Rank — measures how highly the first relevant result is ranked.       |
+| `Hit@5`      | Binary hit rate — 1 if any expected source appears in the top 5, averaged over all questions. |
 
 ## Search-specific flags
 
