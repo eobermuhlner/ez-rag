@@ -1,0 +1,79 @@
+documents:
+  - file: planets.md
+    role: relevant
+  - file: capitals.md
+    role: relevant
+  - file: elements.md
+    role: relevant
+  - file: cooking_distractor.md
+    role: distractor
+
+questions:
+  - id: q1
+    question: "What is the capital of France?"
+    expected_sources: ["capitals.md"]
+    expected_chunk_contains: ["Paris is the capital of France"]
+  - id: q2
+    question: "What is the largest planet in the solar system?"
+    expected_sources: ["planets.md"]
+    expected_chunk_contains: ["Jupiter is the largest planet"]
+  - id: q3
+    question: "What is the atomic number of hydrogen?"
+    expected_sources: ["elements.md"]
+    expected_chunk_contains: ["Hydrogen is the lightest and most abundant element"]
+  - id: q4
+    question: "Which planet is known as the Red Planet?"
+    expected_sources: ["planets.md"]
+    expected_chunk_contains: ["Mars is the fourth planet, known as the Red Planet"]
+  - id: q5
+    question: "What is the capital of Japan?"
+    expected_sources: ["capitals.md"]
+    expected_chunk_contains: ["Tokyo is the capital of Japan"]
+  - id: q6
+    question: "What is the chemical symbol for gold?"
+    expected_sources: ["elements.md"]
+    expected_chunk_contains: ["Gold has atomic number 79 and symbol Au"]
+  - id: q7
+    question: "Which planet has the strongest winds in the solar system?"
+    expected_sources: ["planets.md"]
+    expected_chunk_contains: ["Neptune is the eighth and farthest planet"]
+  - id: q8
+    question: "What is the capital of Australia?"
+    expected_sources: ["capitals.md"]
+    expected_chunk_contains: ["Canberra is the capital of Australia"]
+  - id: q9
+    question: "What is the capital of the United Kingdom?"
+    expected_sources: ["capitals.md"]
+    expected_chunk_contains: ["London is the capital of the United Kingdom"]
+  - id: q10
+    question: "What is the capital of China and what ancient palace lies at its heart?"
+    expected_sources: ["capitals.md"]
+    expected_chunk_contains: ["Beijing is the capital of the People's Republic of China"]
+  - id: q11
+    question: "What is the atomic number and symbol of silicon and what is it primarily used for?"
+    expected_sources: ["elements.md"]
+    expected_chunk_contains: ["Silicon has atomic number 14"]
+  - id: q12
+    question: "What happened to Pluto in 2006 and what spacecraft visited it in 2015?"
+    expected_sources: ["planets.md"]
+    expected_chunk_contains: ["Pluto, once considered the ninth planet, was reclassified"]
+  - id: q13
+    question: "What are Voyager 1 and Voyager 2 and what did they carry as a message?"
+    expected_sources: ["planets.md"]
+    expected_chunk_contains: ["Voyager missions"]
+  - id: q14
+    question: "What is the most abundant element in the universe and what is it used for in fuel cells?"
+    expected_sources: ["elements.md"]
+    expected_chunk_contains: ["Hydrogen is the lightest and most abundant element"]
+  - id: q15
+    question: "What is the capital of India and who designed it?"
+    expected_sources: ["capitals.md"]
+    expected_chunk_contains: ["New Delhi was designed by British"]
+  - id: q16
+    question: "Why is copper used in electrical wiring?"
+    expected_sources: ["elements.md"]
+    expected_chunk_contains: ["Copper has atomic number 29"]
+
+thresholds:
+  recall_at_k: 0.85
+  hit_rate_at_k: 0.85

@@ -56,10 +56,11 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 tasks.withType<Test> {
     useJUnitPlatform {
         val tags = System.getProperty("tags")
-        if (tags != null) {
-            includeTags(tags)
-        } else {
-            excludeTags("integration", "eval")
+        val evalOnly = project.hasProperty("eval")
+        when {
+            evalOnly -> includeTags("eval")
+            tags != null -> includeTags(tags)
+            else -> excludeTags("integration", "eval")
         }
     }
 }
