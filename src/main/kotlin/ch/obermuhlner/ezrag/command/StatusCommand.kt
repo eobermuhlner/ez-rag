@@ -4,6 +4,7 @@ import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.CredentialSource
 import ch.obermuhlner.ezrag.config.Credentials
 import ch.obermuhlner.ezrag.config.CredentialsService
+import ch.obermuhlner.ezrag.config.EzRagConfig
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -19,6 +20,9 @@ import picocli.CommandLine.Option
 import java.io.PrintWriter
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.Callable
 
 @Command(
@@ -34,6 +38,7 @@ class StatusCommand(
     private val errorWriter: PrintWriter = PrintWriter(System.err, true),
     private val credentials: Credentials = allUnsetCredentials(),
     private val startDirOverride: Path? = null,
+    private val config: EzRagConfig? = null,
 ) : Callable<Int> {
 
     @Autowired(required = false)
@@ -60,6 +65,8 @@ class StatusCommand(
         val storeFilePath = storeDir.resolve("vector-store.json")
         // Use injected credentials (for tests), or resolve from Spring service (production), or fall back to all-unset.
         val resolvedCredentials = springCredentialsService?.resolve() ?: credentials
+        // Resolve config: constructor param > Spring service > defaults
+        val resolvedConfig = config ?: springConfigService?.resolve() ?: EzRagConfig()
 
         val repository = VectorStoreRepository(model, storeFilePath)
 
@@ -75,33 +82,99 @@ class StatusCommand(
 
         if (outputFormat == "json") {
             val mapper = ObjectMapper()
-            val docsArray = metadata.documents.map { doc ->
-                mapOf("path" to doc.path, "chunkCount" to doc.chunkCount)
-            }
-            val result = mapOf(
+
+            val credentialsMap = buildCredentialsMap(resolvedConfig, resolvedCredentials)
+
+            val configMap = mapOf(
+                "storeDir" to (resolvedConfig.storeDir ?: ""),
+                "provider" to resolvedConfig.provider,
+                "model" to resolvedConfig.model,
+                "embeddingProvider" to resolvedConfig.embeddingProvider,
+                "embeddingModel" to resolvedConfig.embeddingModel,
+                "rerankModel" to resolvedConfig.rerankModel.ifBlank { "disabled" },
+                "chunkSize" to resolvedConfig.chunkSize,
+                "chunkOverlap" to resolvedConfig.chunkOverlap,
+                "topK" to resolvedConfig.topK
+            )
+
+            val lastIngestTimeValue: Any? = if (metadata.lastIngestTime > 0L) metadata.lastIngestTime else null
+
+            val result = mutableMapOf<String, Any?>(
                 "storeFilePath" to metadata.storeFilePath,
                 "chunkCount" to metadata.chunkCount,
-                "documents" to docsArray,
-                "credentials" to mapOf(
-                    "openaiApiKey" to credentialSourceString(resolvedCredentials.openaiApiKeySource),
-                    "anthropicApiKey" to credentialSourceString(resolvedCredentials.anthropicApiKeySource),
-                )
+                "documentCount" to metadata.documentCount,
+                "storeSizeBytes" to metadata.storeSizeBytes,
+                "staleDocumentCount" to metadata.staleDocumentCount,
+                "lastIngestTime" to lastIngestTimeValue,
+                "configuration" to configMap,
             )
+
+            if (credentialsMap.isNotEmpty()) {
+                result["credentials"] = credentialsMap
+            }
+
             outputWriter.println(mapper.writeValueAsString(result))
         } else {
             outputWriter.println("Store: ${metadata.storeFilePath}")
             outputWriter.println("Chunks: ${metadata.chunkCount}")
-            outputWriter.println()
-            for (doc in metadata.documents) {
-                outputWriter.println("  ${doc.path}  (${doc.chunkCount} chunks)")
+            outputWriter.println("Documents: ${metadata.documentCount}")
+            outputWriter.println("Size: ${formatBytes(metadata.storeSizeBytes)}")
+            outputWriter.println("Stale documents: ${metadata.staleDocumentCount}")
+            if (metadata.lastIngestTime > 0L) {
+                val iso = Instant.ofEpochMilli(metadata.lastIngestTime)
+                    .atOffset(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                outputWriter.println("Last ingest time: $iso")
+            } else {
+                outputWriter.println("Last ingest time: none")
             }
             outputWriter.println()
-            outputWriter.println("Credentials:")
-            outputWriter.println("  openai-api-key: ${credentialSourceString(resolvedCredentials.openaiApiKeySource)}")
-            outputWriter.println("  anthropic-api-key: ${credentialSourceString(resolvedCredentials.anthropicApiKeySource)}")
+            outputWriter.println("Configuration:")
+            outputWriter.println("  storeDir: ${resolvedConfig.storeDir ?: ""}")
+            outputWriter.println("  provider: ${resolvedConfig.provider}")
+            outputWriter.println("  model: ${resolvedConfig.model}")
+            outputWriter.println("  embeddingProvider: ${resolvedConfig.embeddingProvider}")
+            outputWriter.println("  embeddingModel: ${resolvedConfig.embeddingModel}")
+            outputWriter.println("  rerankModel: ${resolvedConfig.rerankModel.ifBlank { "disabled" }}")
+            outputWriter.println("  chunkSize: ${resolvedConfig.chunkSize}")
+            outputWriter.println("  chunkOverlap: ${resolvedConfig.chunkOverlap}")
+            outputWriter.println("  topK: ${resolvedConfig.topK}")
+            outputWriter.println()
+
+            val needsOpenai = resolvedConfig.provider == "openai" || resolvedConfig.embeddingProvider == "openai"
+            val needsAnthropic = resolvedConfig.provider == "anthropic"
+
+            if (needsOpenai || needsAnthropic) {
+                outputWriter.println("Credentials:")
+                if (needsOpenai) {
+                    outputWriter.println("  openai-api-key: ${credentialSourceString(resolvedCredentials.openaiApiKeySource)}")
+                }
+                if (needsAnthropic) {
+                    outputWriter.println("  anthropic-api-key: ${credentialSourceString(resolvedCredentials.anthropicApiKeySource)}")
+                }
+            }
         }
 
         return 0
+    }
+
+    private fun buildCredentialsMap(resolvedConfig: EzRagConfig, resolvedCredentials: Credentials): Map<String, String> {
+        val needsOpenai = resolvedConfig.provider == "openai" || resolvedConfig.embeddingProvider == "openai"
+        val needsAnthropic = resolvedConfig.provider == "anthropic"
+        val map = mutableMapOf<String, String>()
+        if (needsOpenai) {
+            map["openaiApiKey"] = credentialSourceString(resolvedCredentials.openaiApiKeySource)
+        }
+        if (needsAnthropic) {
+            map["anthropicApiKey"] = credentialSourceString(resolvedCredentials.anthropicApiKeySource)
+        }
+        return map
+    }
+
+    private fun formatBytes(bytes: Long): String = when {
+        bytes >= 1_048_576L -> "${bytes / 1_048_576L} MB"
+        bytes >= 1_024L -> "${bytes / 1_024L} KB"
+        else -> "$bytes B"
     }
 
     private fun credentialSourceString(source: CredentialSource): String = when (source) {

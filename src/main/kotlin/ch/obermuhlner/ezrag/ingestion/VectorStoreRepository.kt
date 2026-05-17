@@ -3,9 +3,11 @@ package ch.obermuhlner.ezrag.ingestion
 import org.springframework.ai.document.Document
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.vectorstore.SimpleVectorStore
+import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 
-data class StoreDocumentInfo(val path: String, val chunkCount: Int)
+data class StoreDocumentInfo(val path: String, val chunkCount: Int, val mtime: Long = 0L, val stale: Boolean = false)
 
 data class DocumentChunkInfo(
     val chunkIndex: Int,
@@ -17,7 +19,11 @@ data class DocumentChunkInfo(
 data class StoreMetadata(
     val storeFilePath: String,
     val chunkCount: Int,
-    val documents: List<StoreDocumentInfo>
+    val documents: List<StoreDocumentInfo>,
+    val documentCount: Int = 0,
+    val storeSizeBytes: Long = 0L,
+    val lastIngestTime: Long = 0L,
+    val staleDocumentCount: Int = 0
 )
 
 class VectorStoreRepository(
@@ -120,8 +126,17 @@ class VectorStoreRepository(
         return chunks.sortedBy { it.chunkIndex }
     }
 
-    fun getMetadata(): StoreMetadata {
+    fun getMetadata(
+        filesystemProbe: (String) -> Long? = { path ->
+            try {
+                Files.getLastModifiedTime(Paths.get(path)).toMillis()
+            } catch (_: Exception) {
+                null
+            }
+        }
+    ): StoreMetadata {
         val chunkCountBySource = mutableMapOf<String, Int>()
+        val maxMtimeBySource = mutableMapOf<String, Long>()
         val storeField = SimpleVectorStore::class.java.getDeclaredField("store")
         storeField.isAccessible = true
         @Suppress("UNCHECKED_CAST")
@@ -132,15 +147,28 @@ class VectorStoreRepository(
             val metadata = metadataMethod.invoke(entry) as? Map<String, Any> ?: continue
             val source = metadata["source"] as? String ?: continue
             chunkCountBySource[source] = (chunkCountBySource[source] ?: 0) + 1
+            val mtime = metadata["mtime"]?.let { toLong(it) } ?: 0L
+            maxMtimeBySource[source] = maxOf(maxMtimeBySource[source] ?: 0L, mtime)
         }
         val totalChunks = chunkCountBySource.values.sum()
+        val lastIngestTime = if (maxMtimeBySource.isEmpty()) 0L else maxMtimeBySource.values.max()
         val documents = chunkCountBySource.entries
             .sortedBy { it.key }
-            .map { StoreDocumentInfo(path = it.key, chunkCount = it.value) }
+            .map { (source, count) ->
+                val storedMtime = maxMtimeBySource[source] ?: 0L
+                val currentMtime = filesystemProbe(source)
+                val stale = currentMtime == null || currentMtime != storedMtime
+                StoreDocumentInfo(path = source, chunkCount = count, mtime = storedMtime, stale = stale)
+            }
+        val staleDocumentCount = documents.count { it.stale }
         return StoreMetadata(
             storeFilePath = storeFilePath.toAbsolutePath().toString(),
             chunkCount = totalChunks,
-            documents = documents
+            documents = documents,
+            documentCount = documents.size,
+            storeSizeBytes = storeFilePath.toFile().length(),
+            lastIngestTime = lastIngestTime,
+            staleDocumentCount = staleDocumentCount
         )
     }
 

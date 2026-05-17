@@ -19,6 +19,7 @@ class SubcommandTest {
         val output = out.toString()
         assertThat(output).contains("init")
         assertThat(output).contains("ingest")
+        assertThat(output).contains("list")
         assertThat(output).contains("query")
         assertThat(output).contains("search")
         assertThat(output).contains("status")

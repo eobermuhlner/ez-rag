@@ -272,4 +272,181 @@ class VectorStoreRepositoryTest {
 
         assertThat(chunks).isEmpty()
     }
+
+    // ---- New staleness and aggregate metadata tests ----
+
+    @Test
+    fun `StoreDocumentInfo stale is false when filesystem probe returns same mtime as stored`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        repository.add(listOf(
+            Document.builder().text("Content")
+                .metadata(mapOf("source" to "/abs/file.txt", "mtime" to 1000L)).build()
+        ))
+
+        val metadata = repository.getMetadata(filesystemProbe = { _ -> 1000L })
+        val docInfo = metadata.documents.find { it.path == "/abs/file.txt" }
+
+        assertThat(docInfo).isNotNull
+        assertThat(docInfo!!.stale).isFalse()
+    }
+
+    @Test
+    fun `StoreDocumentInfo stale is true when filesystem probe returns different mtime`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        repository.add(listOf(
+            Document.builder().text("Content")
+                .metadata(mapOf("source" to "/abs/file.txt", "mtime" to 1000L)).build()
+        ))
+
+        val metadata = repository.getMetadata(filesystemProbe = { _ -> 9999L })
+        val docInfo = metadata.documents.find { it.path == "/abs/file.txt" }
+
+        assertThat(docInfo).isNotNull
+        assertThat(docInfo!!.stale).isTrue()
+    }
+
+    @Test
+    fun `StoreDocumentInfo stale is true when filesystem probe returns null (file missing)`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        repository.add(listOf(
+            Document.builder().text("Content")
+                .metadata(mapOf("source" to "/abs/file.txt", "mtime" to 1000L)).build()
+        ))
+
+        val metadata = repository.getMetadata(filesystemProbe = { _ -> null })
+        val docInfo = metadata.documents.find { it.path == "/abs/file.txt" }
+
+        assertThat(docInfo).isNotNull
+        assertThat(docInfo!!.stale).isTrue()
+    }
+
+    @Test
+    fun `StoreDocumentInfo mtime equals max mtime across multiple chunks for same source`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        // Multiple chunks with different mtimes for same source (edge case from partial re-ingestion)
+        repository.add(listOf(
+            Document.builder().text("Chunk 1")
+                .metadata(mapOf("source" to "/abs/file.txt", "mtime" to 1000L, "chunk_index" to 0)).build(),
+            Document.builder().text("Chunk 2")
+                .metadata(mapOf("source" to "/abs/file.txt", "mtime" to 3000L, "chunk_index" to 1)).build(),
+            Document.builder().text("Chunk 3")
+                .metadata(mapOf("source" to "/abs/file.txt", "mtime" to 2000L, "chunk_index" to 2)).build()
+        ))
+
+        val metadata = repository.getMetadata(filesystemProbe = { _ -> 3000L })
+        val docInfo = metadata.documents.find { it.path == "/abs/file.txt" }
+
+        assertThat(docInfo).isNotNull
+        assertThat(docInfo!!.mtime).isEqualTo(3000L)
+        assertThat(docInfo.stale).isFalse()
+    }
+
+    @Test
+    fun `StoreMetadata documentCount equals number of distinct source paths`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        repository.add(listOf(
+            Document.builder().text("Content A1")
+                .metadata(mapOf("source" to "/abs/a.txt", "mtime" to 1000L)).build(),
+            Document.builder().text("Content A2")
+                .metadata(mapOf("source" to "/abs/a.txt", "mtime" to 1000L)).build(),
+            Document.builder().text("Content B")
+                .metadata(mapOf("source" to "/abs/b.txt", "mtime" to 2000L)).build()
+        ))
+
+        val metadata = repository.getMetadata(filesystemProbe = { _ -> null })
+
+        assertThat(metadata.documentCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `StoreMetadata storeSizeBytes equals file length after save`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        repository.add(listOf(
+            Document.builder().text("Some content")
+                .metadata(mapOf("source" to "/abs/file.txt", "mtime" to 1000L)).build()
+        ))
+        repository.save()
+
+        val metadata = repository.getMetadata(filesystemProbe = { _ -> 1000L })
+
+        assertThat(metadata.storeSizeBytes).isEqualTo(storeFilePath.toFile().length())
+        assertThat(metadata.storeSizeBytes).isGreaterThan(0)
+    }
+
+    @Test
+    fun `StoreMetadata lastIngestTime is 0 for empty store`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        val metadata = repository.getMetadata(filesystemProbe = { _ -> null })
+
+        assertThat(metadata.lastIngestTime).isEqualTo(0L)
+    }
+
+    @Test
+    fun `StoreMetadata lastIngestTime equals max mtime across all chunks`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        repository.add(listOf(
+            Document.builder().text("Content A")
+                .metadata(mapOf("source" to "/abs/a.txt", "mtime" to 1000L)).build(),
+            Document.builder().text("Content B")
+                .metadata(mapOf("source" to "/abs/b.txt", "mtime" to 5000L)).build(),
+            Document.builder().text("Content C")
+                .metadata(mapOf("source" to "/abs/c.txt", "mtime" to 3000L)).build()
+        ))
+
+        val metadata = repository.getMetadata(filesystemProbe = { _ -> null })
+
+        assertThat(metadata.lastIngestTime).isEqualTo(5000L)
+    }
+
+    @Test
+    fun `StoreMetadata staleDocumentCount equals count of documents where stale is true`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        repository.add(listOf(
+            Document.builder().text("Content A")
+                .metadata(mapOf("source" to "/abs/a.txt", "mtime" to 1000L)).build(),
+            Document.builder().text("Content B")
+                .metadata(mapOf("source" to "/abs/b.txt", "mtime" to 2000L)).build(),
+            Document.builder().text("Content C")
+                .metadata(mapOf("source" to "/abs/c.txt", "mtime" to 3000L)).build()
+        ))
+
+        // a.txt is stale (mtime changed), b.txt is missing (null), c.txt is fresh
+        val metadata = repository.getMetadata(filesystemProbe = { path ->
+            when (path) {
+                "/abs/a.txt" -> 9999L   // different mtime -> stale
+                "/abs/b.txt" -> null    // missing -> stale
+                "/abs/c.txt" -> 3000L   // same mtime -> fresh
+                else -> null
+            }
+        })
+
+        assertThat(metadata.staleDocumentCount).isEqualTo(2)
+    }
 }

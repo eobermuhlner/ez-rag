@@ -3,6 +3,7 @@ package ch.obermuhlner.ezrag
 import ch.obermuhlner.ezrag.command.DeleteCommand
 import ch.obermuhlner.ezrag.command.InitCommand
 import ch.obermuhlner.ezrag.command.IngestCommand
+import ch.obermuhlner.ezrag.command.ListCommand
 import ch.obermuhlner.ezrag.command.McpServerCommand
 import ch.obermuhlner.ezrag.command.QueryCommand
 import ch.obermuhlner.ezrag.command.SearchCommand
@@ -27,6 +28,7 @@ import java.util.concurrent.Callable
         InitCommand::class,
         IngestCommand::class,
         DeleteCommand::class,
+        ListCommand::class,
         ShowCommand::class,
         QueryCommand::class,
         SearchCommand::class,

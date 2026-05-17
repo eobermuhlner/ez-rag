@@ -195,7 +195,7 @@ class ConfigServiceTest {
     }
 
     @Test
-    fun `EzRagConfig rerankModel defaults to cross-encoder/ms-marco-MiniLM-L-6-v2`() {
+    fun `EzRagConfig rerankModel defaults to cross-encoder ms-marco-MiniLM-L-6-v2`() {
         assertThat(EzRagConfig().rerankModel).isEqualTo("cross-encoder/ms-marco-MiniLM-L-6-v2")
     }
 
