@@ -24,8 +24,9 @@ class EzRagDirResolver {
                 return candidate
             }
             val parent = current.parent
-            if (parent == null || parent == current) {
-                // Reached filesystem root — return fallback
+            // Stop before traversing into root or its direct children (e.g. /tmp, /home, /usr)
+            // to avoid picking up unrelated stores placed in system directories.
+            if (parent == null || parent.nameCount <= 1) {
                 return startDir.toAbsolutePath().normalize().resolve(".ez-rag")
             }
             current = parent
