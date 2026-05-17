@@ -41,6 +41,12 @@ class SubcommandTest {
     }
 
     @Test
+    fun `reingest help exits 0`() {
+        val exitCode = commandLine.execute("reingest", "--help")
+        assertThat(exitCode).isEqualTo(0)
+    }
+
+    @Test
     fun `query help exits 0`() {
         val exitCode = commandLine.execute("query", "--help")
         assertThat(exitCode).isEqualTo(0)

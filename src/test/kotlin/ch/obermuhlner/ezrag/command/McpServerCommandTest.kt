@@ -70,4 +70,11 @@ class McpServerCommandTest {
         val toolNames = toolCallbacks.map { it.toolDefinition.name() }
         assertThat(toolNames).contains("search_embedding")
     }
+
+    @Test
+    fun `ToolCallbackProvider exposes a tool named reingest`() {
+        val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
+        val toolNames = toolCallbacks.map { it.toolDefinition.name() }
+        assertThat(toolNames).contains("reingest")
+    }
 }

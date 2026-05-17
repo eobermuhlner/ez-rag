@@ -7,6 +7,7 @@ import ch.obermuhlner.ezrag.command.IngestCommand
 import ch.obermuhlner.ezrag.command.ListCommand
 import ch.obermuhlner.ezrag.command.McpServerCommand
 import ch.obermuhlner.ezrag.command.QueryCommand
+import ch.obermuhlner.ezrag.command.ReIngestCommand
 import ch.obermuhlner.ezrag.command.SearchCommand
 import ch.obermuhlner.ezrag.command.ShellCommand
 import ch.obermuhlner.ezrag.command.ShowCommand
@@ -28,6 +29,7 @@ import java.util.concurrent.Callable
     subcommands = [
         InitCommand::class,
         IngestCommand::class,
+        ReIngestCommand::class,
         DeleteCommand::class,
         ListCommand::class,
         ShowCommand::class,

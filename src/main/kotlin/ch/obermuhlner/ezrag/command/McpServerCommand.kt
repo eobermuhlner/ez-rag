@@ -75,6 +75,7 @@ class McpServerCommand : Callable<Int> {
         val ingestTool = McpIngestTool(embeddingModel, storeDir)
         val deleteTool = McpDeleteTool(embeddingModel, storeDir)
         val showTool = McpShowTool(embeddingModel, storeDir)
+        val reIngestTool = McpReIngestTool(embeddingModel, storeDir)
 
         val tools = buildList {
             add(statusTool)
@@ -85,6 +86,7 @@ class McpServerCommand : Callable<Int> {
             add(ingestTool)
             add(deleteTool)
             add(showTool)
+            add(reIngestTool)
         }.toTypedArray()
 
         return StaticToolCallbackProvider(*ToolCallbacks.from(*tools))
