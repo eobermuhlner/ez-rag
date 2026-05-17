@@ -70,9 +70,10 @@ echo "What is X?" | ez-rag search
 |--------------------------------|----------------------------------------------------------------------------------------------------|
 | `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`. Prints each file as it is ingested. |
 | `delete <file> [<file>...]`    | Remove one or more ingested documents from the vector store without touching other content.        |
+| `list`                         | List all ingested documents with chunk counts and staleness flags. Use `--output-format json` for machine-readable output with absolute paths. |
 | `show <file>`                  | Show per-chunk metadata (and optionally raw text) for an ingested file. Useful for debugging retrieval. |
 | `query [<word>...]`            | Retrieve relevant chunks and answer using an LLM. Reads question from positional args or stdin.    |
-| `status`                       | Show the vector store path, chunk count, and list of ingested documents.                           |
+| `status`                       | Show store health, aggregate counts, active configuration, and credential status.                  |
 | `search [<word>...]`           | Pure embedding search returning raw chunks without LLM involvement. Reads question from positional args or stdin. |
 | `mcp-server`                   | Run as an MCP server over stdio (for Claude Code and other agentic tools).                         |
 | `shell`                        | _(not yet implemented)_ Interactive REPL mode.                                                     |
@@ -197,6 +198,84 @@ If the file was never ingested, `show` exits with a non-zero code and prints an 
 |-----------------|-----------------------------------------------------------|
 | `--chunks`      | Include raw chunk text in output.                         |
 | `--output`      | Output format: `text` (default) or `json`.                |
+
+### list
+
+List all ingested documents with their chunk counts:
+
+```sh
+ez-rag list
+```
+
+Output (paths relative to current working directory):
+```
+docs/getting-started.md  (3 chunks)
+docs/old-guide.md  (1 chunks)  [STALE]
+```
+
+Documents marked `[STALE]` have been modified on disk since they were last ingested, or their source file no longer exists. Re-ingest them to bring the store up to date.
+
+Documents are listed in alphabetical order by path.
+
+Pass `--output-format json` for machine-readable output with absolute paths:
+
+```sh
+ez-rag list --output-format json
+```
+
+```json
+[
+  { "path": "/abs/path/to/docs/getting-started.md", "chunks": 3, "stale": false },
+  { "path": "/abs/path/to/docs/old-guide.md", "chunks": 1, "stale": true }
+]
+```
+
+If no store exists, `list` prints an error to stderr and exits with code `1`.
+
+| Flag                | Description                                             |
+|---------------------|---------------------------------------------------------|
+| `--output-format`   | Output format: `text` (default) or `json`.              |
+
+### status
+
+Show store health, aggregate counts, and active configuration:
+
+```sh
+ez-rag status
+```
+
+Output:
+```
+Store: /path/to/.ez-rag/vector-store.json
+Chunks: 14
+Documents: 2
+Size: 142 KB
+Stale documents: 0
+Last ingest time: 2026-05-17T10:30:00Z
+
+Configuration:
+  storeDir:
+  provider: passthrough
+  model:
+  embeddingProvider: onnx
+  embeddingModel: all-MiniLM-L6-v2
+  rerankModel: cross-encoder/ms-marco-MiniLM-L-6-v2
+  chunkSize: 1000
+  chunkOverlap: 200
+  topK: 5
+```
+
+The `Credentials:` section is shown only when a provider that needs an API key is active. `status` no longer lists individual documents — use `ez-rag list` for that.
+
+Pass `--output-format json` for machine-readable output:
+
+```sh
+ez-rag status --output-format json
+```
+
+| Flag                | Description                                             |
+|---------------------|---------------------------------------------------------|
+| `--output-format`   | Output format: `text` (default) or `json`.              |
 
 ## Search-specific flags
 
