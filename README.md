@@ -319,6 +319,13 @@ multi-chunk       14         0.93      0.63    0.93    PASS
 Overall           42         0.96      0.71    0.96
 ```
 
+How to read the output:
+
+- Each scenario row covers **all questions** in that scenario directory, regardless of document role.
+- The indented `hard-negative` sub-row covers only the **subset of questions whose expected source is a hard-negative document**. It has no Questions count (it is a subset, not an independent scenario) and no Status (thresholds apply to the scenario as a whole, not the subset).
+- `Overall` averages the per-scenario metrics weighted equally across scenarios, not questions.
+- `Status` is `PASS` when all configured thresholds are met, `FAIL (<metric> < <threshold>)` for the first failing metric, or blank when no thresholds are defined.
+
 Exit code is `0` when all thresholds pass (or no thresholds are defined), `1` when any threshold fails. This makes `eval` suitable for use in CI pipelines.
 
 Pass `--format json` for machine-readable output:
