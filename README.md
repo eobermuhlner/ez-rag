@@ -309,14 +309,14 @@ ez-rag eval ./my-corpus
 
 Output:
 ```
-Scenario          Questions  Recall@5  MRR    Hit@5   Status
-────────────────────────────────────────────────────────────
-factual           8          1.00      0.94   1.00    PASS
-hard-negatives    6          0.83      0.79   0.83    PASS
-  hard-negative              0.67      0.58   0.67
-multi-chunk       5          1.00      1.00   1.00    PASS
-────────────────────────────────────────────────────────────
-Overall           19         0.94      0.91   0.94
+Scenario          Questions  Recall@3  MRR     Hit@3   Status
+─────────────────────────────────────────────────────────────
+factual           16         0.94      0.63    0.94    PASS
+hard-negatives    12         1.00      0.88    1.00    PASS
+  hard-negative              1.00      0.75    1.00
+multi-chunk       14         0.93      0.63    0.93    PASS
+─────────────────────────────────────────────────────────────
+Overall           42         0.96      0.71    0.96
 ```
 
 Exit code is `0` when all thresholds pass (or no thresholds are defined), `1` when any threshold fails. This makes `eval` suitable for use in CI pipelines.
@@ -380,11 +380,11 @@ thresholds:               # optional; eval exits 1 if any threshold is missed
 
 **Metrics:**
 
-| Metric       | Description                                                                           |
-|--------------|---------------------------------------------------------------------------------------|
-| `Recall@5`   | Fraction of questions where at least one expected source chunk appears in the top 5.  |
-| `MRR`        | Mean Reciprocal Rank — measures how highly the first relevant result is ranked.       |
-| `Hit@5`      | Binary hit rate — 1 if any expected source appears in the top 5, averaged over all questions. |
+| Metric       | Description                                                                                                           |
+|--------------|-----------------------------------------------------------------------------------------------------------------------|
+| `Recall@3`   | Fraction of questions for which the expected chunk appears anywhere in the top 3 results. The primary pass/fail metric. |
+| `MRR`        | Mean Reciprocal Rank. For each question, the score is 1/rank of the first relevant result (1.0 if rank 1, 0.5 if rank 2, 0.33 if rank 3, 0 if not found). Averaged across all questions. Sensitive to ordering — a high MRR means relevant chunks tend to appear first. |
+| `Hit@3`      | Same as Recall@3 when each question has a single expected source. Differs when a question has multiple expected sources: Recall@3 counts partial credit, Hit@3 is binary (1 if any expected source is found, 0 otherwise). |
 
 ## Search-specific flags
 
