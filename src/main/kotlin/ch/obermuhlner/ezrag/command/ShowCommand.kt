@@ -80,6 +80,11 @@ class ShowCommand(
                     put("charCount", chunk.charCount)
                     put("mtime", chunk.mtime)
                     if (showText) put("text", chunk.text)
+                    if (chunk.headingTitle != null) {
+                        put("headingTitle", chunk.headingTitle)
+                        put("headingLevel", chunk.headingLevel)
+                        put("headingPath", chunk.headingPath)
+                    }
                 }
             }
             val result = mapOf(
@@ -92,7 +97,12 @@ class ShowCommand(
             outputWriter.println("Chunks: ${chunks.size}")
             outputWriter.println()
             for ((idx, chunk) in chunks.withIndex()) {
-                outputWriter.println("Chunk ${idx + 1} — ${chunk.charCount} chars, mtime: ${chunk.mtime}")
+                val headingSuffix = if (chunk.headingTitle != null) {
+                    ", heading: ${"#".repeat(chunk.headingLevel ?: 1)} ${chunk.headingTitle}"
+                } else {
+                    ""
+                }
+                outputWriter.println("Chunk ${idx + 1} — ${chunk.charCount} chars, mtime: ${chunk.mtime}$headingSuffix")
                 if (showText) {
                     for (line in chunk.text.lines()) {
                         outputWriter.println("  $line")

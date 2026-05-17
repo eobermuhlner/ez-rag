@@ -449,4 +449,88 @@ class VectorStoreRepositoryTest {
 
         assertThat(metadata.staleDocumentCount).isEqualTo(2)
     }
+
+    // ---- Heading metadata read-back tests ----
+
+    @Test
+    fun `getChunksForFile populates headingTitle headingLevel and headingPath when metadata keys are present`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        val doc = Document.builder()
+            .text("# Intro\nSome content here")
+            .metadata(mapOf(
+                "source" to "/abs/file.md",
+                "mtime" to 1000L,
+                "chunk_index" to 0,
+                "heading_title" to "Intro",
+                "heading_level" to 1,
+                "heading_path" to listOf("Intro")
+            ))
+            .build()
+        repository.add(listOf(doc))
+
+        val chunks = repository.getChunksForFile("/abs/file.md")
+
+        assertThat(chunks).hasSize(1)
+        assertThat(chunks[0].headingTitle).isEqualTo("Intro")
+        assertThat(chunks[0].headingLevel).isEqualTo(1)
+        assertThat(chunks[0].headingPath).isEqualTo(listOf("Intro"))
+    }
+
+    @Test
+    fun `getChunksForFile returns null for all heading fields when metadata keys are absent`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        val doc = Document.builder()
+            .text("Plain text chunk")
+            .metadata(mapOf(
+                "source" to "/abs/file.txt",
+                "mtime" to 1000L,
+                "chunk_index" to 0
+            ))
+            .build()
+        repository.add(listOf(doc))
+
+        val chunks = repository.getChunksForFile("/abs/file.txt")
+
+        assertThat(chunks).hasSize(1)
+        assertThat(chunks[0].headingTitle).isNull()
+        assertThat(chunks[0].headingLevel).isNull()
+        assertThat(chunks[0].headingPath).isNull()
+    }
+
+    @Test
+    fun `getChunksForFile deserialises heading_path JSON array back to List-String`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository.load()
+
+        val path = listOf("Overview", "Installation", "Quick Start")
+        val doc = Document.builder()
+            .text("### Quick Start\nRun the tool.")
+            .metadata(mapOf(
+                "source" to "/abs/guide.md",
+                "mtime" to 2000L,
+                "chunk_index" to 0,
+                "heading_title" to "Quick Start",
+                "heading_level" to 3,
+                "heading_path" to path
+            ))
+            .build()
+        repository.add(listOf(doc))
+        repository.save()
+
+        // Reload from disk to exercise JSON serialisation round-trip
+        val repository2 = VectorStoreRepository(embeddingModel, storeFilePath)
+        repository2.load()
+
+        val chunks = repository2.getChunksForFile("/abs/guide.md")
+
+        assertThat(chunks).hasSize(1)
+        assertThat(chunks[0].headingPath).isEqualTo(listOf("Overview", "Installation", "Quick Start"))
+    }
 }

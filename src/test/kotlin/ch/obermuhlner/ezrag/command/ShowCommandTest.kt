@@ -178,6 +178,138 @@ class ShowCommandTest {
         assertThat(chunks[0].get("text").asText()).isEqualTo("Hello world")
     }
 
+    private fun ingestHeadingChunk(
+        repo: VectorStoreRepository,
+        absolutePath: String,
+        text: String,
+        headingTitle: String,
+        headingLevel: Int,
+        headingPath: List<String>,
+        mtime: Long = 1716000000000L
+    ) {
+        val doc = Document.builder()
+            .text(text)
+            .metadata(mapOf(
+                "source" to absolutePath,
+                "mtime" to mtime,
+                "chunk_index" to 0,
+                "heading_title" to headingTitle,
+                "heading_level" to headingLevel,
+                "heading_path" to headingPath
+            ))
+            .build()
+        repo.add(listOf(doc))
+        repo.save()
+    }
+
+    @Test
+    fun `show text output for Markdown chunk with heading includes heading prefix in summary line`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repo = createRepository(storeFilePath)
+        val filePath = tempDir.resolve("doc.md").toAbsolutePath().toString()
+        ingestHeadingChunk(repo, filePath, "## Section Name\nSome content here",
+            headingTitle = "Section Name", headingLevel = 2, headingPath = listOf("Section Name"))
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = ShowCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+        )
+        cmd.filePath = filePath
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        val output = out.toString()
+        assertThat(output).contains("heading: ## Section Name")
+    }
+
+    @Test
+    fun `show JSON output for Markdown chunk with heading includes headingTitle headingLevel headingPath keys`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repo = createRepository(storeFilePath)
+        val filePath = tempDir.resolve("doc.md").toAbsolutePath().toString()
+        ingestHeadingChunk(repo, filePath, "## Section Name\nSome content here",
+            headingTitle = "Section Name", headingLevel = 2, headingPath = listOf("Top", "Section Name"))
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = ShowCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+        )
+        cmd.filePath = filePath
+        cmd.outputFormat = "json"
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        val json = out.toString().trim()
+        val mapper = ObjectMapper()
+        val node = mapper.readTree(json)
+        val chunk = node.get("chunks")[0]
+        assertThat(chunk.has("headingTitle")).isTrue()
+        assertThat(chunk.get("headingTitle").asText()).isEqualTo("Section Name")
+        assertThat(chunk.has("headingLevel")).isTrue()
+        assertThat(chunk.get("headingLevel").asInt()).isEqualTo(2)
+        assertThat(chunk.has("headingPath")).isTrue()
+        assertThat(chunk.get("headingPath").isArray).isTrue()
+    }
+
+    @Test
+    fun `show text output for non-Markdown chunk contains no heading substring`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repo = createRepository(storeFilePath)
+        val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
+        ingestChunks(repo, filePath, listOf("Plain text content"))
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = ShowCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+        )
+        cmd.filePath = filePath
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(out.toString()).doesNotContain("heading:")
+    }
+
+    @Test
+    fun `show JSON output for non-Markdown chunk contains no headingTitle headingLevel headingPath keys`(@TempDir tempDir: Path) {
+        val storeFilePath = tempDir.resolve("vector-store.json")
+        val repo = createRepository(storeFilePath)
+        val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
+        ingestChunks(repo, filePath, listOf("Plain text content"))
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = ShowCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+        )
+        cmd.filePath = filePath
+        cmd.outputFormat = "json"
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        val json = out.toString().trim()
+        val mapper = ObjectMapper()
+        val node = mapper.readTree(json)
+        val chunk = node.get("chunks")[0]
+        assertThat(chunk.has("headingTitle")).isFalse()
+        assertThat(chunk.has("headingLevel")).isFalse()
+        assertThat(chunk.has("headingPath")).isFalse()
+    }
+
     @Test
     fun `show of unknown file exits non-zero with error message`(@TempDir tempDir: Path) {
         val storeFilePath = tempDir.resolve("vector-store.json")

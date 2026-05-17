@@ -25,8 +25,7 @@ open class IngestService(
     var onFileLoaded: ((Path, List<Document>) -> Unit)? = null
 
     open fun ingest(files: List<File>): IngestResult {
-        val loader = DocumentLoader()
-        val chunker = DocumentChunker(chunkSize, chunkOverlap)
+        val registry = DocumentReaderRegistry(chunkSize, chunkOverlap)
         val repository = VectorStoreRepository(embeddingModel, storeFilePath)
         val directoryWalker = DirectoryWalker(warningWriter)
         repository.load()
@@ -64,8 +63,8 @@ open class IngestService(
                 continue
             }
             onFileIngesting?.invoke(absolutePath)
-            val documents = loader.load(absolutePath)
-            val chunks = withMtime(chunker.split(documents), mtime)
+            val rawChunks = registry.read(absolutePath.toFile())
+            val chunks = withSourceAndMtime(rawChunks, sourceKey, mtime)
             onFileLoaded?.invoke(absolutePath, chunks)
             if (chunks.isEmpty()) {
                 warningWriter.println("Warning: No chunks produced for: $absolutePath")
@@ -85,12 +84,12 @@ open class IngestService(
         )
     }
 
-    private fun withMtime(documents: List<Document>, mtime: Long): List<Document> {
+    private fun withSourceAndMtime(documents: List<Document>, source: String, mtime: Long): List<Document> {
         return documents.mapIndexed { index, doc ->
             Document.builder()
                 .id(doc.id)
                 .text(doc.text)
-                .metadata(doc.metadata + mapOf("mtime" to mtime, "chunk_index" to index))
+                .metadata(doc.metadata + mapOf("source" to source, "mtime" to mtime, "chunk_index" to index))
                 .build()
         }
     }

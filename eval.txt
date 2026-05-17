@@ -1,9 +1,9 @@
 Scenario         Questions  Recall@3  MRR     Hit@3   Status
 ────────────────────────────────────────────────────────────
 factual          16         0.94      0.63    0.94    PASS
-factual-md       16         0.88      0.67    0.88    PASS
+factual-md       16         0.94      0.94    0.94    PASS
 hard-negatives   12         1.00      0.88    1.00    PASS
   hard-negative             1.00      0.75    1.00
 multi-chunk      14         0.93      0.63    0.93    PASS
 ────────────────────────────────────────────────────────────
-Overall          58         0.94      0.70    0.94
+Overall          58         0.95      0.77    0.95

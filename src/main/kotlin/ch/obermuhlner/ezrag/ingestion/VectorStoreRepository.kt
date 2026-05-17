@@ -13,7 +13,10 @@ data class DocumentChunkInfo(
     val chunkIndex: Int,
     val charCount: Int,
     val mtime: Long,
-    val text: String
+    val text: String,
+    val headingTitle: String? = null,
+    val headingLevel: Int? = null,
+    val headingPath: List<String>? = null
 )
 
 data class StoreMetadata(
@@ -115,11 +118,29 @@ class VectorStoreRepository(
             val mtime = metadata["mtime"]?.let { toLong(it) } ?: 0L
             val chunkIndex = metadata["chunk_index"]?.let { toLong(it)?.toInt() } ?: 0
 
+            val headingTitle = metadata["heading_title"] as? String
+            val headingLevel = metadata["heading_level"]?.let {
+                when (it) {
+                    is Int -> it
+                    is Number -> it.toInt()
+                    is String -> it.toIntOrNull()
+                    else -> null
+                }
+            }
+            @Suppress("UNCHECKED_CAST")
+            val headingPath = when (val raw = metadata["heading_path"]) {
+                is List<*> -> raw.filterIsInstance<String>().takeIf { it.isNotEmpty() }
+                else -> null
+            }
+
             chunks.add(DocumentChunkInfo(
                 chunkIndex = chunkIndex,
                 charCount = text.length,
                 mtime = mtime,
-                text = text
+                text = text,
+                headingTitle = headingTitle,
+                headingLevel = headingLevel,
+                headingPath = headingPath
             ))
         }
 
