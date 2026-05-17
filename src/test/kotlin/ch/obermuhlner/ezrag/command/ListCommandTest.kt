@@ -211,6 +211,31 @@ class ListCommandTest {
     }
 
     @Test
+    fun `list text output shows absolute path when document is outside CWD`(@TempDir tempDir: Path) {
+        val fileA = tempDir.resolve("a.txt").toAbsolutePath().toString()
+        buildStore(tempDir, listOf(fileA to 1000L))
+
+        val cwd = java.nio.file.Paths.get("").toAbsolutePath()
+        // Skip if tempDir happens to be under CWD (unlikely but guard anyway)
+        org.junit.jupiter.api.Assumptions.assumeTrue(!java.nio.file.Paths.get(fileA).startsWith(cwd))
+
+        val out = StringWriter()
+        val cmd = ListCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+        )
+        cmd.filesystemProbeOverride = { _ -> 1000L }
+        cmd.call()
+
+        val output = out.toString()
+        assertThat(output).contains(fileA)
+        assertThat(output.lines().filter { it.isNotBlank() }).allSatisfy { line ->
+            assertThat(line).doesNotStartWith("..")
+        }
+    }
+
+    @Test
     fun `list JSON output uses absolute paths`(@TempDir tempDir: Path) {
         val fileA = tempDir.resolve("a.txt").toAbsolutePath().toString()
         buildStore(tempDir, listOf(fileA to 1000L))

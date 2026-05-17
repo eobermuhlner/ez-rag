@@ -96,7 +96,8 @@ class ListCommand(
             val cwd = Paths.get("").toAbsolutePath()
             for (doc in documents) {
                 val displayPath = try {
-                    cwd.relativize(Paths.get(doc.path)).toString()
+                    val rel = cwd.relativize(Paths.get(doc.path))
+                    if (rel.toString().startsWith("..")) doc.path else rel.toString()
                 } catch (_: Exception) {
                     doc.path
                 }
