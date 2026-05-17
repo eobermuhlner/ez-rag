@@ -96,6 +96,7 @@ class QueryCommand(
             return 1
         }
 
+
         val resolvedQuestion = if (questionArgs.isNotEmpty()) {
             questionArgs.joinToString(" ")
         } else {
@@ -113,7 +114,7 @@ class QueryCommand(
                     ?: return exitWithError("No embedding model configured.")
                 val chatModel = springChatModel
                     ?: return exitWithError("No chat model configured.")
-                val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+                val repository = VectorStoreRepository(embeddingModel, storeDir)
                 repository.load()
                 val embeddingSearchPipeline = EmbeddingSearchPipeline(repository, embeddingModel, springReranker)
                 RagPipeline(embeddingSearchPipeline, chatModel)

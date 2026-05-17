@@ -42,8 +42,7 @@ class RagPipelineTest {
     }
 
     private fun createRepository(tempDir: Path): VectorStoreRepository {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
         repo.load()
         return repo
     }

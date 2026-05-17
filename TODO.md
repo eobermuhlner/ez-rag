@@ -1,4 +1,5 @@
-- add markdown chunking
+- add markdown sub-heading chunking with token budget. support breaking at paragraph boundaries, tables, bullet points, and other natural breakpoints. last resort is breaking mid-sentence, but try to avoid that when possible. 
+- add markdown table chunking with token budget. support breaking at row boundaries, then cell boundaries. convert large tables into separate rows with headers. If cells exceed token budget, convert to single cells with headers. last resort is breaking mid-cell, but try to avoid that when possible.
 - add pdf to markdown converter
 - add local .ez-rag/config.yaml support (overriding defaults in ~/.ez-rag/config.yaml)
 - use LuceneVectorStore for semantic search instead of SimpleVectorStore

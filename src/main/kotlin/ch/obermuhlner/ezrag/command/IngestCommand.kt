@@ -85,11 +85,10 @@ class IngestCommand(
             ?: storeDirOption?.let { Paths.get(it) }
             ?: (configServiceOverride ?: springConfigService)?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
-        val resolvedStorePath = resolvedStoreDir.resolve("vector-store.json")
         val resolvedChunkSize = chunkSize ?: chunkSizeOption ?: 1000
         val resolvedChunkOverlap = chunkOverlap ?: chunkOverlapOption ?: 200
 
-        val service = IngestService(model, resolvedStorePath, resolvedChunkSize, resolvedChunkOverlap, warningWriter)
+        val service = IngestService(model, resolvedStoreDir, resolvedChunkSize, resolvedChunkOverlap, warningWriter)
 
         val isQuiet = quiet || quietOption
         val isVerbose = verbose || detailsOption

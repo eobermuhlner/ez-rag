@@ -38,8 +38,7 @@ class ListCommandTest {
     }
 
     private fun buildStore(storeDir: Path, docs: List<Pair<String, Long>>): VectorStoreRepository {
-        val storeFilePath = storeDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
         repo.load()
         for ((source, mtime) in docs) {
             repo.add(listOf(

@@ -52,8 +52,8 @@ class QueryCommandTest {
         ChatResponse(listOf(Generation(AssistantMessage("Stub answer"))))
     }
 
-    private fun createPopulatedRepository(storeFilePath: Path): VectorStoreRepository {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+    private fun createPopulatedRepository(storeDir: Path): VectorStoreRepository {
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
         repo.load()
         val doc = Document.builder()
             .text("Test content for querying.")
@@ -65,18 +65,18 @@ class QueryCommandTest {
     }
 
     private fun createQueryCommand(
-        storeFilePath: Path,
+        storeDir: Path,
         out: StringWriter,
         err: StringWriter,
         inputStream: ByteArrayInputStream = ByteArrayInputStream(ByteArray(0)),
         pipeline: RagPipeline? = null,
         formatter: OutputFormatter = OutputFormatter(),
     ): QueryCommand {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
         repo.load()
         val ragPipeline = pipeline ?: RagPipeline(EmbeddingSearchPipeline(repo, fakeEmbeddingModel), stubChatModel)
         return QueryCommand(
-            storeDirOverride = storeFilePath.parent,
+            storeDirOverride = storeDir,
             ragPipeline = ragPipeline,
             outputFormatter = formatter,
             outputWriter = PrintWriter(out, true),
@@ -91,12 +91,11 @@ class QueryCommandTest {
 
     @Test
     fun `positional words are joined into single question string`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        createPopulatedRepository(storeFilePath)
+        createPopulatedRepository(tempDir)
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -108,7 +107,7 @@ class QueryCommandTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = QueryCommand(
-            storeDirOverride = storeFilePath.parent,
+            storeDirOverride = tempDir,
             ragPipeline = capturingPipeline,
             outputFormatter = OutputFormatter(),
             outputWriter = PrintWriter(out, true),
@@ -130,12 +129,11 @@ class QueryCommandTest {
 
     @Test
     fun `single quoted token in questionArgs is used as question`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        createPopulatedRepository(storeFilePath)
+        createPopulatedRepository(tempDir)
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -147,7 +145,7 @@ class QueryCommandTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = QueryCommand(
-            storeDirOverride = storeFilePath.parent,
+            storeDirOverride = tempDir,
             ragPipeline = capturingPipeline,
             outputFormatter = OutputFormatter(),
             outputWriter = PrintWriter(out, true),
@@ -180,10 +178,10 @@ class QueryCommandTest {
 
     @Test
     fun `non-existent store exits code 1 and output contains word ingest`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("nonexistent.json")
+        val nonExistentDir = tempDir.resolve("nonexistent-dir")
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = createQueryCommand(storeFilePath, out, err)
+        val cmd = createQueryCommand(nonExistentDir, out, err)
         cmd.questionArgs = listOf("hello")
 
         val exitCode = cmd.call()
@@ -198,12 +196,11 @@ class QueryCommandTest {
 
     @Test
     fun `positional question with populated store exits code 0 and answer on outputWriter`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        createPopulatedRepository(storeFilePath)
+        createPopulatedRepository(tempDir)
 
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = createQueryCommand(storeFilePath, out, err)
+        val cmd = createQueryCommand(tempDir, out, err)
         cmd.questionArgs = listOf("hello")
 
         val exitCode = cmd.call()
@@ -218,14 +215,13 @@ class QueryCommandTest {
 
     @Test
     fun `absence of positional args reads stdin until EOF and uses as question`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        createPopulatedRepository(storeFilePath)
+        createPopulatedRepository(tempDir)
 
         val stdinContent = "Question from stdin"
         val inputStream = ByteArrayInputStream(stdinContent.toByteArray())
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -237,7 +233,7 @@ class QueryCommandTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = QueryCommand(
-            storeDirOverride = storeFilePath.parent,
+            storeDirOverride = tempDir,
             ragPipeline = capturingPipeline,
             outputFormatter = OutputFormatter(),
             outputWriter = PrintWriter(out, true),
@@ -259,13 +255,12 @@ class QueryCommandTest {
 
     @Test
     fun `empty stdin exits code 1 with message No question provided`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        createPopulatedRepository(storeFilePath)
+        createPopulatedRepository(tempDir)
 
         val inputStream = ByteArrayInputStream(ByteArray(0))
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = createQueryCommand(storeFilePath, out, err, inputStream)
+        val cmd = createQueryCommand(tempDir, out, err, inputStream)
         // no questionArgs set
 
         val exitCode = cmd.call()
@@ -280,12 +275,11 @@ class QueryCommandTest {
 
     @Test
     fun `--output json produces JSON-formatted output`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        createPopulatedRepository(storeFilePath)
+        createPopulatedRepository(tempDir)
 
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = createQueryCommand(storeFilePath, out, err)
+        val cmd = createQueryCommand(tempDir, out, err)
         cmd.questionArgs = listOf("hello")
         cmd.outputFormat = "json"
 
@@ -304,12 +298,11 @@ class QueryCommandTest {
 
     @Test
     fun `--top-k 2 passes topK=2 to RagPipeline via RagQuery`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        createPopulatedRepository(storeFilePath)
+        createPopulatedRepository(tempDir)
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -321,7 +314,7 @@ class QueryCommandTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = QueryCommand(
-            storeDirOverride = storeFilePath.parent,
+            storeDirOverride = tempDir,
             ragPipeline = capturingPipeline,
             outputFormatter = OutputFormatter(),
             outputWriter = PrintWriter(out, true),
@@ -343,12 +336,11 @@ class QueryCommandTest {
 
     @Test
     fun `--model claude-3-5-sonnet passes modelOverride to RagQuery`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        createPopulatedRepository(storeFilePath)
+        createPopulatedRepository(tempDir)
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -360,7 +352,7 @@ class QueryCommandTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = QueryCommand(
-            storeDirOverride = storeFilePath.parent,
+            storeDirOverride = tempDir,
             ragPipeline = capturingPipeline,
             outputFormatter = OutputFormatter(),
             outputWriter = PrintWriter(out, true),
@@ -382,12 +374,11 @@ class QueryCommandTest {
 
     @Test
     fun `--system-prompt Custom passes systemPrompt to RagQuery`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        createPopulatedRepository(storeFilePath)
+        createPopulatedRepository(tempDir)
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -399,7 +390,7 @@ class QueryCommandTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = QueryCommand(
-            storeDirOverride = storeFilePath.parent,
+            storeDirOverride = tempDir,
             ragPipeline = capturingPipeline,
             outputFormatter = OutputFormatter(),
             outputWriter = PrintWriter(out, true),
@@ -421,8 +412,7 @@ class QueryCommandTest {
 
     @Test
     fun `--verbose writes source info to errorWriter`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        createPopulatedRepository(storeFilePath)
+        createPopulatedRepository(tempDir)
 
         val fixedResult = RagResult(
             answer = "Answer",
@@ -436,7 +426,7 @@ class QueryCommandTest {
             )
         )
         val stubPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, storeFilePath).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult = fixedResult
@@ -445,7 +435,7 @@ class QueryCommandTest {
         val out = StringWriter()
         val err = StringWriter()
         val cmd = QueryCommand(
-            storeDirOverride = storeFilePath.parent,
+            storeDirOverride = tempDir,
             ragPipeline = stubPipeline,
             outputFormatter = OutputFormatter(),
             outputWriter = PrintWriter(out, true),

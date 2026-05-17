@@ -39,4 +39,26 @@ class ConfigFileReaderTest {
         assertThat(config).isNotNull()
         assertThat(config!!.rerankModel).isEqualTo("cross-encoder/ms-marco-MiniLM-L-6-v2")
     }
+
+    @Test
+    fun `search-mode kebab-case is parsed and produces searchMode == bm25`(@TempDir tempDir: Path) {
+        val configFile = tempDir.resolve("config.yml").toFile()
+        configFile.writeText("search-mode: bm25\n")
+
+        val config = readConfigFile(configFile.absolutePath)
+
+        assertThat(config).isNotNull()
+        assertThat(config!!.searchMode).isEqualTo("bm25")
+    }
+
+    @Test
+    fun `analyzer is parsed and produces analyzer == english`(@TempDir tempDir: Path) {
+        val configFile = tempDir.resolve("config.yml").toFile()
+        configFile.writeText("analyzer: english\n")
+
+        val config = readConfigFile(configFile.absolutePath)
+
+        assertThat(config).isNotNull()
+        assertThat(config!!.analyzer).isEqualTo("english")
+    }
 }

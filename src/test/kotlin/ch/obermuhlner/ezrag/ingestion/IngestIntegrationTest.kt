@@ -73,11 +73,10 @@ class IngestIntegrationTest {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for ingestion.")
 
-        val storeFilePath = tempDir.resolve("vector-store.json")
         val ingestCommand = IngestCommand(fakeEmbeddingModel, tempDir)
         ingestCommand.call(listOf(sampleFile.toFile()))
 
-        val json = storeFilePath.toFile().readText()
+        val json = tempDir.resolve("vector-store.json").toFile().readText()
         val mapper = ObjectMapper()
         val node = mapper.readTree(json)
         assertThat(node).isNotNull()
@@ -174,8 +173,6 @@ class IngestIntegrationTest {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for deduplication.")
 
-        val storeFilePath = tempDir.resolve("vector-store.json")
-
         // First ingest
         val out1 = StringWriter()
         val ingestCommand1 = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out1))
@@ -193,6 +190,7 @@ class IngestIntegrationTest {
         assertThat(out2.toString()).contains("0 chunks created")
 
         // Verify the store file still exists and the JSON shows the same chunk count
+        val storeFilePath = tempDir.resolve("vector-store.json")
         assertThat(storeFilePath.toFile()).exists()
         val json = storeFilePath.toFile().readText()
         val mapper = ObjectMapper()

@@ -57,9 +57,8 @@ class ShowCommand(
             ?: storeDirOption?.let { Paths.get(it) }
             ?: (configServiceOverride ?: springConfigService)?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
-        val resolvedStorePath = resolvedStoreDir.resolve("vector-store.json")
 
-        val repository = VectorStoreRepository(model, resolvedStorePath)
+        val repository = VectorStoreRepository(model, resolvedStoreDir)
         repository.load()
 
         val absolutePath = Paths.get(filePath).toAbsolutePath().normalize().toString()

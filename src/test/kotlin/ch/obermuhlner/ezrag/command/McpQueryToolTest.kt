@@ -53,7 +53,7 @@ class McpQueryToolTest {
         resultToReturn: RagResult = RagResult(answer = "answer", sources = emptyList()),
         throwException: Exception? = null
     ): RagPipeline {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir.resolve("store.json"))
+        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
         repo.load()
         val searchPipeline = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
         return object : RagPipeline(searchPipeline, stubChatModel) {

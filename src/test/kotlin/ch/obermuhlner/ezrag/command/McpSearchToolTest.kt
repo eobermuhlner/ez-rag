@@ -1,8 +1,10 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.ingestion.BM25Repository
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import ch.obermuhlner.ezrag.rag.ChunkMatch
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
+import ch.obermuhlner.ezrag.rag.HybridSearchPipeline
 import ch.obermuhlner.ezrag.rag.SearchQuery
 import ch.obermuhlner.ezrag.rag.SearchResult
 import org.assertj.core.api.Assertions.assertThat
@@ -43,10 +45,11 @@ class McpSearchToolTest {
         capturedQueries: MutableList<SearchQuery> = mutableListOf(),
         resultToReturn: SearchResult = SearchResult(emptyList()),
         throwException: Exception? = null
-    ): EmbeddingSearchPipeline {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir.resolve("store.json"))
+    ): HybridSearchPipeline {
+        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
         repo.load()
-        return object : EmbeddingSearchPipeline(repo, fakeEmbeddingModel) {
+        val bm25Repo = BM25Repository(tempDir, "standard")
+        return object : HybridSearchPipeline(repo, fakeEmbeddingModel, bm25Repo) {
             override fun search(query: SearchQuery): SearchResult {
                 capturedQueries.add(query)
                 if (throwException != null) throw throwException

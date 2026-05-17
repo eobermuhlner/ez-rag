@@ -77,7 +77,7 @@ class InitCommandTest {
     }
 
     @Test
-    fun `adds vector-store-json entry to gitignore when gitignore exists`(@TempDir tempDir: Path) {
+    fun `adds ez-rag directory entry to gitignore when gitignore exists`(@TempDir tempDir: Path) {
         val gitignore = tempDir.resolve(".gitignore").toFile()
         gitignore.writeText("target/\n*.log\n")
 
@@ -85,7 +85,7 @@ class InitCommandTest {
         val cmd = InitCommand(cwdOverride = tempDir, outputWriter = pw)
         cmd.call()
 
-        assertThat(gitignore.readText()).contains(".ez-rag/vector-store.json")
+        assertThat(gitignore.readText()).contains(".ez-rag/")
     }
 
     @Test
@@ -99,20 +99,20 @@ class InitCommandTest {
     }
 
     @Test
-    fun `does not add duplicate vector-store-json entry when already present in gitignore`(@TempDir tempDir: Path) {
+    fun `does not add duplicate ez-rag directory entry when already present in gitignore`(@TempDir tempDir: Path) {
         val gitignore = tempDir.resolve(".gitignore").toFile()
-        gitignore.writeText(".ez-rag/vector-store.json\n")
+        gitignore.writeText(".ez-rag/\n")
 
         val (_, pw) = makeWriter()
         val cmd = InitCommand(cwdOverride = tempDir, outputWriter = pw)
         cmd.call()
 
-        val count = gitignore.readLines().count { it.trim() == ".ez-rag/vector-store.json" }
+        val count = gitignore.readLines().count { it.trim() == ".ez-rag/" }
         assertThat(count).isEqualTo(1)
     }
 
     @Test
-    fun `both credentials and vector-store entries present after init when credentials already in gitignore`(@TempDir tempDir: Path) {
+    fun `both credentials and ez-rag directory entries present after init when credentials already in gitignore`(@TempDir tempDir: Path) {
         val gitignore = tempDir.resolve(".gitignore").toFile()
         gitignore.writeText(".ez-rag/credentials.yml\n")
 
@@ -122,9 +122,9 @@ class InitCommandTest {
 
         val content = gitignore.readText()
         assertThat(content).contains(".ez-rag/credentials.yml")
-        assertThat(content).contains(".ez-rag/vector-store.json")
-        // Ensure neither is duplicated
+        assertThat(content).contains(".ez-rag/")
+        // Ensure .ez-rag/ directory entry is not duplicated
         assertThat(content.lines().count { it.trim() == ".ez-rag/credentials.yml" }).isEqualTo(1)
-        assertThat(content.lines().count { it.trim() == ".ez-rag/vector-store.json" }).isEqualTo(1)
+        assertThat(content.lines().count { it.trim() == ".ez-rag/" }).isEqualTo(1)
     }
 }

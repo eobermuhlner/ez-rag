@@ -43,6 +43,9 @@ dependencies {
     implementation("org.springframework.ai:spring-ai-starter-mcp-server")
     implementation("com.microsoft.onnxruntime:onnxruntime:1.19.2")
     implementation("ai.djl.huggingface:tokenizers:0.32.0")
+    implementation("org.apache.lucene:lucene-core:9.12.1")
+    implementation("org.apache.lucene:lucene-analysis-common:9.12.1")
+    implementation("org.apache.lucene:lucene-queryparser:9.12.1")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 

@@ -5,7 +5,8 @@ data class SearchQuery(
     val topK: Int,
     val minScore: Double,
     val rerankCandidates: Int? = null,
-    val verbose: Boolean = false
+    val verbose: Boolean = false,
+    val mode: String = "embedding"
 )
 
 data class ChunkMatch(
@@ -16,5 +17,6 @@ data class ChunkMatch(
 )
 
 data class SearchResult(
-    val chunks: List<ChunkMatch>
+    val chunks: List<ChunkMatch>,
+    val mode: String = "embedding"
 )

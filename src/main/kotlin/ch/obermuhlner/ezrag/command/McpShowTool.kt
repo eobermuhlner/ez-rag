@@ -12,7 +12,7 @@ import java.nio.file.Paths
  */
 class McpShowTool(
     private val embeddingModel: EmbeddingModel,
-    private val storeFilePath: Path,
+    private val storeDir: Path,
 ) {
 
     data class ChunkResult(
@@ -35,7 +35,7 @@ class McpShowTool(
     ): ShowToolResult {
         val absolutePath = Paths.get(filePath).toAbsolutePath().normalize().toString()
         return try {
-            val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+            val repository = VectorStoreRepository(embeddingModel, storeDir)
             repository.load()
             val chunks = repository.getChunksForFile(absolutePath)
             if (chunks.isEmpty()) {

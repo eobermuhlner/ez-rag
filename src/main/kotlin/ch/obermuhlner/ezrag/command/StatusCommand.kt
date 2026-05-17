@@ -6,6 +6,7 @@ import ch.obermuhlner.ezrag.config.Credentials
 import ch.obermuhlner.ezrag.config.CredentialsService
 import ch.obermuhlner.ezrag.config.EzRagConfig
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
+import ch.obermuhlner.ezrag.ingestion.BM25Repository
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.ai.document.Document
@@ -68,7 +69,7 @@ class StatusCommand(
         // Resolve config: constructor param > Spring service > defaults
         val resolvedConfig = config ?: springConfigService?.resolve() ?: EzRagConfig()
 
-        val repository = VectorStoreRepository(model, storeFilePath)
+        val repository = VectorStoreRepository(model, storeDir)
 
         if (!repository.storeExists()) {
             outputWriter.println(
@@ -79,6 +80,8 @@ class StatusCommand(
 
         repository.load()
         val metadata = repository.getMetadata()
+
+        val bm25Metadata = BM25Repository(storeDir, resolvedConfig.analyzer).use { it.getMetadata() }
 
         if (outputFormat == "json") {
             val mapper = ObjectMapper()
@@ -106,6 +109,10 @@ class StatusCommand(
                 "storeSizeBytes" to metadata.storeSizeBytes,
                 "staleDocumentCount" to metadata.staleDocumentCount,
                 "lastIngestTime" to lastIngestTimeValue,
+                "bm25" to mapOf(
+                    "documentCount" to bm25Metadata.documentCount,
+                    "indexSizeBytes" to bm25Metadata.indexSizeBytes,
+                ),
                 "configuration" to configMap,
             )
 
@@ -128,6 +135,7 @@ class StatusCommand(
             } else {
                 outputWriter.println("Last ingest time: none")
             }
+            outputWriter.println("BM25 documents: ${bm25Metadata.documentCount}  index size: ${formatBytes(bm25Metadata.indexSizeBytes)}")
             outputWriter.println()
             outputWriter.println("Configuration:")
             outputWriter.println("  storeDir: ${resolvedConfig.storeDir ?: ""}")

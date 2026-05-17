@@ -33,8 +33,8 @@ class DeleteCommandTest {
         override fun dimensions(): Int = 4
     }
 
-    private fun createRepository(storeFilePath: Path): VectorStoreRepository {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+    private fun createRepository(storeDir: Path): VectorStoreRepository {
+        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
         repo.load()
         return repo
     }
@@ -52,8 +52,7 @@ class DeleteCommandTest {
 
     @Test
     fun `delete removes ingested file from store`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repo = createRepository(storeFilePath)
+        val repo = createRepository(tempDir)
         val fileToDelete = tempDir.resolve("file.txt").toAbsolutePath().toString()
         ingestFile(repo, fileToDelete, chunkCount = 3)
 
@@ -68,14 +67,13 @@ class DeleteCommandTest {
 
         assertThat(exitCode).isEqualTo(0)
         // Reload and verify the file is gone
-        val repo2 = createRepository(storeFilePath)
+        val repo2 = createRepository(tempDir)
         assertThat(repo2.getMetadata().documents.find { it.path == fileToDelete }).isNull()
     }
 
     @Test
     fun `delete prints Deleted line with chunk count by default`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repo = createRepository(storeFilePath)
+        val repo = createRepository(tempDir)
         val fileToDelete = tempDir.resolve("file.txt").toAbsolutePath().toString()
         ingestFile(repo, fileToDelete, chunkCount = 3)
 
@@ -93,8 +91,7 @@ class DeleteCommandTest {
 
     @Test
     fun `delete with --quiet produces no output on success`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repo = createRepository(storeFilePath)
+        val repo = createRepository(tempDir)
         val fileToDelete = tempDir.resolve("file.txt").toAbsolutePath().toString()
         ingestFile(repo, fileToDelete, chunkCount = 2)
 
@@ -114,8 +111,7 @@ class DeleteCommandTest {
 
     @Test
     fun `delete of unknown file prints warning and exits 0`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        createRepository(storeFilePath) // empty store
+        createRepository(tempDir) // empty store
 
         val unknownPath = tempDir.resolve("unknown.txt").toAbsolutePath().toString()
         val out = StringWriter()
@@ -133,8 +129,7 @@ class DeleteCommandTest {
 
     @Test
     fun `delete multiple files deletes both and prints result for each`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repo = createRepository(storeFilePath)
+        val repo = createRepository(tempDir)
         val file1 = tempDir.resolve("file1.txt").toAbsolutePath().toString()
         val file2 = tempDir.resolve("file2.txt").toAbsolutePath().toString()
         ingestFile(repo, file1, chunkCount = 2)
@@ -154,7 +149,7 @@ class DeleteCommandTest {
         assertThat(output).contains("Deleted: $file1 (2 chunks)")
         assertThat(output).contains("Deleted: $file2 (4 chunks)")
 
-        val repo2 = createRepository(storeFilePath)
+        val repo2 = createRepository(tempDir)
         assertThat(repo2.getMetadata().documents).isEmpty()
     }
 }

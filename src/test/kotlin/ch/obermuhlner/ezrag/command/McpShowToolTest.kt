@@ -33,8 +33,7 @@ class McpShowToolTest {
 
     @Test
     fun `calling show tool with valid file path returns chunk metadata`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
         repo.load()
 
         val absolutePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
@@ -47,7 +46,7 @@ class McpShowToolTest {
         repo.add(docs)
         repo.save()
 
-        val tool = McpShowTool(fakeEmbeddingModel, storeFilePath)
+        val tool = McpShowTool(fakeEmbeddingModel, tempDir)
         val result = tool.show(absolutePath, false)
 
         assertThat(result.error).isNull()
@@ -61,8 +60,7 @@ class McpShowToolTest {
 
     @Test
     fun `calling show tool with includeChunks true returns text`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
         repo.load()
 
         val absolutePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
@@ -73,7 +71,7 @@ class McpShowToolTest {
         repo.add(listOf(doc))
         repo.save()
 
-        val tool = McpShowTool(fakeEmbeddingModel, storeFilePath)
+        val tool = McpShowTool(fakeEmbeddingModel, tempDir)
         val result = tool.show(absolutePath, true)
 
         assertThat(result.error).isNull()
@@ -82,13 +80,12 @@ class McpShowToolTest {
 
     @Test
     fun `calling show tool with unknown file path returns error`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
         repo.load()
         repo.save()
 
         val unknownPath = tempDir.resolve("unknown.txt").toAbsolutePath().toString()
-        val tool = McpShowTool(fakeEmbeddingModel, storeFilePath)
+        val tool = McpShowTool(fakeEmbeddingModel, tempDir)
         val result = tool.show(unknownPath, false)
 
         assertThat(result.error).isNotNull()

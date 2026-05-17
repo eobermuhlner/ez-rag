@@ -31,8 +31,10 @@ data class StoreMetadata(
 
 class VectorStoreRepository(
     private val embeddingModel: EmbeddingModel,
-    private val storeFilePath: Path,
+    private val storeDir: Path,
 ) {
+
+    private val storeFilePath: Path = storeDir.resolve("vector-store.json")
 
     private lateinit var vectorStore: SimpleVectorStore
     // Tracks (source, mtime) pairs of all documents in the store

@@ -12,9 +12,9 @@ import java.nio.file.Path
  */
 class McpIngestTool(
     private val embeddingModel: EmbeddingModel,
-    private val storeFilePath: Path,
+    private val storeDir: Path,
     private val ingestServiceFactory: (Int, Int) -> IngestService = { chunkSize, chunkOverlap ->
-        IngestService(embeddingModel, storeFilePath, chunkSize, chunkOverlap)
+        IngestService(embeddingModel, storeDir, chunkSize, chunkOverlap)
     }
 ) {
 

@@ -56,4 +56,18 @@ class McpServerCommandTest {
         val toolNames = toolCallbacks.map { it.toolDefinition.name() }
         assertThat(toolNames).contains("query")
     }
+
+    @Test
+    fun `ToolCallbackProvider exposes a tool named search_bm25`() {
+        val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
+        val toolNames = toolCallbacks.map { it.toolDefinition.name() }
+        assertThat(toolNames).contains("search_bm25")
+    }
+
+    @Test
+    fun `ToolCallbackProvider exposes a tool named search_embedding`() {
+        val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
+        val toolNames = toolCallbacks.map { it.toolDefinition.name() }
+        assertThat(toolNames).contains("search_embedding")
+    }
 }

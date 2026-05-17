@@ -218,9 +218,8 @@ class MarkdownDocumentReaderTest {
         assertThat(subChunk).isNotNull()
 
         // Simulate IngestService: set source, mtime, chunk_index metadata
-        val storeFilePath = tempDir.resolve("vector-store.json")
         val embeddingModel = makeFakeEmbeddingModel()
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val docsToStore = documents.mapIndexed { idx, doc ->
@@ -238,7 +237,7 @@ class MarkdownDocumentReaderTest {
         repository.save()
 
         // Load back via a new repository instance (simulates round-trip through JSON)
-        val repository2 = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository2 = VectorStoreRepository(embeddingModel, tempDir)
         repository2.load()
         val chunks = repository2.getChunksForFile("/abs/roundtrip.md")
 

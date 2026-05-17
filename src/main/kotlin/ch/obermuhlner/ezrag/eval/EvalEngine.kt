@@ -51,8 +51,7 @@ class EvalEngine(
         ingestCommand.call(files)
 
         // Step 2: load the store once for reuse across questions
-        val storeFilePath = storeDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, storeDir)
         repository.load()
         val pipeline = EmbeddingSearchPipeline(repository, embeddingModel)
 

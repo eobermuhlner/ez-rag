@@ -33,8 +33,7 @@ class McpDeleteToolTest {
 
     @Test
     fun `calling delete tool with valid file path removes document and returns confirmation`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
         repo.load()
 
         val absolutePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
@@ -47,27 +46,26 @@ class McpDeleteToolTest {
         repo.add(docs)
         repo.save()
 
-        val tool = McpDeleteTool(fakeEmbeddingModel, storeFilePath)
+        val tool = McpDeleteTool(fakeEmbeddingModel, tempDir)
         val result = tool.delete(absolutePath)
 
         assertThat(result.chunksRemoved).isEqualTo(3)
         assertThat(result.error).isNull()
 
         // Verify the store no longer contains the file
-        val repo2 = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        val repo2 = VectorStoreRepository(fakeEmbeddingModel, tempDir)
         repo2.load()
         assertThat(repo2.getMetadata().documents.find { it.path == absolutePath }).isNull()
     }
 
     @Test
     fun `calling delete tool with unknown file path returns 0 chunks removed`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeFilePath)
+        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
         repo.load()
         repo.save()
 
         val unknownPath = tempDir.resolve("unknown.txt").toAbsolutePath().toString()
-        val tool = McpDeleteTool(fakeEmbeddingModel, storeFilePath)
+        val tool = McpDeleteTool(fakeEmbeddingModel, tempDir)
         val result = tool.delete(unknownPath)
 
         assertThat(result.chunksRemoved).isEqualTo(0)

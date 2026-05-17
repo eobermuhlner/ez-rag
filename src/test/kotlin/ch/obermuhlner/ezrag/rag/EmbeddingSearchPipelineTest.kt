@@ -72,8 +72,7 @@ class EmbeddingSearchPipelineTest {
     }
 
     private fun createRepository(tempDir: Path, embeddingModel: EmbeddingModel = distinctVectorEmbeddingModel): VectorStoreRepository {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repo = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repo = VectorStoreRepository(embeddingModel, tempDir)
         repo.load()
         return repo
     }

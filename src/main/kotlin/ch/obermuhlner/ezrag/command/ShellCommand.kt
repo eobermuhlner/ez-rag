@@ -1,11 +1,14 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.rag.BM25SearchPipeline
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
+import ch.obermuhlner.ezrag.rag.HybridSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.RagPipeline
 import ch.obermuhlner.ezrag.rag.RagQuery
 import ch.obermuhlner.ezrag.rag.SearchQuery
+import ch.obermuhlner.ezrag.rag.SearchResult
 import org.springframework.ai.chat.model.ChatModel
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.beans.factory.annotation.Autowired
@@ -30,6 +33,8 @@ class ShellCommand(
     private val storeDirOverride: Path? = null,
     private val ragPipeline: RagPipeline? = null,
     private val embeddingSearchPipeline: EmbeddingSearchPipeline? = null,
+    private val hybridSearchPipeline: HybridSearchPipeline? = null,
+    private val bm25SearchPipeline: BM25SearchPipeline? = null,
     private val vectorStoreRepository: VectorStoreRepository? = null,
     private val outputFormatter: OutputFormatter = OutputFormatter(),
     private val outputWriter: PrintWriter = PrintWriter(System.out, true),
@@ -69,19 +74,29 @@ class ShellCommand(
             return 1
         }
 
-        val (pipeline, resolvedSearchPipeline, resolvedRepository) = if (ragPipeline != null) {
-            Triple(ragPipeline, embeddingSearchPipeline, vectorStoreRepository)
+        data class ResolvedPipelines(
+            val ragPipeline: RagPipeline,
+            val embeddingSearchPipeline: EmbeddingSearchPipeline?,
+            val hybridSearchPipeline: HybridSearchPipeline?,
+            val bm25SearchPipeline: BM25SearchPipeline?,
+            val repository: VectorStoreRepository?
+        )
+
+        val resolved = if (ragPipeline != null) {
+            ResolvedPipelines(ragPipeline, embeddingSearchPipeline, hybridSearchPipeline, bm25SearchPipeline, vectorStoreRepository)
         } else {
             val embeddingModel = springEmbeddingModel
                 ?: return exitWithError("No embedding model configured.")
             val chatModel = springChatModel
                 ?: return exitWithError("No chat model configured.")
-            val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+            val repository = VectorStoreRepository(embeddingModel, storeDir)
             repository.load()
             val esp = EmbeddingSearchPipeline(repository, embeddingModel)
-            Triple(
+            ResolvedPipelines(
                 RagPipeline(esp, chatModel),
                 esp,
+                null, // HybridSearchPipeline not wired in production shell (built lazily if needed)
+                null, // BM25SearchPipeline not wired in production shell (built lazily if needed)
                 repository
             )
         }
@@ -95,7 +110,7 @@ class ShellCommand(
             if (trimmed.isEmpty()) continue
             if (trimmed == "exit" || trimmed == "quit") break
             if (trimmed.startsWith("/")) {
-                if (handleSlashCommand(trimmed, resolvedSearchPipeline, resolvedRepository)) break
+                if (handleSlashCommand(trimmed, resolved.hybridSearchPipeline, resolved.embeddingSearchPipeline, resolved.bm25SearchPipeline, resolved.repository)) break
                 continue
             }
 
@@ -106,7 +121,7 @@ class ShellCommand(
                     systemPrompt = "",
                     modelOverride = modelOverride,
                 )
-                val result = pipeline.query(ragQuery)
+                val result = resolved.ragPipeline.query(ragQuery)
 
                 if (verbose) {
                     result.sources.forEach { source ->
@@ -129,7 +144,9 @@ class ShellCommand(
 
     private fun handleSlashCommand(
         line: String,
-        searchPipeline: EmbeddingSearchPipeline?,
+        hybridPipeline: HybridSearchPipeline?,
+        embeddingPipeline: EmbeddingSearchPipeline?,
+        bm25Pipeline: BM25SearchPipeline?,
         repository: VectorStoreRepository?,
     ): Boolean {
         val parts = line.split(" ", limit = 2)
@@ -140,11 +157,13 @@ class ShellCommand(
             "/exit" -> true
 
             "/help" -> {
-                outputWriter.println("/help              - Show this help")
-                outputWriter.println("/status            - Show vector store metadata")
-                outputWriter.println("/search <question> - Run embedding search without LLM")
-                outputWriter.println("/verbose           - Toggle verbose mode")
-                outputWriter.println("/exit              - Exit the REPL")
+                outputWriter.println("/help                        - Show this help")
+                outputWriter.println("/status                      - Show vector store metadata")
+                outputWriter.println("/search <question>           - Run hybrid search without LLM")
+                outputWriter.println("/search-bm25 <question>      - Run BM25 (keyword) search without LLM")
+                outputWriter.println("/search-embedding <question> - Run embedding search without LLM")
+                outputWriter.println("/verbose                     - Toggle verbose mode")
+                outputWriter.println("/exit                        - Exit the REPL")
                 false
             }
 
@@ -164,10 +183,39 @@ class ShellCommand(
             "/search" -> {
                 if (args.isBlank()) {
                     errorWriter.println("Usage: /search <question>")
-                } else if (searchPipeline != null) {
-                    val searchQuery = SearchQuery(question = args, topK = topK, minScore = 0.0)
+                } else {
+                    val searchQuery = SearchQuery(question = args, topK = topK, minScore = 0.0, mode = "hybrid")
+                    val activePipeline: Any? = hybridPipeline ?: embeddingPipeline
+                    if (activePipeline != null) {
+                        try {
+                            val result: SearchResult = when (activePipeline) {
+                                is HybridSearchPipeline -> activePipeline.search(searchQuery)
+                                is EmbeddingSearchPipeline -> activePipeline.search(searchQuery)
+                                else -> throw IllegalStateException("Unknown pipeline type")
+                            }
+                            val formatted = if (outputFormat == "json") {
+                                outputFormatter.formatJson(result)
+                            } else {
+                                outputFormatter.formatText(result)
+                            }
+                            outputWriter.println(formatted)
+                        } catch (e: Exception) {
+                            errorWriter.println("Search error: ${e.message}")
+                        }
+                    } else {
+                        errorWriter.println("Search not available: no search pipeline configured.")
+                    }
+                }
+                false
+            }
+
+            "/search-bm25" -> {
+                if (args.isBlank()) {
+                    errorWriter.println("Usage: /search-bm25 <question>")
+                } else if (bm25Pipeline != null) {
                     try {
-                        val result = searchPipeline.search(searchQuery)
+                        val searchQuery = SearchQuery(question = args, topK = topK, minScore = 0.0, mode = "bm25")
+                        val result = bm25Pipeline.search(searchQuery)
                         val formatted = if (outputFormat == "json") {
                             outputFormatter.formatJson(result)
                         } else {
@@ -178,7 +226,29 @@ class ShellCommand(
                         errorWriter.println("Search error: ${e.message}")
                     }
                 } else {
-                    errorWriter.println("Search not available: no search pipeline configured.")
+                    errorWriter.println("BM25 search not available: no BM25 pipeline configured.")
+                }
+                false
+            }
+
+            "/search-embedding" -> {
+                if (args.isBlank()) {
+                    errorWriter.println("Usage: /search-embedding <question>")
+                } else if (embeddingPipeline != null) {
+                    try {
+                        val searchQuery = SearchQuery(question = args, topK = topK, minScore = 0.0, mode = "embedding")
+                        val result = embeddingPipeline.search(searchQuery)
+                        val formatted = if (outputFormat == "json") {
+                            outputFormatter.formatJson(result)
+                        } else {
+                            outputFormatter.formatText(result)
+                        }
+                        outputWriter.println(formatted)
+                    } catch (e: Exception) {
+                        errorWriter.println("Search error: ${e.message}")
+                    }
+                } else {
+                    errorWriter.println("Embedding search not available: no embedding pipeline configured.")
                 }
                 false
             }

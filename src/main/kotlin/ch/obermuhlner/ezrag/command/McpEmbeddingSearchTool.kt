@@ -1,34 +1,33 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.rag.ChunkMatch
-import ch.obermuhlner.ezrag.rag.HybridSearchPipeline
+import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.SearchQuery
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
 
 /**
- * MCP tool that searches the vector store using hybrid search (BM25 + embedding via RRF)
- * and returns matching chunks.
+ * MCP tool that searches the vector store using embedding (semantic) search and returns matching chunks.
  */
-class McpSearchTool(private val pipeline: HybridSearchPipeline) {
+class McpEmbeddingSearchTool(private val pipeline: EmbeddingSearchPipeline) {
 
     data class SearchToolResult(
         val chunks: List<ChunkMatch>,
         val error: String? = null
     )
 
-    @Tool(description = "Search the vector store for chunks matching the question using hybrid search (BM25 + embedding). Returns raw matching chunks with scores.")
-    fun search(
+    @Tool(name = "search_embedding", description = "Search the vector store using embedding (semantic) search. Returns matching chunks ranked by similarity score.")
+    fun searchEmbedding(
         @ToolParam(description = "The search question or query text.") question: String,
         @ToolParam(required = false, description = "Maximum number of results to return (default: 5).") topK: Int?,
-        @ToolParam(required = false, description = "Minimum similarity score threshold, 0.0 to 1.0 (default: 0.0, ignored for hybrid mode).") minScore: Double?
+        @ToolParam(required = false, description = "Minimum similarity score threshold, 0.0 to 1.0 (default: 0.0).") minScore: Double?
     ): SearchToolResult {
         return try {
             val query = SearchQuery(
                 question = question,
                 topK = topK ?: 5,
                 minScore = minScore ?: 0.0,
-                mode = "hybrid"
+                mode = "embedding"
             )
             val result = pipeline.search(query)
             SearchToolResult(chunks = result.chunks)

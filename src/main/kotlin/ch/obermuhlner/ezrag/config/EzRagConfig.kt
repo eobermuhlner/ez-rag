@@ -19,5 +19,7 @@ data class EzRagConfig(
     val outputFormat: String = "text",
     val verbose: Boolean = false,
     val rerankModel: String = "cross-encoder/ms-marco-MiniLM-L-6-v2",
-    val rerankCandidates: Int? = null
+    val rerankCandidates: Int? = null,
+    val searchMode: String = "hybrid",
+    val analyzer: String = "standard"
 )

@@ -14,10 +14,11 @@ import java.nio.file.Path
  */
 open class IngestService(
     private val embeddingModel: EmbeddingModel,
-    private val storeFilePath: Path,
+    private val storeDir: Path,
     private val chunkSize: Int = 1000,
     private val chunkOverlap: Int = 200,
     private val warningWriter: PrintWriter = PrintWriter(System.err, true),
+    private val analyzerName: String = "standard",
 ) {
 
     var onFileIngesting: ((Path) -> Unit)? = null
@@ -26,7 +27,8 @@ open class IngestService(
 
     open fun ingest(files: List<File>): IngestResult {
         val registry = DocumentReaderRegistry(chunkSize, chunkOverlap)
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, storeDir)
+        val bm25Repository = BM25Repository(storeDir, analyzerName)
         val directoryWalker = DirectoryWalker(warningWriter)
         repository.load()
 
@@ -57,7 +59,7 @@ open class IngestService(
             val absolutePath = path.toAbsolutePath().normalize()
             val mtime = absolutePath.toFile().lastModified()
             val sourceKey = absolutePath.toString()
-            if (repository.isAlreadyIngested(sourceKey, mtime)) {
+            if (repository.isAlreadyIngested(sourceKey, mtime) && bm25Repository.isAlreadyIndexed(sourceKey, mtime)) {
                 onFileSkipped?.invoke(absolutePath, "already ingested")
                 skipped++
                 continue
@@ -71,11 +73,14 @@ open class IngestService(
                 continue
             }
             repository.add(chunks)
+            bm25Repository.deleteBySource(sourceKey)
+            bm25Repository.index(chunks)
             filesIngested++
             chunksCreated += chunks.size
         }
 
         repository.save()
+        bm25Repository.close()
 
         return IngestResult(
             filesIngested = filesIngested,

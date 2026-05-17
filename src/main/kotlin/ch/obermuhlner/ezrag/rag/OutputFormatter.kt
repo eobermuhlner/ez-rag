@@ -20,6 +20,7 @@ class OutputFormatter {
         }
         val chunksArray = if (result.chunks.isEmpty()) "[]" else "[\n    $chunksJson\n  ]"
         return """{
+  "mode": "${result.mode}",
   "chunks": $chunksArray
 }"""
     }

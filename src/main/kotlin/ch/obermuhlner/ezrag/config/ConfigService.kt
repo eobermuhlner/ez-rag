@@ -32,7 +32,9 @@ class ConfigService(
             outputFormat = cliFlags.outputFormat ?: envVars["OUTPUT_FORMAT"] ?: file.outputFormat,
             verbose = cliFlags.verbose ?: envVars["VERBOSE"]?.toBooleanStrictOrNull() ?: file.verbose,
             rerankModel = rerankModel,
-            rerankCandidates = rerankCandidates
+            rerankCandidates = rerankCandidates,
+            searchMode = cliFlags.searchMode ?: envVars["SEARCH_MODE"] ?: file.searchMode,
+            analyzer = cliFlags.analyzer ?: envVars["ANALYZER"] ?: file.analyzer
         )
     }
 

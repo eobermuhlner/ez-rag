@@ -25,7 +25,9 @@ fun readConfigFile(path: String = System.getProperty("user.home") + "/.ez-rag/co
         outputFormat = data.string("outputFormat") ?: data.string("output-format") ?: "text",
         verbose = data["verbose"] as? Boolean ?: false,
         rerankModel = data.string("rerankModel") ?: data.string("rerank-model") ?: EzRagConfig().rerankModel,
-        rerankCandidates = data.int("rerankCandidates") ?: data.int("rerank-candidates")
+        rerankCandidates = data.int("rerankCandidates") ?: data.int("rerank-candidates"),
+        searchMode = data.string("searchMode") ?: data.string("search-mode") ?: EzRagConfig().searchMode,
+        analyzer = data.string("analyzer") ?: EzRagConfig().analyzer
     )
 }
 

@@ -2,9 +2,12 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
+import ch.obermuhlner.ezrag.ingestion.BM25Repository
 import ch.obermuhlner.ezrag.ingestion.IngestService
 import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.rag.BM25SearchPipeline
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
+import ch.obermuhlner.ezrag.rag.HybridSearchPipeline
 import ch.obermuhlner.ezrag.rag.RagPipeline
 import org.springframework.ai.chat.model.ChatModel
 import org.springframework.ai.embedding.EmbeddingModel
@@ -54,24 +57,30 @@ class McpServerCommand : Callable<Int> {
         val storeDir = storeDirOption?.let { Paths.get(it) }
             ?: springConfigService?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(Paths.get("").toAbsolutePath())
-        val storeFilePath = storeDir.resolve("vector-store.json")
 
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, storeDir)
         repository.load()
 
         val chatModel = springChatModel
         val statusTool = McpStatusTool(repository)
         val embeddingSearchPipeline = EmbeddingSearchPipeline(repository, embeddingModel)
-        val searchTool = McpSearchTool(embeddingSearchPipeline)
+        val bm25Repository = BM25Repository(storeDir, "standard")
+        val bm25SearchPipeline = BM25SearchPipeline(bm25Repository)
+        val hybridSearchPipeline = HybridSearchPipeline(repository, embeddingModel, bm25Repository)
+        val searchTool = McpSearchTool(hybridSearchPipeline)
+        val bm25SearchTool = McpBm25SearchTool(bm25SearchPipeline)
+        val embeddingSearchTool = McpEmbeddingSearchTool(embeddingSearchPipeline)
         val queryTool = chatModel?.let { McpQueryTool(RagPipeline(embeddingSearchPipeline, it)) }
 
-        val ingestTool = McpIngestTool(embeddingModel, storeFilePath)
-        val deleteTool = McpDeleteTool(embeddingModel, storeFilePath)
-        val showTool = McpShowTool(embeddingModel, storeFilePath)
+        val ingestTool = McpIngestTool(embeddingModel, storeDir)
+        val deleteTool = McpDeleteTool(embeddingModel, storeDir)
+        val showTool = McpShowTool(embeddingModel, storeDir)
 
         val tools = buildList {
             add(statusTool)
             add(searchTool)
+            add(bm25SearchTool)
+            add(embeddingSearchTool)
             if (queryTool != null) add(queryTool)
             add(ingestTool)
             add(deleteTool)

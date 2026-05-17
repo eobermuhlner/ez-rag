@@ -256,4 +256,80 @@ class ConfigServiceTest {
         val config = service.resolve(CliFlags(rerankCandidates = 20))
         assertThat(config.rerankCandidates).isEqualTo(20)
     }
+
+    // ---- searchMode resolution tests ----
+
+    @Test
+    fun `searchMode resolves to CLI flag value when flag is set`() {
+        val service = ConfigService(
+            configFileSource = { EzRagConfig(searchMode = "bm25") },
+            envVars = mapOf("SEARCH_MODE" to "embedding")
+        )
+        assertThat(service.resolve(CliFlags(searchMode = "bm25")).searchMode).isEqualTo("bm25")
+    }
+
+    @Test
+    fun `searchMode resolves to SEARCH_MODE env var when only env var is set`() {
+        val service = ConfigService(
+            configFileSource = { null },
+            envVars = mapOf("SEARCH_MODE" to "embedding")
+        )
+        assertThat(service.resolve().searchMode).isEqualTo("embedding")
+    }
+
+    @Test
+    fun `searchMode resolves to config file value when only file sets it`() {
+        val service = ConfigService(
+            configFileSource = { EzRagConfig(searchMode = "bm25") },
+            envVars = emptyMap()
+        )
+        assertThat(service.resolve().searchMode).isEqualTo("bm25")
+    }
+
+    @Test
+    fun `searchMode defaults to hybrid when no source specifies it`() {
+        val service = ConfigService(
+            configFileSource = { null },
+            envVars = emptyMap()
+        )
+        assertThat(service.resolve().searchMode).isEqualTo("hybrid")
+    }
+
+    // ---- analyzer resolution tests ----
+
+    @Test
+    fun `analyzer resolves to CLI flag value when flag is set`() {
+        val service = ConfigService(
+            configFileSource = { EzRagConfig(analyzer = "english") },
+            envVars = mapOf("ANALYZER" to "english")
+        )
+        assertThat(service.resolve(CliFlags(analyzer = "english")).analyzer).isEqualTo("english")
+    }
+
+    @Test
+    fun `analyzer resolves to ANALYZER env var when only env var is set`() {
+        val service = ConfigService(
+            configFileSource = { null },
+            envVars = mapOf("ANALYZER" to "english")
+        )
+        assertThat(service.resolve().analyzer).isEqualTo("english")
+    }
+
+    @Test
+    fun `analyzer resolves to config file value when only file sets it`() {
+        val service = ConfigService(
+            configFileSource = { EzRagConfig(analyzer = "english") },
+            envVars = emptyMap()
+        )
+        assertThat(service.resolve().analyzer).isEqualTo("english")
+    }
+
+    @Test
+    fun `analyzer defaults to standard when no source specifies it`() {
+        val service = ConfigService(
+            configFileSource = { null },
+            envVars = emptyMap()
+        )
+        assertThat(service.resolve().analyzer).isEqualTo("standard")
+    }
 }

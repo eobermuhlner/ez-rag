@@ -21,7 +21,7 @@ class InitCommand(
 ) : Callable<Int> {
 
     companion object {
-        private const val VECTOR_STORE_ENTRY = ".ez-rag/vector-store.json"
+        private const val VECTOR_STORE_ENTRY = ".ez-rag/"
     }
 
     override fun call(): Int {

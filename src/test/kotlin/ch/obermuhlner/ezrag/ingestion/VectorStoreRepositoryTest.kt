@@ -37,8 +37,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `add documents and save creates the store file`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val document = Document.builder()
@@ -48,16 +47,15 @@ class VectorStoreRepositoryTest {
         repository.add(listOf(document))
         repository.save()
 
-        assertThat(storeFilePath.toFile()).exists()
-        assertThat(storeFilePath.toFile().length()).isGreaterThan(0)
+        val storeFile = tempDir.resolve("vector-store.json").toFile()
+        assertThat(storeFile).exists()
+        assertThat(storeFile.length()).isGreaterThan(0)
     }
 
     @Test
     fun `load from existing file preserves documents`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-
         // First run: add documents and save
-        val repo1 = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repo1 = VectorStoreRepository(embeddingModel, tempDir)
         repo1.load()
         val doc = Document.builder()
             .text("Hello world")
@@ -67,28 +65,27 @@ class VectorStoreRepositoryTest {
         repo1.save()
 
         // Second run: load the saved store
-        val repo2 = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repo2 = VectorStoreRepository(embeddingModel, tempDir)
         repo2.load()
 
         // The store file should still exist and be valid
-        assertThat(storeFilePath.toFile()).exists()
+        assertThat(tempDir.resolve("vector-store.json").toFile()).exists()
     }
 
     @Test
     fun `load works when store file does not exist`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("non-existent-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val nonExistentDir = tempDir.resolve("non-existent-dir")
+        val repository = VectorStoreRepository(embeddingModel, nonExistentDir)
 
         // Should not throw
         repository.load()
 
-        assertThat(storeFilePath.toFile()).doesNotExist()
+        assertThat(nonExistentDir.resolve("vector-store.json").toFile()).doesNotExist()
     }
 
     @Test
     fun `isAlreadyIngested returns true for matching path and mtime`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val document = Document.builder()
@@ -102,8 +99,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `isAlreadyIngested returns false for matching path but different mtime`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val document = Document.builder()
@@ -117,8 +113,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `isAlreadyIngested returns false when no documents have been added`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         assertThat(repository.isAlreadyIngested("file.txt", 1000L)).isFalse()
@@ -126,8 +121,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `getMetadata returns correct per-file and total counts`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val docsForA = (1..3).map { i ->
@@ -158,8 +152,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `delete removes all chunks for target file leaves other files untouched and returns chunk count`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val docsForA = (0..2).map { i ->
@@ -188,8 +181,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `delete evicts file from ingestedFiles cache so isAlreadyIngested returns false`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val doc = Document.builder()
@@ -206,8 +198,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `delete on unknown path returns 0`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val doc = Document.builder()
@@ -226,8 +217,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `getChunksForFile returns chunks sorted by chunkIndex with correct charCount and mtime`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val texts = listOf("Hello world", "Second chunk here", "Third chunk content text")
@@ -258,8 +248,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `getChunksForFile on unknown path returns empty list`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val doc = Document.builder()
@@ -277,8 +266,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `StoreDocumentInfo stale is false when filesystem probe returns same mtime as stored`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         repository.add(listOf(
@@ -295,8 +283,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `StoreDocumentInfo stale is true when filesystem probe returns different mtime`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         repository.add(listOf(
@@ -313,8 +300,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `StoreDocumentInfo stale is true when filesystem probe returns null (file missing)`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         repository.add(listOf(
@@ -331,8 +317,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `StoreDocumentInfo mtime equals max mtime across multiple chunks for same source`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         // Multiple chunks with different mtimes for same source (edge case from partial re-ingestion)
@@ -355,8 +340,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `StoreMetadata documentCount equals number of distinct source paths`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         repository.add(listOf(
@@ -375,8 +359,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `StoreMetadata storeSizeBytes equals file length after save`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         repository.add(listOf(
@@ -387,14 +370,13 @@ class VectorStoreRepositoryTest {
 
         val metadata = repository.getMetadata(filesystemProbe = { _ -> 1000L })
 
-        assertThat(metadata.storeSizeBytes).isEqualTo(storeFilePath.toFile().length())
+        assertThat(metadata.storeSizeBytes).isEqualTo(tempDir.resolve("vector-store.json").toFile().length())
         assertThat(metadata.storeSizeBytes).isGreaterThan(0)
     }
 
     @Test
     fun `StoreMetadata lastIngestTime is 0 for empty store`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val metadata = repository.getMetadata(filesystemProbe = { _ -> null })
@@ -404,8 +386,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `StoreMetadata lastIngestTime equals max mtime across all chunks`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         repository.add(listOf(
@@ -424,8 +405,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `StoreMetadata staleDocumentCount equals count of documents where stale is true`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         repository.add(listOf(
@@ -454,8 +434,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `getChunksForFile populates headingTitle headingLevel and headingPath when metadata keys are present`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val doc = Document.builder()
@@ -481,8 +460,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `getChunksForFile returns null for all heading fields when metadata keys are absent`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val doc = Document.builder()
@@ -505,8 +483,7 @@ class VectorStoreRepositoryTest {
 
     @Test
     fun `getChunksForFile deserialises heading_path JSON array back to List-String`(@TempDir tempDir: Path) {
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        val repository = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository = VectorStoreRepository(embeddingModel, tempDir)
         repository.load()
 
         val path = listOf("Overview", "Installation", "Quick Start")
@@ -525,7 +502,7 @@ class VectorStoreRepositoryTest {
         repository.save()
 
         // Reload from disk to exercise JSON serialisation round-trip
-        val repository2 = VectorStoreRepository(embeddingModel, storeFilePath)
+        val repository2 = VectorStoreRepository(embeddingModel, tempDir)
         repository2.load()
 
         val chunks = repository2.getChunksForFile("/abs/guide.md")

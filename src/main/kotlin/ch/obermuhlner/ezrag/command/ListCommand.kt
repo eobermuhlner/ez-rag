@@ -61,7 +61,7 @@ class ListCommand(
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
         val storeFilePath = storeDir.resolve("vector-store.json")
 
-        val repository = VectorStoreRepository(model, storeFilePath)
+        val repository = VectorStoreRepository(model, storeDir)
 
         if (!repository.storeExists()) {
             errorWriter.println(
