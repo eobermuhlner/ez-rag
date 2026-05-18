@@ -94,6 +94,14 @@ class LuceneRepository private constructor(
         }
 
         /**
+         * Deletes the stored embedding dimension config so the next open() accepts any dimension.
+         * Use before re-ingesting all documents with a new embedding model.
+         */
+        fun resetStoredDimension(storeDir: Path) {
+            storeDir.resolve("lucene").resolve(CONFIG_FILE).toFile().delete()
+        }
+
+        /**
          * Checks whether the index at storeDir/lucene/ contains committed data,
          * without opening a writer.
          */

@@ -17,36 +17,39 @@ import java.time.Instant
 
 class ReIngestServiceTest {
 
-    private val fakeEmbeddingModel: EmbeddingModel = object : EmbeddingModel {
+    private val fakeEmbeddingModel: EmbeddingModel = createFakeModel(4)
+
+    private fun createFakeModel(dim: Int): EmbeddingModel = object : EmbeddingModel {
         override fun call(request: EmbeddingRequest): EmbeddingResponse {
             val embeddings = request.instructions.mapIndexed { idx, _ ->
-                Embedding(FloatArray(4) { 0.1f * (idx + 1) }, idx)
+                Embedding(FloatArray(dim) { 0.1f * (idx + 1) }, idx)
             }
             return EmbeddingResponse(embeddings)
         }
-        override fun embed(document: Document): FloatArray = FloatArray(4) { 0.1f }
-        override fun embed(text: String): FloatArray = FloatArray(4) { 0.1f }
+        override fun embed(document: Document): FloatArray = FloatArray(dim) { 0.1f }
+        override fun embed(text: String): FloatArray = FloatArray(dim) { 0.1f }
         override fun embedForResponse(texts: List<String>): EmbeddingResponse {
             val embeddings = texts.mapIndexed { idx, _ ->
-                Embedding(FloatArray(4) { 0.1f * (idx + 1) }, idx)
+                Embedding(FloatArray(dim) { 0.1f * (idx + 1) }, idx)
             }
             return EmbeddingResponse(embeddings)
         }
-        override fun dimensions(): Int = 4
+        override fun dimensions(): Int = dim
     }
 
-    private fun ingestFile(storeDir: Path, file: Path, chunkSize: Int = 1000, chunkOverlap: Int = 200) {
-        val service = IngestService(fakeEmbeddingModel, storeDir, chunkSize, chunkOverlap)
+    private fun ingestFile(storeDir: Path, file: Path, model: EmbeddingModel = fakeEmbeddingModel, chunkSize: Int = 1000, chunkOverlap: Int = 200) {
+        val service = IngestService(model, storeDir, chunkSize, chunkOverlap)
         service.ingest(listOf(file.toFile()))
     }
 
     private fun createReIngestService(
         storeDir: Path,
+        model: EmbeddingModel = fakeEmbeddingModel,
         warningWriter: PrintWriter = PrintWriter(System.err, true),
         chunkSize: Int = 1000,
         chunkOverlap: Int = 200
     ): ReIngestService {
-        return ReIngestService(fakeEmbeddingModel, storeDir, chunkSize, chunkOverlap, warningWriter)
+        return ReIngestService(model, storeDir, chunkSize, chunkOverlap, warningWriter)
     }
 
     @Test
@@ -65,7 +68,7 @@ class ReIngestServiceTest {
         sourceFile.toFile().writeText("updated content after modification")
 
         val warnOut = StringWriter()
-        val service = createReIngestService(storeDir, PrintWriter(warnOut, true))
+        val service = createReIngestService(storeDir, warningWriter = PrintWriter(warnOut, true))
         val result = service.reIngest(forceAll = false)
 
         assertThat(result.filesReIngested).isEqualTo(1)
@@ -130,7 +133,7 @@ class ReIngestServiceTest {
         Files.delete(sourceFile)
 
         val warnOut = StringWriter()
-        val service = createReIngestService(storeDir, PrintWriter(warnOut, true))
+        val service = createReIngestService(storeDir, warningWriter = PrintWriter(warnOut, true))
         val result = service.reIngest(forceAll = false)
 
         assertThat(result.filesSkipped).isEqualTo(1)
@@ -166,7 +169,7 @@ class ReIngestServiceTest {
         // file3 remains unchanged
 
         val warnOut = StringWriter()
-        val service = createReIngestService(storeDir, PrintWriter(warnOut, true))
+        val service = createReIngestService(storeDir, warningWriter = PrintWriter(warnOut, true))
         val result = service.reIngest(forceAll = false)
 
         // staleFound should be 2: file1 (changed mtime) + file2 (missing = stale)
@@ -212,5 +215,43 @@ class ReIngestServiceTest {
         val result = service.reIngest(forceAll = true)
 
         assertThat(result.staleFound).isNull()
+    }
+
+    @Test
+    fun `forceAll=true succeeds when embedding dimension has changed`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val sourceFile = tempDir.resolve("doc.txt")
+        sourceFile.toFile().writeText("content to re-ingest with new model")
+
+        // Ingest with dimension-4 model
+        val smallModel = createFakeModel(4)
+        ingestFile(storeDir, sourceFile, model = smallModel)
+
+        // Re-ingest with dimension-8 model — must not throw
+        val largeModel = createFakeModel(8)
+        val service = createReIngestService(storeDir, model = largeModel)
+        val result = service.reIngest(forceAll = true)
+
+        assertThat(result.filesReIngested).isEqualTo(1)
+        assertThat(result.chunksCreated).isGreaterThan(0)
+    }
+
+    @Test
+    fun `forceAll=true with dimension change replaces index with new dimension`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val sourceFile = tempDir.resolve("doc.txt")
+        sourceFile.toFile().writeText("dimension migration test content")
+
+        val smallModel = createFakeModel(4)
+        ingestFile(storeDir, sourceFile, model = smallModel)
+
+        val largeModel = createFakeModel(8)
+        createReIngestService(storeDir, model = largeModel).reIngest(forceAll = true)
+
+        // Searching with the new model must work without dimension errors
+        LuceneRepository.open(largeModel, storeDir, "standard").use { repo ->
+            val chunks = repo.getChunksForFile(sourceFile.toAbsolutePath().normalize().toString())
+            assertThat(chunks).isNotEmpty()
+        }
     }
 }

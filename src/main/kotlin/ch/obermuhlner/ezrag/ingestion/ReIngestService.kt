@@ -1,6 +1,10 @@
 package ch.obermuhlner.ezrag.ingestion
 
+import org.springframework.ai.document.Document
+import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
+import org.springframework.ai.embedding.EmbeddingRequest
+import org.springframework.ai.embedding.EmbeddingResponse
 import java.io.File
 import java.io.PrintWriter
 import java.nio.file.Path
@@ -25,7 +29,10 @@ open class ReIngestService(
     var onFileReIngesting: ((Path) -> Unit)? = null
 
     open fun reIngest(forceAll: Boolean = false): ReIngestResult {
-        val repository = LuceneRepository.open(embeddingModel, storeDir, analyzerName)
+        // Use a stub model (dimension=0) for reading metadata and deleting — no embedding needed.
+        // When forceAll=true the stored dimension may differ from the new model's dimension, so
+        // bypassing validation here avoids a false dimension-mismatch error.
+        val repository = LuceneRepository.open(stubEmbeddingModel(), storeDir, analyzerName)
 
         val metadata = repository.getMetadata()
         val allDocuments = metadata.documents
@@ -63,6 +70,11 @@ open class ReIngestService(
         }
 
         if (filesToReIngest.isNotEmpty()) {
+            // When all documents are being re-ingested the embedding model may have changed.
+            // Reset the stored dimension so IngestService can write the new one.
+            if (forceAll) {
+                LuceneRepository.resetStoredDimension(storeDir)
+            }
             val ingestService = IngestService(embeddingModel, storeDir, chunkSize, chunkOverlap, warningWriter, analyzerName)
             val ingestResult = ingestService.ingest(filesToReIngest)
             filesReIngested = ingestResult.filesIngested
@@ -75,5 +87,15 @@ open class ReIngestService(
             chunksCreated = chunksCreated,
             filesSkipped = filesSkipped,
         )
+    }
+
+    private fun stubEmbeddingModel(): EmbeddingModel = object : EmbeddingModel {
+        override fun call(request: EmbeddingRequest) =
+            EmbeddingResponse(request.instructions.mapIndexed { i, _ -> Embedding(FloatArray(0), i) })
+        override fun embed(document: Document): FloatArray = FloatArray(0)
+        override fun embed(text: String): FloatArray = FloatArray(0)
+        override fun embedForResponse(texts: List<String>) =
+            EmbeddingResponse(texts.mapIndexed { i, _ -> Embedding(FloatArray(0), i) })
+        override fun dimensions(): Int = 0
     }
 }
