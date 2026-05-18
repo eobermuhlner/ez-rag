@@ -37,6 +37,7 @@ class QueryCommand(
     private val errorWriter: PrintWriter = PrintWriter(System.err, true),
     private val inputStream: InputStream = System.`in`,
     private val startDirOverride: Path? = null,
+    private val configServiceOverride: ConfigService? = null,
 ) : Callable<Int> {
 
     @ParentCommand
@@ -135,6 +136,14 @@ class QueryCommand(
         }
 
         if (verbose) {
+            val effectiveConfigService = configServiceOverride ?: springConfigService
+            if (effectiveConfigService != null) {
+                val config = effectiveConfigService.resolve()
+                errorWriter.println("  Chat provider: ${config.provider}, model: ${config.model}")
+            }
+            result.userMessage?.let { msg ->
+                errorWriter.println("  User message: $msg")
+            }
             result.sources.forEach { source ->
                 errorWriter.println("  Source: ${source.filePath}  score=${source.similarityScore}  chunk=${source.chunkIndex}")
             }

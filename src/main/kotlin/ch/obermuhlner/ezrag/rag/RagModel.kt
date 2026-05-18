@@ -18,5 +18,6 @@ data class SourceReference(
 
 data class RagResult(
     val answer: String,
-    val sources: List<SourceReference>
+    val sources: List<SourceReference>,
+    val userMessage: String? = null,
 )

@@ -463,6 +463,63 @@ class QueryCommandTest {
     }
 
     // -----------------------------------------------------------------------
+    // Test 10: verbose mode prints chat provider and model to errorWriter
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `verbose mode prints chat provider and model to errorWriter`(@TempDir tempDir: Path) {
+        populateRepository(tempDir)
+
+        val configService = ConfigService(
+            configFileSource = { EzRagConfig(provider = "openai", model = "gpt-4o-mini") },
+            envVars = emptyMap()
+        )
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = QueryCommand(
+            storeDirOverride = tempDir,
+            ragPipeline = object : RagPipeline(
+                EmbeddingSearchPipeline(LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")),
+                stubChatModel
+            ) {
+                override fun query(ragQuery: RagQuery): RagResult = RagResult("Answer", emptyList())
+            },
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+            configServiceOverride = configService,
+        )
+        cmd.questionArgs = listOf("hello")
+        cmd.verbose = true
+
+        cmd.call()
+
+        val errOutput = err.toString()
+        assertThat(errOutput).contains("openai")
+        assertThat(errOutput).contains("gpt-4o-mini")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 11: verbose mode prints user message sent to model to errorWriter
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `verbose mode prints user message sent to model to errorWriter`(@TempDir tempDir: Path) {
+        populateRepository(tempDir)
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createQueryCommand(tempDir, out, err)
+        cmd.questionArgs = listOf("what is the architecture")
+        cmd.verbose = true
+
+        cmd.call()
+
+        assertThat(err.toString()).contains("what is the architecture")
+    }
+
+    // -----------------------------------------------------------------------
     // Task 03-onnx-provider-wiring: default provider is OnnxChatModel
     // -----------------------------------------------------------------------
 

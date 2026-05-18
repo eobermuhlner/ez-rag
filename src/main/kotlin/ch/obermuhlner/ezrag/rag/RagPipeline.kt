@@ -65,6 +65,6 @@ Always cite which document(s) your answer is based on."""
         val response = chatModel.call(prompt)
         val answer = response.result?.output?.text ?: ""
 
-        return RagResult(answer = answer, sources = sources)
+        return RagResult(answer = answer, sources = sources, userMessage = userContent)
     }
 }
