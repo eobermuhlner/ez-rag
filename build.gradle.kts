@@ -4,6 +4,7 @@ plugins {
     id("org.springframework.boot") version "3.4.5"
     id("io.spring.dependency-management") version "1.1.7"
     application
+    jacoco
 }
 
 group = "ch.obermuhlner"
@@ -58,6 +59,8 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 }
 
 tasks.withType<Test> {
+    finalizedBy(tasks.jacocoTestReport)
+    System.getenv("TMPDIR")?.let { systemProperty("java.io.tmpdir", it) }
     useJUnitPlatform {
         val tags = System.getProperty("tags")
         val evalOnly = project.hasProperty("eval")
@@ -66,6 +69,14 @@ tasks.withType<Test> {
             tags != null -> includeTags(tags)
             else -> excludeTags("integration", "eval")
         }
+    }
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
     }
 }
 

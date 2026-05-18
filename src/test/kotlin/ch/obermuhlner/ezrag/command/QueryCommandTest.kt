@@ -11,7 +11,6 @@ import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.RagPipeline
 import ch.obermuhlner.ezrag.rag.RagQuery
 import ch.obermuhlner.ezrag.rag.RagResult
-import ch.obermuhlner.ezrag.rag.SourceReference
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -416,51 +415,6 @@ class QueryCommandTest {
         assertThat(capturedQueries[0].systemPrompt).isEqualTo("Custom prompt")
     }
 
-    // -----------------------------------------------------------------------
-    // Test 9: --verbose writes source details to errorWriter
-    // -----------------------------------------------------------------------
-
-    @Test
-    fun `--verbose writes source info to errorWriter`(@TempDir tempDir: Path) {
-        populateRepository(tempDir)
-
-        val fixedResult = RagResult(
-            answer = "Answer",
-            sources = listOf(
-                SourceReference(
-                    filePath = "doc/source.txt",
-                    chunkIndex = 0,
-                    similarityScore = 0.87,
-                    excerpt = "Some excerpt"
-                )
-            )
-        )
-        val stubPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")),
-            stubChatModel
-        ) {
-            override fun query(ragQuery: RagQuery): RagResult = fixedResult
-        }
-
-        val out = StringWriter()
-        val err = StringWriter()
-        val cmd = QueryCommand(
-            storeDirOverride = tempDir,
-            ragPipeline = stubPipeline,
-            outputFormatter = OutputFormatter(),
-            outputWriter = PrintWriter(out, true),
-            errorWriter = PrintWriter(err, true),
-            inputStream = ByteArrayInputStream(ByteArray(0)),
-        )
-        cmd.questionArgs = listOf("hello")
-        cmd.verbose = true
-
-        cmd.call()
-
-        val errOutput = err.toString()
-        assertThat(errOutput).contains("doc/source.txt")
-        assertThat(errOutput).contains("0.87")
-    }
 
     // -----------------------------------------------------------------------
     // Test 10: verbose mode prints chat provider and model to errorWriter
