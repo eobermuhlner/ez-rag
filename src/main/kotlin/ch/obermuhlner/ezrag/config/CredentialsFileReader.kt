@@ -19,8 +19,9 @@ class CredentialsFileReader(private val warningWriter: PrintWriter) {
 
         val openaiApiKey = data.string("openai-api-key") ?: data.string("openaiApiKey")
         val anthropicApiKey = data.string("anthropic-api-key") ?: data.string("anthropicApiKey")
+        val huggingfaceToken = data.string("huggingface-token") ?: data.string("huggingfaceToken")
 
-        return RawCredentials(openaiApiKey = openaiApiKey, anthropicApiKey = anthropicApiKey)
+        return RawCredentials(openaiApiKey = openaiApiKey, anthropicApiKey = anthropicApiKey, huggingfaceToken = huggingfaceToken)
     }
 
     private fun checkPermissions(path: String) {

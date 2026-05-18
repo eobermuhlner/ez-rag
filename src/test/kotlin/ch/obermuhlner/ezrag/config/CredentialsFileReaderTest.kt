@@ -100,6 +100,30 @@ class CredentialsFileReaderTest {
     }
 
     @Test
+    fun `parses huggingface-token in kebab-case`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("credentials.yml")
+        file.toFile().writeText("huggingface-token: hf-test-token\n")
+        setPosixPermissions(file, setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE))
+
+        val result = CredentialsFileReader(noOpWriter).read(file.toString())
+
+        assertThat(result).isNotNull
+        assertThat(result!!.huggingfaceToken).isEqualTo("hf-test-token")
+    }
+
+    @Test
+    fun `parses huggingfaceToken in camelCase as fallback`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("credentials.yml")
+        file.toFile().writeText("huggingfaceToken: hf-camel-token\n")
+        setPosixPermissions(file, setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE))
+
+        val result = CredentialsFileReader(noOpWriter).read(file.toString())
+
+        assertThat(result).isNotNull
+        assertThat(result!!.huggingfaceToken).isEqualTo("hf-camel-token")
+    }
+
+    @Test
     fun `emits no warning when file permissions are 0600`(@TempDir tempDir: Path) {
         val file = tempDir.resolve("credentials.yml")
         file.toFile().writeText("openai-api-key: sk-test\n")

@@ -33,6 +33,7 @@ class OnnxChatModel private constructor(
     private val cacheRoot: File,
     private val injectedBackend: GenerationBackend?,
     private val injectedTemplateFormat: TemplateFormat,
+    private val token: String? = null,
 ) : ChatModel {
 
     enum class TemplateFormat { CHATML, ZEPHYR }
@@ -81,12 +82,13 @@ class OnnxChatModel private constructor(
             else -> TemplateFormat.CHATML
         }
 
-        operator fun invoke(modelName: String, cacheRoot: File): OnnxChatModel =
+        operator fun invoke(modelName: String, cacheRoot: File, token: String? = null): OnnxChatModel =
             OnnxChatModel(
                 modelName = modelName,
                 cacheRoot = cacheRoot,
                 injectedBackend = null,
                 injectedTemplateFormat = TemplateFormat.CHATML,
+                token = token,
             )
 
         operator fun invoke(
@@ -129,7 +131,7 @@ class OnnxChatModel private constructor(
         if (!isCached) {
             System.err.println("Downloading ONNX chat model '$modelName' to cache...")
         }
-        val downloader = OnnxModelDownloader(modelName, cacheRoot)
+        val downloader = OnnxModelDownloader(modelName, cacheRoot, token = token)
         val tokenizerFile = downloader.ensureFile("tokenizer.json", "tokenizer.json")
         val tokenizerConfigFile = downloader.ensureFile("tokenizer_config.json", "tokenizer_config.json")
         val configFile = downloader.ensureFile("config.json", "config.json")

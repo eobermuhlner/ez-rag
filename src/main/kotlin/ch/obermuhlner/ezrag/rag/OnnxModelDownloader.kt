@@ -9,7 +9,7 @@ class OnnxModelDownloader(
     private val modelName: String,
     private val cacheRoot: File,
     private val baseUrl: String = "https://huggingface.co",
-    private val token: String? = System.getenv("HF_TOKEN") ?: System.getenv("HUGGINGFACE_TOKEN")
+    private val token: String? = null
 ) {
 
     private val modelDir: File get() = cacheRoot.resolve(modelName)

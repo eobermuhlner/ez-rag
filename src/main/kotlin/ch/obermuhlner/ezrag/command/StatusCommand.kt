@@ -197,6 +197,8 @@ class StatusCommand(
             openaiApiKeySource = CredentialSource.Unset,
             anthropicApiKey = null,
             anthropicApiKeySource = CredentialSource.Unset,
+            huggingfaceToken = null,
+            huggingfaceTokenSource = CredentialSource.Unset,
         )
     }
 }

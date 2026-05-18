@@ -5,8 +5,8 @@ import org.junit.jupiter.api.Test
 
 class CredentialsServiceTest {
 
-    private fun makeRawCredentials(openaiKey: String? = null, anthropicKey: String? = null): RawCredentials =
-        RawCredentials(openaiApiKey = openaiKey, anthropicApiKey = anthropicKey)
+    private fun makeRawCredentials(openaiKey: String? = null, anthropicKey: String? = null, huggingfaceToken: String? = null): RawCredentials =
+        RawCredentials(openaiApiKey = openaiKey, anthropicApiKey = anthropicKey, huggingfaceToken = huggingfaceToken)
 
     @Test
     fun `resolves OpenAI key from env var and records EnvVar source`() {
@@ -165,5 +165,79 @@ class CredentialsServiceTest {
         val credentials = service.resolve()
 
         assertThat(credentials.anthropicApiKeySource).isEqualTo(CredentialSource.File(homePath))
+    }
+
+    @Test
+    fun `resolves HuggingFace token from HF_TOKEN env var and records EnvVar source`() {
+        val service = CredentialsService(
+            envVars = mapOf("HF_TOKEN" to "hf-from-env"),
+            homeFileReader = { null }
+        )
+        val credentials = service.resolve()
+
+        assertThat(credentials.huggingfaceToken).isEqualTo("hf-from-env")
+        assertThat(credentials.huggingfaceTokenSource).isEqualTo(CredentialSource.EnvVar("HF_TOKEN"))
+    }
+
+    @Test
+    fun `resolves HuggingFace token from HUGGINGFACE_TOKEN env var when HF_TOKEN not set`() {
+        val service = CredentialsService(
+            envVars = mapOf("HUGGINGFACE_TOKEN" to "hf-from-long-env"),
+            homeFileReader = { null }
+        )
+        val credentials = service.resolve()
+
+        assertThat(credentials.huggingfaceToken).isEqualTo("hf-from-long-env")
+        assertThat(credentials.huggingfaceTokenSource).isEqualTo(CredentialSource.EnvVar("HUGGINGFACE_TOKEN"))
+    }
+
+    @Test
+    fun `HF_TOKEN beats HUGGINGFACE_TOKEN env var for HuggingFace token`() {
+        val service = CredentialsService(
+            envVars = mapOf("HF_TOKEN" to "hf-wins", "HUGGINGFACE_TOKEN" to "hf-loses"),
+            homeFileReader = { null }
+        )
+        val credentials = service.resolve()
+
+        assertThat(credentials.huggingfaceToken).isEqualTo("hf-wins")
+        assertThat(credentials.huggingfaceTokenSource).isEqualTo(CredentialSource.EnvVar("HF_TOKEN"))
+    }
+
+    @Test
+    fun `resolves HuggingFace token from credentials file when no env var set`() {
+        val homePath = "/home/.ez-rag/credentials.yml"
+        val service = CredentialsService(
+            envVars = emptyMap(),
+            homeFileReader = { makeRawCredentials(huggingfaceToken = "hf-from-file") to homePath }
+        )
+        val credentials = service.resolve()
+
+        assertThat(credentials.huggingfaceToken).isEqualTo("hf-from-file")
+        assertThat(credentials.huggingfaceTokenSource).isEqualTo(CredentialSource.File(homePath))
+    }
+
+    @Test
+    fun `HF_TOKEN env var beats credentials file for HuggingFace token`() {
+        val homePath = "/home/.ez-rag/credentials.yml"
+        val service = CredentialsService(
+            envVars = mapOf("HF_TOKEN" to "hf-env-wins"),
+            homeFileReader = { makeRawCredentials(huggingfaceToken = "hf-file-loses") to homePath }
+        )
+        val credentials = service.resolve()
+
+        assertThat(credentials.huggingfaceToken).isEqualTo("hf-env-wins")
+        assertThat(credentials.huggingfaceTokenSource).isEqualTo(CredentialSource.EnvVar("HF_TOKEN"))
+    }
+
+    @Test
+    fun `records Unset when neither env var nor file provides HuggingFace token`() {
+        val service = CredentialsService(
+            envVars = emptyMap(),
+            homeFileReader = { null }
+        )
+        val credentials = service.resolve()
+
+        assertThat(credentials.huggingfaceToken).isNull()
+        assertThat(credentials.huggingfaceTokenSource).isEqualTo(CredentialSource.Unset)
     }
 }

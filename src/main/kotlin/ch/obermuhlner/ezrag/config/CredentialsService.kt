@@ -17,6 +17,8 @@ class CredentialsService(
 
         val openaiEnvKey = envVars["OPENAI_API_KEY"]
         val anthropicEnvKey = envVars["ANTHROPIC_API_KEY"]
+        val hfEnvToken = envVars["HF_TOKEN"]
+        val huggingfaceEnvToken = envVars["HUGGINGFACE_TOKEN"]
 
         val openaiApiKey: String?
         val openaiApiKeySource: CredentialSource
@@ -50,11 +52,32 @@ class CredentialsService(
             anthropicApiKeySource = CredentialSource.Unset
         }
 
+        val huggingfaceToken: String?
+        val huggingfaceTokenSource: CredentialSource
+        if (hfEnvToken != null) {
+            huggingfaceToken = hfEnvToken
+            huggingfaceTokenSource = CredentialSource.EnvVar("HF_TOKEN")
+        } else if (huggingfaceEnvToken != null) {
+            huggingfaceToken = huggingfaceEnvToken
+            huggingfaceTokenSource = CredentialSource.EnvVar("HUGGINGFACE_TOKEN")
+        } else if (projectLocalCredentials?.huggingfaceToken != null && projectLocalPath != null) {
+            huggingfaceToken = projectLocalCredentials.huggingfaceToken
+            huggingfaceTokenSource = CredentialSource.File(projectLocalPath)
+        } else if (homeCredentials?.huggingfaceToken != null && homePath != null) {
+            huggingfaceToken = homeCredentials.huggingfaceToken
+            huggingfaceTokenSource = CredentialSource.File(homePath)
+        } else {
+            huggingfaceToken = null
+            huggingfaceTokenSource = CredentialSource.Unset
+        }
+
         return Credentials(
             openaiApiKey = openaiApiKey,
             openaiApiKeySource = openaiApiKeySource,
             anthropicApiKey = anthropicApiKey,
             anthropicApiKeySource = anthropicApiKeySource,
+            huggingfaceToken = huggingfaceToken,
+            huggingfaceTokenSource = huggingfaceTokenSource,
         )
     }
 }

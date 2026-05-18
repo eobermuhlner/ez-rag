@@ -5,6 +5,8 @@ data class Credentials(
     val openaiApiKeySource: CredentialSource,
     val anthropicApiKey: String?,
     val anthropicApiKeySource: CredentialSource,
+    val huggingfaceToken: String? = null,
+    val huggingfaceTokenSource: CredentialSource = CredentialSource.Unset,
 )
 
 sealed class CredentialSource {
@@ -21,4 +23,5 @@ sealed class CredentialSource {
 data class RawCredentials(
     val openaiApiKey: String?,
     val anthropicApiKey: String?,
+    val huggingfaceToken: String? = null,
 )

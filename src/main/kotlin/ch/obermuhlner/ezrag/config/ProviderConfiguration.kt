@@ -78,7 +78,7 @@ class ProviderConfiguration(
             "passthrough" -> PassthroughChatModel()
             "onnx" -> {
                 val cacheRoot = java.io.File(System.getProperty("user.home") + "/.ez-rag/models/")
-                OnnxChatModel(modelName = modelName, cacheRoot = cacheRoot)
+                OnnxChatModel(modelName = modelName, cacheRoot = cacheRoot, token = credentials.huggingfaceToken)
             }
             else -> throw IllegalArgumentException(
                 "Unsupported chat provider '${config.provider}'. Valid providers are: openai, anthropic, ollama, onnx, passthrough."
@@ -90,8 +90,9 @@ class ProviderConfiguration(
     fun reranker(): Reranker? {
         val config = configService.resolve()
         if (config.rerankModel.isEmpty()) return null
+        val credentials = credentialsService.resolve()
         val cacheDir = System.getProperty("user.home") + "/.ez-rag/models/"
-        return OnnxCrossEncoderReranker(config.rerankModel, cacheDir)
+        return OnnxCrossEncoderReranker(config.rerankModel, cacheDir, token = credentials.huggingfaceToken)
     }
 
     @Bean

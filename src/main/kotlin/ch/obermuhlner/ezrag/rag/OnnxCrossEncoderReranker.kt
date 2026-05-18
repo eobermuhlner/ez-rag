@@ -9,12 +9,13 @@ import java.nio.LongBuffer
 
 class OnnxCrossEncoderReranker(
     private val modelName: String,
-    cacheDir: String
+    cacheDir: String,
+    token: String? = null,
 ) : Reranker {
 
     override val name: String get() = modelName
 
-    private val downloader = OnnxModelDownloader(modelName, File(cacheDir))
+    private val downloader = OnnxModelDownloader(modelName, File(cacheDir), token = token)
 
     private val tokenizer: HuggingFaceTokenizer by lazy {
         val tokenizerFile = downloader.ensureFile("tokenizer.json", "tokenizer.json")
