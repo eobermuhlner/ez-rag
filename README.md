@@ -76,6 +76,7 @@ echo "What is X?" | ez-rag search
 | `query [<word>...]`            | Retrieve relevant chunks and answer using an LLM. Reads question from positional args or stdin.    |
 | `status`                       | Show store health, aggregate counts, active configuration, and credential status.                  |
 | `search [<word>...]`           | Search returning raw chunks without LLM involvement. Defaults to hybrid (BM25 + embedding) mode; override with `--mode`. Reads question from positional args or stdin. |
+| `reingest`                     | Re-ingest all stale documents (mtime changed since last ingest). Use `--all` to force re-ingest of every document. |
 | `eval <corpus-dir>`            | Evaluate retrieval quality against a corpus of scenarios. Exits 1 if any threshold fails.          |
 | `mcp-server`                   | Run as an MCP server over stdio (for Claude Code and other agentic tools).                         |
 | `shell`                        | _(not yet implemented)_ Interactive REPL mode.                                                     |
@@ -257,6 +258,56 @@ If no store exists, `list` prints an error to stderr and exits with code `1`.
 | Flag                | Description                                             |
 |---------------------|---------------------------------------------------------|
 | `--output-format`   | Output format: `text` (default) or `json`.              |
+
+### reingest
+
+Re-ingest all stale documents — those whose filesystem mtime differs from the mtime stored at ingest time:
+
+```sh
+ez-rag reingest
+```
+
+Output:
+```
+Stale documents: 2
+Re-ingesting: docs/getting-started.md
+Re-ingesting: docs/configuration.md
+2 files re-ingested, 18 chunks created, 0 skipped
+```
+
+Use `--all` to force re-ingest of every document in the store regardless of staleness:
+
+```sh
+ez-rag reingest --all
+```
+
+Output (the `Stale documents:` line is omitted in `--all` mode):
+```
+Re-ingesting: docs/getting-started.md
+Re-ingesting: docs/configuration.md
+Re-ingesting: docs/api-reference.md
+3 files re-ingested, 31 chunks created, 0 skipped
+```
+
+If a source file no longer exists on disk, a warning is printed on stderr and the file is skipped (the store entry is left untouched — use `delete` to remove it explicitly):
+
+```
+WARN: source file not found, skipping: /absolute/path/to/missing.md
+```
+
+Pass `--quiet` to suppress per-file `Re-ingesting:` lines and show only the summary:
+
+```sh
+ez-rag reingest --quiet
+```
+
+| Flag                 | Default | Description                                                    |
+|----------------------|---------|----------------------------------------------------------------|
+| `--all`              | off     | Re-ingest every document, not just stale ones                  |
+| `--quiet` / `-q`     | off     | Suppress per-file output; print only the final summary line    |
+| `--chunk-size N`     | `1000`  | Token count per chunk                                          |
+| `--chunk-overlap N`  | `200`   | Overlap between consecutive chunks                             |
+| `--store-dir <path>` | auto    | Target a specific store directory instead of the auto-resolved one |
 
 ### status
 
@@ -802,6 +853,24 @@ Returns per-chunk metadata for an ingested file. Optionally includes raw chunk t
 | `file`       | String          | Absolute path that was matched against                                      |
 | `chunks`     | List of objects | Each entry has `chunkIndex`, `charCount`, `mtime`, and optionally `text`    |
 | `error`      | String or null  | Set when an error occurred or the file was not found                        |
+
+#### `reingest`
+
+Re-ingests stale documents (those whose filesystem mtime changed since the last ingest). Pass `forceAll: true` to re-ingest every document regardless of staleness. The store is saved to disk after each successful call.
+
+| Parameter      | Type    | Required | Default | Description                                              |
+|----------------|---------|----------|---------|----------------------------------------------------------|
+| `forceAll`     | Boolean | no       | `false` | If true, re-ingest every document regardless of staleness |
+| `chunkSize`    | Int     | no       | `1000`  | Chunk size in characters                                 |
+| `chunkOverlap` | Int     | no       | `200`   | Overlap between consecutive chunks                       |
+
+| Return field      | Type           | Description                                                               |
+|-------------------|----------------|---------------------------------------------------------------------------|
+| `staleFound`      | Int or null    | Number of documents identified as stale; `null` when `forceAll` is `true` |
+| `filesReIngested` | Int            | Number of files successfully re-ingested                                  |
+| `chunksCreated`   | Int            | Number of chunks added to the store                                       |
+| `filesSkipped`    | Int            | Source files not found on disk (warned and skipped)                       |
+| `error`           | String or null | Set when an error occurred                                                |
 
 #### `ingest`
 
