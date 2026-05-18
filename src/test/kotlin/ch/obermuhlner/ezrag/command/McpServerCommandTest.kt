@@ -5,12 +5,16 @@ import ch.obermuhlner.ezrag.config.ProviderConfiguration
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.io.TempDir
 import org.springframework.ai.tool.ToolCallbackProvider
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Import
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.context.junit.jupiter.SpringExtension
+import java.nio.file.Path
 
 /**
  * Verifies that McpServerCommand is present in the Spring application context.
@@ -25,6 +29,18 @@ import org.springframework.test.context.junit.jupiter.SpringExtension
     "spring.ai.mcp.server.enabled=false"
 ])
 class McpServerCommandTest {
+
+    companion object {
+        @TempDir
+        @JvmField
+        var tempDir: Path? = null
+
+        @DynamicPropertySource
+        @JvmStatic
+        fun storeDirProperty(registry: DynamicPropertyRegistry) {
+            registry.add("ez.rag.storeDir") { tempDir!!.toAbsolutePath().toString() }
+        }
+    }
 
     @Autowired
     private lateinit var applicationContext: ApplicationContext

@@ -8,6 +8,17 @@ import java.nio.file.Path
 class ConfigFileReaderTest {
 
     @Test
+    fun `model defaults to empty string when key is absent from config file`(@TempDir tempDir: Path) {
+        val configFile = tempDir.resolve("config.yml").toFile()
+        configFile.writeText("provider: openai\n")
+
+        val config = readConfigFile(configFile.absolutePath)
+
+        assertThat(config).isNotNull()
+        assertThat(config!!.model).isEqualTo("")
+    }
+
+    @Test
     fun `rerankModel defaults to cross-encoder model when key is absent from config file`(@TempDir tempDir: Path) {
         val configFile = tempDir.resolve("config.yml").toFile()
         configFile.writeText("provider: openai\n")

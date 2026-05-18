@@ -14,7 +14,7 @@ fun readConfigFile(path: String = System.getProperty("user.home") + "/.ez-rag/co
     return EzRagConfig(
         provider = data.string("provider") ?: "openai",
         embeddingProvider = data.string("embeddingProvider") ?: data.string("embedding-provider") ?: "openai",
-        model = data.string("model") ?: "gpt-4o-mini",
+        model = data.string("model") ?: "",
         embeddingModel = data.string("embeddingModel") ?: data.string("embedding-model") ?: "text-embedding-3-small",
         ollamaUrl = data.string("ollamaUrl") ?: data.string("ollama-url") ?: "http://localhost:11434",
         storeDir = data.string("storeDir") ?: data.string("store-dir"),

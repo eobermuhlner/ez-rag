@@ -51,15 +51,15 @@ Always cite which document(s) your answer is based on."""
             ragQuery.systemPrompt
         }
 
-        val contextText = searchResult.chunks.mapIndexed { idx, chunk ->
-            "--- Context: ${chunk.filePath} ---\n${chunk.content}"
-        }.joinToString("\n\n")
+        val contextText = searchResult.chunks.joinToString("\n\n") { chunk ->
+            "<document source=\"${chunk.filePath}\">\n${chunk.content}\n</document>"
+        }
 
         if (chatModel is PassthroughChatModel) {
             return RagResult(answer = contextText, sources = sources)
         }
 
-        val userContent = "$contextText\n\n${ragQuery.question}"
+        val userContent = "$contextText\n\n<question>${ragQuery.question}</question>"
 
         val prompt = Prompt(listOf(SystemMessage(effectiveSystemPrompt), UserMessage(userContent)))
         val response = chatModel.call(prompt)

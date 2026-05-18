@@ -47,6 +47,6 @@ class ConfigService(
      */
     fun resolveExplicitStoreDir(cliFlags: CliFlags = CliFlags()): String? {
         val rawFileStoreDir = configFileSource()?.storeDir
-        return cliFlags.storeDir ?: envVars["STORE_DIR"] ?: rawFileStoreDir
+        return cliFlags.storeDir ?: startupFlags.storeDir ?: envVars["STORE_DIR"] ?: rawFileStoreDir
     }
 }

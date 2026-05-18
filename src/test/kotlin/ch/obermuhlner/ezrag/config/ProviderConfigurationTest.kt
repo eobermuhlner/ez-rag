@@ -17,7 +17,7 @@ class ProviderConfigurationTest {
     private fun configServiceWith(
         provider: String = "openai",
         embeddingProvider: String = "openai",
-        model: String = "gpt-4o-mini",
+        model: String = "",
         embeddingModel: String = "text-embedding-3-small",
         ollamaUrl: String = "http://localhost:11434"
     ): ConfigService = ConfigService(
@@ -265,8 +265,51 @@ class ProviderConfigurationTest {
 
     @Test
     fun `chatModel returns OnnxChatModel when provider is onnx`() {
-        val config = providerConfigWith(provider = "onnx", model = "Xenova/TinyLlama-1.1B-Chat-v1.0", openaiApiKey = null)
+        val config = providerConfigWith(provider = "onnx", model = "onnx-community/Qwen2.5-1.5B-Instruct", openaiApiKey = null)
         assertThat(config.chatModel()).isInstanceOf(OnnxChatModel::class.java)
+    }
+
+    // ---- per-provider default models ----
+
+    @Test
+    fun `defaultChatModelFor returns gpt-4o-mini for openai`() {
+        assertThat(ProviderConfiguration.defaultChatModelFor("openai")).isEqualTo("gpt-4o-mini")
+    }
+
+    @Test
+    fun `defaultChatModelFor returns claude-haiku-4-5-20251001 for anthropic`() {
+        assertThat(ProviderConfiguration.defaultChatModelFor("anthropic")).isEqualTo("claude-haiku-4-5-20251001")
+    }
+
+    @Test
+    fun `defaultChatModelFor returns llama3_2 for ollama`() {
+        assertThat(ProviderConfiguration.defaultChatModelFor("ollama")).isEqualTo("llama3.2")
+    }
+
+    @Test
+    fun `defaultChatModelFor returns Qwen2_5 for onnx`() {
+        assertThat(ProviderConfiguration.defaultChatModelFor("onnx")).isEqualTo("onnx-community/Qwen2.5-1.5B-Instruct")
+    }
+
+    @Test
+    fun `openai chatModel uses gpt-4o-mini when model is empty`() {
+        val config = providerConfigWith(provider = "openai", model = "", openaiApiKey = "sk-test")
+        val model = config.chatModel() as OpenAiChatModel
+        assertThat(model.defaultOptions.model).isEqualTo("gpt-4o-mini")
+    }
+
+    @Test
+    fun `anthropic chatModel uses claude-haiku-4-5-20251001 when model is empty`() {
+        val config = providerConfigWith(provider = "anthropic", model = "", anthropicApiKey = "sk-ant-test", openaiApiKey = null)
+        val model = config.chatModel() as AnthropicChatModel
+        assertThat(model.defaultOptions.model).isEqualTo("claude-haiku-4-5-20251001")
+    }
+
+    @Test
+    fun `ollama chatModel uses llama3_2 when model is empty`() {
+        val config = providerConfigWith(provider = "ollama", model = "", openaiApiKey = null)
+        val model = config.chatModel() as OllamaChatModel
+        assertThat(model.defaultOptions.model).isEqualTo("llama3.2")
     }
 
     @Test

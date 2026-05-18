@@ -3,6 +3,7 @@ package ch.obermuhlner.ezrag.command
 import ch.obermuhlner.ezrag.EzRagCommand
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
+import ch.obermuhlner.ezrag.config.ProviderConfiguration
 import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
@@ -139,13 +140,12 @@ class QueryCommand(
             val effectiveConfigService = configServiceOverride ?: springConfigService
             if (effectiveConfigService != null) {
                 val config = effectiveConfigService.resolve()
-                errorWriter.println("  Chat provider: ${config.provider}, model: ${config.model}")
+                val effectiveModel = config.model.ifEmpty { ProviderConfiguration.defaultChatModelFor(config.provider) }
+                errorWriter.println("Chat provider: ${config.provider}  model: $effectiveModel")
             }
             result.userMessage?.let { msg ->
-                errorWriter.println("  User message: $msg")
-            }
-            result.sources.forEach { source ->
-                errorWriter.println("  Source: ${source.filePath}  score=${source.similarityScore}  chunk=${source.chunkIndex}")
+                errorWriter.println("User message:")
+                errorWriter.println("$msg")
             }
         }
 

@@ -28,6 +28,16 @@ class ProviderConfiguration(
     private val credentialsService: CredentialsService,
 ) {
 
+    companion object {
+        fun defaultChatModelFor(provider: String): String = when (provider) {
+            "openai"      -> "gpt-4o-mini"
+            "anthropic"   -> "claude-haiku-4-5-20251001"
+            "ollama"      -> "llama3.2"
+            "onnx"        -> "onnx-community/Qwen2.5-1.5B-Instruct"
+            else          -> ""
+        }
+    }
+
     private fun requireApiKey(key: String?, source: CredentialSource, envVarName: String): String {
         if (source is CredentialSource.Unset) {
             throw IllegalStateException(
@@ -43,7 +53,7 @@ class ProviderConfiguration(
     @Bean
     fun chatModel(): ChatModel {
         val config = configService.resolve()
-        val modelName = config.model
+        val modelName = config.model.ifEmpty { defaultChatModelFor(config.provider) }
         val credentials = credentialsService.resolve()
         return when (config.provider) {
             "openai" -> {

@@ -96,9 +96,36 @@ class RagPipelineTest {
             .firstOrNull()
         assertThat(userMessage).isNotNull()
         val content = userMessage!!.text
-        assertThat(content).contains("--- Context:")
+        assertThat(content).contains("<document source=")
         assertThat(content).contains("The capital of France is Paris.")
-        assertThat(content).endsWith("What is the capital of France?")
+        assertThat(content).endsWith("<question>What is the capital of France?</question>")
+    }
+
+    @Test
+    fun `UserMessage wraps each document in XML document tags with source attribute`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+
+        val doc = Document.builder()
+            .text("The capital of France is Paris.")
+            .metadata(mapOf("source" to "geography.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc))
+
+        var capturedPrompt: Prompt? = null
+        val capturingChatModel: ChatModel = ChatModel { prompt ->
+            capturedPrompt = prompt
+            ChatResponse(listOf(Generation(AssistantMessage("Paris"))))
+        }
+
+        val pipeline = createPipeline(repository, capturingChatModel)
+        val query = RagQuery(question = "What is the capital of France?", topK = 5, systemPrompt = "", modelOverride = null)
+        pipeline.query(query)
+
+        val content = capturedPrompt!!.instructions.filterIsInstance<UserMessage>().first().text
+        assertThat(content).contains("<document source=\"geography.txt\">")
+        assertThat(content).contains("The capital of France is Paris.")
+        assertThat(content).contains("</document>")
+        assertThat(content).contains("<question>What is the capital of France?</question>")
     }
 
     @Test
@@ -216,7 +243,7 @@ class RagPipelineTest {
         val query = RagQuery(question = "What is the capital of France?", topK = 5, systemPrompt = "", modelOverride = null)
         val result = pipeline.query(query)
 
-        val expectedContextText = "--- Context: geography.txt ---\nThe capital of France is Paris."
+        val expectedContextText = "<document source=\"geography.txt\">\nThe capital of France is Paris.\n</document>"
         assertThat(result.answer).isEqualTo(expectedContextText)
         assertThat(result.sources).hasSize(1)
         assertThat(result.sources.first().filePath).isEqualTo("geography.txt")
