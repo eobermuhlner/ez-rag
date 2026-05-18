@@ -57,6 +57,9 @@ ez-rag query --provider openai "Summarize the architecture."
 # Fully local setup with Ollama (no API key)
 ez-rag ingest --embedding-provider ollama ./docs
 ez-rag query --provider ollama --embedding-provider ollama "What are the main features?"
+
+# Fully local LLM (no API key, downloads ~1 GB on first run)
+ez-rag query --provider onnx "What are the main features?"
 ```
 
 ```sh
@@ -505,7 +508,7 @@ These flags apply to all subcommands:
 
 | Flag                      | Default                  | Description                                    |
 |---------------------------|--------------------------|------------------------------------------------|
-| `--provider`              | `passthrough`            | Chat provider: `passthrough`, `openai`, `anthropic`, `ollama` |
+| `--provider`              | `passthrough`            | Chat provider: `passthrough`, `onnx`, `openai`, `anthropic`, `ollama` |
 | `--embedding-provider`    | `onnx`                   | Embedding provider: `onnx`, `openai`, `ollama` |
 | `--model`                 | provider default         | Override the chat model name                   |
 | `--embedding-model`       | provider default         | Override the embedding model name              |
@@ -520,12 +523,13 @@ These flags apply to all subcommands:
 
 ### Chat providers
 
-| Provider      | Default model       | API key (env var or credentials file) | Notes                                               |
-|---------------|---------------------|---------------------------------------|-----------------------------------------------------|
-| `passthrough` | —                   | —                                     | Default. Returns retrieved context chunks directly; no LLM call, no API key required. |
-| `openai`      | `gpt-4o-mini`       | `OPENAI_API_KEY`                      |                                                     |
-| `anthropic`   | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY`                   |                                                     |
-| `ollama`      | `llama3.2`          | `OLLAMA_BASE_URL` (optional)          | Requires a running Ollama instance                  |
+| Provider      | Default model                    | API key (env var or credentials file) | Notes                                               |
+|---------------|----------------------------------|---------------------------------------|-----------------------------------------------------|
+| `passthrough` | —                                | —                                     | **Default.** Returns retrieved context chunks directly; no LLM call, no API key required. |
+| `onnx`        | `Xenova/TinyLlama-1.1B-Chat-v1.0` | —                                     | Fully local LLM; model downloaded automatically on first use to `~/.ez-rag/models/`. No API key required. |
+| `openai`      | `gpt-4o-mini`                    | `OPENAI_API_KEY`                      |                                                     |
+| `anthropic`   | `claude-sonnet-4-6`              | `ANTHROPIC_API_KEY`                   |                                                     |
+| `ollama`      | `llama3.2`                       | `OLLAMA_BASE_URL` (optional)          | Requires a running Ollama instance                  |
 
 ### Embedding providers
 

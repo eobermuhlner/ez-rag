@@ -1,7 +1,12 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.config.ConfigService
+import ch.obermuhlner.ezrag.config.CredentialsService
+import ch.obermuhlner.ezrag.config.EzRagConfig
+import ch.obermuhlner.ezrag.config.ProviderConfiguration
 import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
+import ch.obermuhlner.ezrag.rag.PassthroughChatModel
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.RagPipeline
 import ch.obermuhlner.ezrag.rag.RagQuery
@@ -455,5 +460,27 @@ class QueryCommandTest {
         val errOutput = err.toString()
         assertThat(errOutput).contains("doc/source.txt")
         assertThat(errOutput).contains("0.87")
+    }
+
+    // -----------------------------------------------------------------------
+    // Task 03-onnx-provider-wiring: default provider is OnnxChatModel
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `default EzRagConfig provider produces PassthroughChatModel`() {
+        val defaultConfig = EzRagConfig()
+        val configService = ConfigService(
+            configFileSource = { defaultConfig },
+            envVars = emptyMap()
+        )
+        val credentialsService = CredentialsService(
+            envVars = emptyMap(),
+            homeFileReader = { null }
+        )
+        val providerConfig = ProviderConfiguration(configService, credentialsService)
+
+        val chatModel = providerConfig.chatModel()
+
+        assertThat(chatModel).isInstanceOf(PassthroughChatModel::class.java)
     }
 }

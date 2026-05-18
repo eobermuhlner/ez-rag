@@ -15,6 +15,7 @@ import org.springframework.ai.openai.OpenAiEmbeddingModel
 import org.springframework.ai.openai.OpenAiEmbeddingOptions
 import org.springframework.ai.openai.api.OpenAiApi
 import org.springframework.ai.transformers.TransformersEmbeddingModel
+import ch.obermuhlner.ezrag.rag.OnnxChatModel
 import ch.obermuhlner.ezrag.rag.OnnxCrossEncoderReranker
 import ch.obermuhlner.ezrag.rag.PassthroughChatModel
 import ch.obermuhlner.ezrag.rag.Reranker
@@ -75,8 +76,12 @@ class ProviderConfiguration(
                     .build()
             }
             "passthrough" -> PassthroughChatModel()
+            "onnx" -> {
+                val cacheRoot = java.io.File(System.getProperty("user.home") + "/.ez-rag/models/")
+                OnnxChatModel(modelName = modelName, cacheRoot = cacheRoot)
+            }
             else -> throw IllegalArgumentException(
-                "Unsupported chat provider '${config.provider}'. Valid providers are: openai, anthropic, ollama, passthrough."
+                "Unsupported chat provider '${config.provider}'. Valid providers are: openai, anthropic, ollama, onnx, passthrough."
             )
         }
     }

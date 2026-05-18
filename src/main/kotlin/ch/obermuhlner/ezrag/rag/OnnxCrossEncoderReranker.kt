@@ -5,9 +5,7 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import java.io.File
-import java.net.URI
 import java.nio.LongBuffer
-import java.nio.file.Files
 
 class OnnxCrossEncoderReranker(
     private val modelName: String,
@@ -16,15 +14,15 @@ class OnnxCrossEncoderReranker(
 
     override val name: String get() = modelName
 
-    private val modelDir: File = File(cacheDir).resolve(modelName)
+    private val downloader = OnnxModelDownloader(modelName, File(cacheDir))
 
     private val tokenizer: HuggingFaceTokenizer by lazy {
-        val tokenizerFile = ensureCached("tokenizer.json", "tokenizer.json")
+        val tokenizerFile = downloader.ensureFile("tokenizer.json", "tokenizer.json")
         HuggingFaceTokenizer.newInstance(tokenizerFile.toPath())
     }
 
     private val ortSession: OrtSession by lazy {
-        val modelFile = ensureCachedOnnxModel()
+        val modelFile = downloader.ensureCachedOnnxModel("onnx/model.onnx", "model.onnx")
         val env = OrtEnvironment.getEnvironment()
         env.createSession(modelFile.absolutePath, OrtSession.SessionOptions())
     }
@@ -105,53 +103,4 @@ class OnnxCrossEncoderReranker(
         }
     }
 
-    private fun ensureCached(remotePath: String, localFileName: String): File {
-        val localFile = modelDir.resolve(localFileName)
-        if (!localFile.exists()) {
-            modelDir.mkdirs()
-            val url = "https://huggingface.co/$modelName/resolve/main/$remotePath"
-            downloadFile(url, localFile)
-        }
-        return localFile
-    }
-
-    private fun ensureCachedOnnxModel(): File {
-        // Try onnx/model.onnx first, then model.onnx
-        val onnxSubDir = modelDir.resolve("onnx")
-        val onnxSubDirModel = onnxSubDir.resolve("model.onnx")
-        if (onnxSubDirModel.exists()) return onnxSubDirModel
-
-        val directModel = modelDir.resolve("model.onnx")
-        if (directModel.exists()) return directModel
-
-        // Try to download from onnx/model.onnx on HuggingFace
-        try {
-            onnxSubDir.mkdirs()
-            val url = "https://huggingface.co/$modelName/resolve/main/onnx/model.onnx"
-            downloadFile(url, onnxSubDirModel)
-            return onnxSubDirModel
-        } catch (e: Exception) {
-            // Fall back to model.onnx at root
-        }
-
-        modelDir.mkdirs()
-        val url = "https://huggingface.co/$modelName/resolve/main/model.onnx"
-        downloadFile(url, directModel)
-        return directModel
-    }
-
-    private fun downloadFile(url: String, destination: File) {
-        val tempFile = Files.createTempFile(destination.parentFile.toPath(), "download-", ".tmp").toFile()
-        try {
-            URI(url).toURL().openStream().use { input ->
-                tempFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            tempFile.renameTo(destination)
-        } catch (e: Exception) {
-            tempFile.delete()
-            throw RuntimeException("Failed to download $url to $destination: ${e.message}", e)
-        }
-    }
 }

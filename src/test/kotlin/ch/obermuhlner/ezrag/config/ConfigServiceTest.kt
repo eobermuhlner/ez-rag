@@ -41,7 +41,7 @@ class ConfigServiceTest {
         val resolved = service.resolve()
         assertThat(resolved.provider).isEqualTo("passthrough")
         assertThat(resolved.embeddingProvider).isEqualTo("onnx")
-        assertThat(resolved.model).isEqualTo("")
+        assertThat(resolved.model).isEqualTo("Xenova/TinyLlama-1.1B-Chat-v1.0")
         assertThat(resolved.embeddingModel).isEqualTo("all-MiniLM-L6-v2")
         assertThat(resolved.ollamaUrl).isEqualTo("http://localhost:11434")
         assertThat(resolved.storeDir).isEqualTo(".ez-rag")
@@ -58,7 +58,7 @@ class ConfigServiceTest {
         val config = EzRagConfig()
         assertThat(config.provider).isEqualTo("passthrough")
         assertThat(config.embeddingProvider).isEqualTo("onnx")
-        assertThat(config.model).isEqualTo("")
+        assertThat(config.model).isEqualTo("Xenova/TinyLlama-1.1B-Chat-v1.0")
         assertThat(config.embeddingModel).isEqualTo("all-MiniLM-L6-v2")
         assertThat(config.ollamaUrl).isEqualTo("http://localhost:11434")
         // storeDir is null by default in EzRagConfig; resolved storeDir defaults to ".ez-rag" in ConfigService

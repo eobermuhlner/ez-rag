@@ -9,6 +9,7 @@ import org.springframework.ai.ollama.OllamaEmbeddingModel
 import org.springframework.ai.openai.OpenAiChatModel
 import org.springframework.ai.openai.OpenAiEmbeddingModel
 import org.springframework.ai.transformers.TransformersEmbeddingModel
+import ch.obermuhlner.ezrag.rag.OnnxChatModel
 import ch.obermuhlner.ezrag.rag.PassthroughChatModel
 
 class ProviderConfigurationTest {
@@ -258,5 +259,25 @@ class ProviderConfigurationTest {
     fun `embeddingModel does not throw for onnx embedding provider when both keys are Unset`() {
         val config = providerConfigWith(embeddingProvider = "onnx", openaiApiKey = null, anthropicApiKey = null)
         assertThat(config.embeddingModel()).isInstanceOf(TransformersEmbeddingModel::class.java)
+    }
+
+    // ---- Task 03-onnx-provider-wiring: ONNX chat provider ----
+
+    @Test
+    fun `chatModel returns OnnxChatModel when provider is onnx`() {
+        val config = providerConfigWith(provider = "onnx", model = "Xenova/TinyLlama-1.1B-Chat-v1.0", openaiApiKey = null)
+        assertThat(config.chatModel()).isInstanceOf(OnnxChatModel::class.java)
+    }
+
+    @Test
+    fun `chatModel throws IllegalArgumentException for unknown provider listing all valid providers`() {
+        val config = providerConfigWith(provider = "unknown-provider")
+        assertThatThrownBy { config.chatModel() }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("openai")
+            .hasMessageContaining("anthropic")
+            .hasMessageContaining("ollama")
+            .hasMessageContaining("onnx")
+            .hasMessageContaining("passthrough")
     }
 }

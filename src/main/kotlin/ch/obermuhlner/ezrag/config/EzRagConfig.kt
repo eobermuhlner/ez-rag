@@ -3,7 +3,7 @@ package ch.obermuhlner.ezrag.config
 data class EzRagConfig(
     val provider: String = "passthrough",
     val embeddingProvider: String = "onnx",
-    val model: String = "",
+    val model: String = "Xenova/TinyLlama-1.1B-Chat-v1.0",
     val embeddingModel: String = "all-MiniLM-L6-v2",
     val ollamaUrl: String = "http://localhost:11434",
     /**
