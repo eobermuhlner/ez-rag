@@ -92,13 +92,12 @@ class ReIngestServiceTest {
         service.reIngest(forceAll = false)
 
         // Verify store contents: new content should be present
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        repo.load()
-        val chunks = repo.getChunksForFile(sourceFile.toAbsolutePath().normalize().toString())
-
-        val allText = chunks.joinToString(" ") { it.text }
-        assertThat(allText).contains("Berlin")
-        assertThat(allText).doesNotContain("Paris")
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val chunks = repo.getChunksForFile(sourceFile.toAbsolutePath().normalize().toString())
+            val allText = chunks.joinToString(" ") { it.text }
+            assertThat(allText).contains("Berlin")
+            assertThat(allText).doesNotContain("Paris")
+        }
     }
 
     @Test

@@ -12,6 +12,8 @@ import java.io.PrintWriter
 import java.io.StringWriter
 import java.nio.file.Path
 
+
+
 class IngestServiceTest {
 
     private val fakeEmbeddingModel: EmbeddingModel = object : EmbeddingModel {
@@ -159,14 +161,14 @@ class IngestServiceTest {
 
         service.ingest(listOf(relativeFile))
 
-        val repository = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repository.load()
-        val metadata = repository.getMetadata()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repository ->
+            val metadata = repository.getMetadata()
 
-        val absolutePath = sampleFile.toAbsolutePath().normalize().toString()
-        assertThat(metadata.documents).anyMatch { it.path == absolutePath }
-        // Ensure no relative paths are stored
-        assertThat(metadata.documents).allMatch { java.nio.file.Paths.get(it.path).isAbsolute }
+            val absolutePath = sampleFile.toAbsolutePath().normalize().toString()
+            assertThat(metadata.documents).anyMatch { it.path == absolutePath }
+            // Ensure no relative paths are stored
+            assertThat(metadata.documents).allMatch { java.nio.file.Paths.get(it.path).isAbsolute }
+        }
     }
 
     @Test
@@ -179,46 +181,18 @@ class IngestServiceTest {
         val service = IngestService(fakeEmbeddingModel, tempDir, chunkSize = 500, chunkOverlap = 0)
         service.ingest(listOf(sampleFile.toFile()))
 
-        // Read back stored chunk indices via repository reflection
-        val repository = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repository.load()
         val absolutePath = sampleFile.toAbsolutePath().normalize().toString()
 
-        // Collect chunk_index values for the file via reflection on the underlying store
-        val chunkIndices = collectChunkIndicesForFile(repository, absolutePath)
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repository ->
+            val chunks = repository.getChunksForFile(absolutePath)
+            val chunkIndices = chunks.map { it.chunkIndex }
 
-        assertThat(chunkIndices).isNotEmpty
-        assertThat(chunkIndices).hasSizeGreaterThanOrEqualTo(2)
-        // chunk_index values should be 0, 1, 2, ... without gaps or duplicates
-        val sorted = chunkIndices.sorted()
-        assertThat(sorted.first()).isEqualTo(0)
-        assertThat(sorted).isEqualTo((0 until sorted.size).toList())
-    }
-
-    /** Helper: uses reflection to extract chunk_index values for a given source path. */
-    private fun collectChunkIndicesForFile(repository: VectorStoreRepository, absolutePath: String): List<Int> {
-        val store = repository.getStore()
-        val storeField = org.springframework.ai.vectorstore.SimpleVectorStore::class.java.getDeclaredField("store")
-        storeField.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        val storeMap = storeField.get(store) as Map<String, Any>
-        val indices = mutableListOf<Int>()
-        for (entry in storeMap.values) {
-            val metadataMethod = entry.javaClass.getMethod("getMetadata")
-            @Suppress("UNCHECKED_CAST")
-            val metadata = metadataMethod.invoke(entry) as? Map<String, Any> ?: continue
-            val source = metadata["source"] as? String ?: continue
-            if (source != absolutePath) continue
-            val idx = metadata["chunk_index"]
-            if (idx != null) {
-                indices.add(when (idx) {
-                    is Int -> idx
-                    is Number -> idx.toInt()
-                    is String -> idx.toIntOrNull() ?: continue
-                    else -> continue
-                })
-            }
+            assertThat(chunkIndices).isNotEmpty
+            assertThat(chunkIndices).hasSizeGreaterThanOrEqualTo(2)
+            // chunk_index values should be 0, 1, 2, ... without gaps or duplicates
+            val sorted = chunkIndices.sorted()
+            assertThat(sorted.first()).isEqualTo(0)
+            assertThat(sorted).isEqualTo((0 until sorted.size).toList())
         }
-        return indices
     }
 }

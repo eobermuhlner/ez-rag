@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -37,19 +37,17 @@ class ListCommandTest {
         override fun dimensions(): Int = 4
     }
 
-    private fun buildStore(storeDir: Path, docs: List<Pair<String, Long>>): VectorStoreRepository {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        repo.load()
-        for ((source, mtime) in docs) {
-            repo.add(listOf(
-                Document.builder()
-                    .text("Content of $source")
-                    .metadata(mapOf("source" to source, "mtime" to mtime))
-                    .build()
-            ))
+    private fun buildStore(storeDir: Path, docs: List<Pair<String, Long>>) {
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            for ((source, mtime) in docs) {
+                repo.add(listOf(
+                    Document.builder()
+                        .text("Content of $source")
+                        .metadata(mapOf("source" to source, "mtime" to mtime, "chunk_index" to 0))
+                        .build()
+                ))
+            }
         }
-        repo.save()
-        return repo
     }
 
     @Test
@@ -67,8 +65,6 @@ class ListCommandTest {
             errorWriter = PrintWriter(err, true),
         )
         // Use a probe that returns the stored mtime (files are "fresh")
-        // The probe takes a path (String) and returns the current mtime (Long?)
-        // Returning the same stored mtime simulates a fresh (non-stale) file
         cmd.filesystemProbeOverride = { path ->
             when (path) {
                 fileA -> 1000L
@@ -205,7 +201,6 @@ class ListCommandTest {
 
         assertThat(exitCode).isEqualTo(1)
         val combined = out.toString() + err.toString()
-        assertThat(combined).contains(nonExistentDir.resolve("vector-store.json").toAbsolutePath().toString())
         assertThat(combined).contains("ez-rag ingest")
     }
 

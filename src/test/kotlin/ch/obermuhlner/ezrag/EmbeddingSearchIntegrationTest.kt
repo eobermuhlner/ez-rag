@@ -2,7 +2,7 @@ package ch.obermuhlner.ezrag
 
 import ch.obermuhlner.ezrag.command.IngestCommand
 import ch.obermuhlner.ezrag.command.SearchCommand
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import org.assertj.core.api.Assertions.assertThat
@@ -58,13 +58,11 @@ class EmbeddingSearchIntegrationTest {
         err: StringWriter,
         inputStream: ByteArrayInputStream = ByteArrayInputStream(ByteArray(0)),
     ): SearchCommand {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        repo.load()
-        val pipeline = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
+        val luceneRepo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
+        val pipeline = EmbeddingSearchPipeline(luceneRepo)
         return SearchCommand(
             storeDirOverride = storeDir,
             searchPipeline = pipeline,
-            repositoryForVerbose = repo,
             outputFormatter = OutputFormatter(),
             outputWriter = PrintWriter(out, true),
             errorWriter = PrintWriter(err, true),

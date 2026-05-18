@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -34,33 +34,52 @@ class ShowCommandTest {
         override fun dimensions(): Int = 4
     }
 
-    private fun createRepository(storeDir: Path): VectorStoreRepository {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        repo.load()
-        return repo
-    }
-
     private fun ingestChunks(
-        repo: VectorStoreRepository,
+        storeDir: Path,
         absolutePath: String,
         texts: List<String>,
         mtime: Long = 1716000000000L
     ) {
-        val docs = texts.mapIndexed { i, text ->
-            Document.builder()
-                .text(text)
-                .metadata(mapOf("source" to absolutePath, "mtime" to mtime, "chunk_index" to i))
-                .build()
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val docs = texts.mapIndexed { i, text ->
+                Document.builder()
+                    .text(text)
+                    .metadata(mapOf("source" to absolutePath, "mtime" to mtime, "chunk_index" to i))
+                    .build()
+            }
+            repo.add(docs)
         }
-        repo.add(docs)
-        repo.save()
+    }
+
+    private fun ingestHeadingChunk(
+        storeDir: Path,
+        absolutePath: String,
+        text: String,
+        headingTitle: String,
+        headingLevel: Int,
+        headingPath: List<String>,
+        mtime: Long = 1716000000000L
+    ) {
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text(text)
+                .metadata(mapOf(
+                    "source" to absolutePath,
+                    "mtime" to mtime,
+                    "chunk_index" to 0,
+                    "heading_title" to headingTitle,
+                    "heading_level" to headingLevel,
+                    "heading_path" to headingPath
+                ))
+                .build()
+            repo.add(listOf(doc))
+        }
     }
 
     @Test
     fun `show displays header and per-chunk metadata without raw text`(@TempDir tempDir: Path) {
-        val repo = createRepository(tempDir)
         val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
-        ingestChunks(repo, filePath, listOf("Hello world", "Second chunk", "Third one here"))
+        ingestChunks(tempDir, filePath, listOf("Hello world", "Second chunk", "Third one here"))
 
         val out = StringWriter()
         val err = StringWriter()
@@ -88,9 +107,8 @@ class ShowCommandTest {
 
     @Test
     fun `show with --chunks includes raw text of each chunk`(@TempDir tempDir: Path) {
-        val repo = createRepository(tempDir)
         val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
-        ingestChunks(repo, filePath, listOf("Hello world", "Second chunk text"))
+        ingestChunks(tempDir, filePath, listOf("Hello world", "Second chunk text"))
 
         val out = StringWriter()
         val err = StringWriter()
@@ -112,9 +130,8 @@ class ShowCommandTest {
 
     @Test
     fun `show with --output json produces valid JSON with expected fields`(@TempDir tempDir: Path) {
-        val repo = createRepository(tempDir)
         val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
-        ingestChunks(repo, filePath, listOf("Hello world", "Second chunk"), mtime = 1716000000000L)
+        ingestChunks(tempDir, filePath, listOf("Hello world", "Second chunk"), mtime = 1716000000000L)
 
         val out = StringWriter()
         val err = StringWriter()
@@ -148,9 +165,8 @@ class ShowCommandTest {
 
     @Test
     fun `show with --output json and --chunks includes text field`(@TempDir tempDir: Path) {
-        val repo = createRepository(tempDir)
         val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
-        ingestChunks(repo, filePath, listOf("Hello world"))
+        ingestChunks(tempDir, filePath, listOf("Hello world"))
 
         val out = StringWriter()
         val err = StringWriter()
@@ -174,35 +190,10 @@ class ShowCommandTest {
         assertThat(chunks[0].get("text").asText()).isEqualTo("Hello world")
     }
 
-    private fun ingestHeadingChunk(
-        repo: VectorStoreRepository,
-        absolutePath: String,
-        text: String,
-        headingTitle: String,
-        headingLevel: Int,
-        headingPath: List<String>,
-        mtime: Long = 1716000000000L
-    ) {
-        val doc = Document.builder()
-            .text(text)
-            .metadata(mapOf(
-                "source" to absolutePath,
-                "mtime" to mtime,
-                "chunk_index" to 0,
-                "heading_title" to headingTitle,
-                "heading_level" to headingLevel,
-                "heading_path" to headingPath
-            ))
-            .build()
-        repo.add(listOf(doc))
-        repo.save()
-    }
-
     @Test
     fun `show text output for Markdown chunk with heading includes heading prefix in summary line`(@TempDir tempDir: Path) {
-        val repo = createRepository(tempDir)
         val filePath = tempDir.resolve("doc.md").toAbsolutePath().toString()
-        ingestHeadingChunk(repo, filePath, "## Section Name\nSome content here",
+        ingestHeadingChunk(tempDir, filePath, "## Section Name\nSome content here",
             headingTitle = "Section Name", headingLevel = 2, headingPath = listOf("Section Name"))
 
         val out = StringWriter()
@@ -223,9 +214,8 @@ class ShowCommandTest {
 
     @Test
     fun `show JSON output for Markdown chunk with heading includes headingTitle headingLevel headingPath keys`(@TempDir tempDir: Path) {
-        val repo = createRepository(tempDir)
         val filePath = tempDir.resolve("doc.md").toAbsolutePath().toString()
-        ingestHeadingChunk(repo, filePath, "## Section Name\nSome content here",
+        ingestHeadingChunk(tempDir, filePath, "## Section Name\nSome content here",
             headingTitle = "Section Name", headingLevel = 2, headingPath = listOf("Top", "Section Name"))
 
         val out = StringWriter()
@@ -255,9 +245,8 @@ class ShowCommandTest {
 
     @Test
     fun `show text output for non-Markdown chunk contains no heading substring`(@TempDir tempDir: Path) {
-        val repo = createRepository(tempDir)
         val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
-        ingestChunks(repo, filePath, listOf("Plain text content"))
+        ingestChunks(tempDir, filePath, listOf("Plain text content"))
 
         val out = StringWriter()
         val err = StringWriter()
@@ -276,9 +265,8 @@ class ShowCommandTest {
 
     @Test
     fun `show JSON output for non-Markdown chunk contains no headingTitle headingLevel headingPath keys`(@TempDir tempDir: Path) {
-        val repo = createRepository(tempDir)
         val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
-        ingestChunks(repo, filePath, listOf("Plain text content"))
+        ingestChunks(tempDir, filePath, listOf("Plain text content"))
 
         val out = StringWriter()
         val err = StringWriter()
@@ -304,7 +292,8 @@ class ShowCommandTest {
 
     @Test
     fun `show of unknown file exits non-zero with error message`(@TempDir tempDir: Path) {
-        createRepository(tempDir) // empty store
+        // Create an empty store so LuceneRepository.open() succeeds
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
 
         val unknownPath = tempDir.resolve("unknown.txt").toAbsolutePath().toString()
         val out = StringWriter()

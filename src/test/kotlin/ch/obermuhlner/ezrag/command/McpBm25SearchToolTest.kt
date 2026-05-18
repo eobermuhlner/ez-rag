@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.BM25Repository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.BM25SearchPipeline
 import ch.obermuhlner.ezrag.rag.ChunkMatch
 import ch.obermuhlner.ezrag.rag.SearchQuery
@@ -8,9 +8,24 @@ import ch.obermuhlner.ezrag.rag.SearchResult
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.springframework.ai.document.Document
+import org.springframework.ai.embedding.Embedding
+import org.springframework.ai.embedding.EmbeddingModel
+import org.springframework.ai.embedding.EmbeddingRequest
+import org.springframework.ai.embedding.EmbeddingResponse
 import java.nio.file.Path
 
 class McpBm25SearchToolTest {
+
+    private val fakeEmbeddingModel: EmbeddingModel = object : EmbeddingModel {
+        override fun call(request: EmbeddingRequest): EmbeddingResponse =
+            EmbeddingResponse(request.instructions.mapIndexed { i, _ -> Embedding(FloatArray(4) { 0.25f }, i) })
+        override fun embed(document: Document): FloatArray = FloatArray(4) { 0.25f }
+        override fun embed(text: String): FloatArray = FloatArray(4) { 0.25f }
+        override fun embedForResponse(texts: List<String>): EmbeddingResponse =
+            EmbeddingResponse(texts.mapIndexed { i, _ -> Embedding(FloatArray(4) { 0.25f }, i) })
+        override fun dimensions(): Int = 4
+    }
 
     private fun stubPipeline(
         storeDir: Path,
@@ -18,7 +33,7 @@ class McpBm25SearchToolTest {
         resultToReturn: SearchResult = SearchResult(emptyList(), mode = "bm25"),
         throwException: Exception? = null
     ): BM25SearchPipeline {
-        val repo = BM25Repository(storeDir, "standard")
+        val repo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
         return object : BM25SearchPipeline(repo) {
             override fun search(query: SearchQuery): SearchResult {
                 capturedQueries.add(query)

@@ -2,7 +2,7 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
@@ -53,22 +53,20 @@ class DeleteCommand(
             ?: (configServiceOverride ?: springConfigService)?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
 
-        val repository = VectorStoreRepository(model, resolvedStoreDir)
-        repository.load()
-
         val isQuiet = quiet || quietOption
 
-        for (rawPath in filePaths) {
-            val absolutePath = Paths.get(rawPath).toAbsolutePath().normalize().toString()
-            val removed = repository.delete(absolutePath)
-            if (removed == 0) {
-                outputWriter.println("Warning: not found in store: $absolutePath")
-            } else if (!isQuiet) {
-                outputWriter.println("Deleted: $absolutePath ($removed chunks)")
+        LuceneRepository.open(model, resolvedStoreDir, "standard").use { repository ->
+            for (rawPath in filePaths) {
+                val absolutePath = Paths.get(rawPath).toAbsolutePath().normalize().toString()
+                val removed = repository.delete(absolutePath)
+                if (removed == 0) {
+                    outputWriter.println("Warning: not found in store: $absolutePath")
+                } else if (!isQuiet) {
+                    outputWriter.println("Deleted: $absolutePath ($removed chunks)")
+                }
             }
         }
 
-        repository.save()
         return 0
     }
 

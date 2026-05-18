@@ -2,7 +2,7 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.beans.factory.annotation.Autowired
@@ -58,55 +58,55 @@ class ShowCommand(
             ?: (configServiceOverride ?: springConfigService)?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
 
-        val repository = VectorStoreRepository(model, resolvedStoreDir)
-        repository.load()
-
         val absolutePath = Paths.get(filePath).toAbsolutePath().normalize().toString()
-        val chunks = repository.getChunksForFile(absolutePath)
 
-        if (chunks.isEmpty()) {
-            errorWriter.println("Error: file not found in store: $absolutePath")
-            return 1
-        }
+        LuceneRepository.open(model, resolvedStoreDir, "standard").use { repository ->
+            val chunks = repository.getChunksForFile(absolutePath)
 
-        val showText = includeChunks || chunksOption
-
-        if (outputFormat == "json") {
-            val mapper = ObjectMapper()
-            val chunksArray = chunks.map { chunk ->
-                buildMap {
-                    put("chunkIndex", chunk.chunkIndex)
-                    put("charCount", chunk.charCount)
-                    put("mtime", chunk.mtime)
-                    if (showText) put("text", chunk.text)
-                    if (chunk.headingTitle != null) {
-                        put("headingTitle", chunk.headingTitle)
-                        put("headingLevel", chunk.headingLevel)
-                        put("headingPath", chunk.headingPath)
-                    }
-                }
+            if (chunks.isEmpty()) {
+                errorWriter.println("Error: file not found in store: $absolutePath")
+                return 1
             }
-            val result = mapOf(
-                "file" to absolutePath,
-                "chunks" to chunksArray
-            )
-            outputWriter.println(mapper.writeValueAsString(result))
-        } else {
-            outputWriter.println("File: $absolutePath")
-            outputWriter.println("Chunks: ${chunks.size}")
-            outputWriter.println()
-            for ((idx, chunk) in chunks.withIndex()) {
-                val headingSuffix = if (chunk.headingTitle != null) {
-                    ", heading: ${"#".repeat(chunk.headingLevel ?: 1)} ${chunk.headingTitle}"
-                } else {
-                    ""
-                }
-                outputWriter.println("Chunk ${idx + 1} — ${chunk.charCount} chars, mtime: ${chunk.mtime}$headingSuffix")
-                if (showText) {
-                    for (line in chunk.text.lines()) {
-                        outputWriter.println("  $line")
+
+            val showText = includeChunks || chunksOption
+
+            if (outputFormat == "json") {
+                val mapper = ObjectMapper()
+                val chunksArray = chunks.map { chunk ->
+                    buildMap {
+                        put("chunkIndex", chunk.chunkIndex)
+                        put("charCount", chunk.charCount)
+                        put("mtime", chunk.mtime)
+                        if (showText) put("text", chunk.text)
+                        if (chunk.headingTitle != null) {
+                            put("headingTitle", chunk.headingTitle)
+                            put("headingLevel", chunk.headingLevel)
+                            put("headingPath", chunk.headingPath)
+                        }
                     }
-                    outputWriter.println()
+                }
+                val result = mapOf(
+                    "file" to absolutePath,
+                    "chunks" to chunksArray
+                )
+                outputWriter.println(mapper.writeValueAsString(result))
+            } else {
+                outputWriter.println("File: $absolutePath")
+                outputWriter.println("Chunks: ${chunks.size}")
+                outputWriter.println()
+                for ((idx, chunk) in chunks.withIndex()) {
+                    val headingSuffix = if (chunk.headingTitle != null) {
+                        ", heading: ${"#".repeat(chunk.headingLevel ?: 1)} ${chunk.headingTitle}"
+                    } else {
+                        ""
+                    }
+                    outputWriter.println("Chunk ${idx + 1} — ${chunk.charCount} chars, mtime: ${chunk.mtime}$headingSuffix")
+                    if (showText) {
+                        for (line in chunk.text.lines()) {
+                            outputWriter.println("  $line")
+                        }
+                        outputWriter.println()
+                    }
                 }
             }
         }

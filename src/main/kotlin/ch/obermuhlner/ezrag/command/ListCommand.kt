@@ -2,7 +2,7 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.ai.document.Document
 import org.springframework.ai.embedding.Embedding
@@ -59,18 +59,13 @@ class ListCommand(
             ?: storeDirOption?.let { Paths.get(it) }
             ?: springConfigService?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
-        val storeFilePath = storeDir.resolve("vector-store.json")
 
-        val repository = VectorStoreRepository(model, storeDir)
-
-        if (!repository.storeExists()) {
+        if (!LuceneRepository.storeExists(storeDir)) {
             errorWriter.println(
-                "No vector store found at ${storeFilePath.toAbsolutePath()}. Run 'ez-rag ingest' first."
+                "No store found at ${storeDir.resolve("lucene").toAbsolutePath()}. Run 'ez-rag ingest' first."
             )
             return 1
         }
-
-        repository.load()
 
         val probe: (String) -> Long? = filesystemProbeOverride ?: { path ->
             try {
@@ -79,30 +74,33 @@ class ListCommand(
                 null
             }
         }
-        val metadata = repository.getMetadata(probe)
-        val documents = metadata.documents // already sorted alphabetically by VectorStoreRepository
 
-        if (outputFormat == "json") {
-            val mapper = ObjectMapper()
-            val result = documents.map { doc ->
-                mapOf(
-                    "path" to doc.path,
-                    "chunks" to doc.chunkCount,
-                    "stale" to doc.stale
-                )
-            }
-            outputWriter.println(mapper.writeValueAsString(result))
-        } else {
-            val cwd = Paths.get("").toAbsolutePath()
-            for (doc in documents) {
-                val displayPath = try {
-                    val rel = cwd.relativize(Paths.get(doc.path))
-                    if (rel.toString().startsWith("..")) doc.path else rel.toString()
-                } catch (_: Exception) {
-                    doc.path
+        LuceneRepository.open(model, storeDir, "standard").use { repository ->
+            val metadata = repository.getMetadata(probe)
+            val documents = metadata.documents // already sorted alphabetically
+
+            if (outputFormat == "json") {
+                val mapper = ObjectMapper()
+                val result = documents.map { doc ->
+                    mapOf(
+                        "path" to doc.path,
+                        "chunks" to doc.chunkCount,
+                        "stale" to doc.stale
+                    )
                 }
-                val staleMarker = if (doc.stale) "  [STALE]" else ""
-                outputWriter.println("$displayPath  (${doc.chunkCount} chunks)$staleMarker")
+                outputWriter.println(mapper.writeValueAsString(result))
+            } else {
+                val cwd = Paths.get("").toAbsolutePath()
+                for (doc in documents) {
+                    val displayPath = try {
+                        val rel = cwd.relativize(Paths.get(doc.path))
+                        if (rel.toString().startsWith("..")) doc.path else rel.toString()
+                    } catch (_: Exception) {
+                        doc.path
+                    }
+                    val staleMarker = if (doc.stale) "  [STALE]" else ""
+                    outputWriter.println("$displayPath  (${doc.chunkCount} chunks)$staleMarker")
+                }
             }
         }
 

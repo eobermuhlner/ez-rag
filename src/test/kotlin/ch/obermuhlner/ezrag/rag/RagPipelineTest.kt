@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.rag
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -41,14 +41,12 @@ class RagPipelineTest {
         override fun dimensions(): Int = 4
     }
 
-    private fun createRepository(tempDir: Path): VectorStoreRepository {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        return repo
+    private fun createRepository(tempDir: Path): LuceneRepository {
+        return LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
     }
 
-    private fun createPipeline(repository: VectorStoreRepository, chatModel: ChatModel): RagPipeline {
-        val searchPipeline = EmbeddingSearchPipeline(repository, fakeEmbeddingModel)
+    private fun createPipeline(repository: LuceneRepository, chatModel: ChatModel): RagPipeline {
+        val searchPipeline = EmbeddingSearchPipeline(repository)
         return RagPipeline(searchPipeline, chatModel)
     }
 

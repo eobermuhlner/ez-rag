@@ -2,9 +2,8 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
-import ch.obermuhlner.ezrag.ingestion.BM25Repository
 import ch.obermuhlner.ezrag.ingestion.IngestService
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.BM25SearchPipeline
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.HybridSearchPipeline
@@ -58,15 +57,14 @@ class McpServerCommand : Callable<Int> {
             ?: springConfigService?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(Paths.get("").toAbsolutePath())
 
-        val repository = VectorStoreRepository(embeddingModel, storeDir)
-        repository.load()
+        val analyzer = springConfigService?.resolve()?.analyzer ?: "standard"
+        val luceneRepository = LuceneRepository.open(embeddingModel, storeDir, analyzer)
 
         val chatModel = springChatModel
-        val statusTool = McpStatusTool(repository)
-        val embeddingSearchPipeline = EmbeddingSearchPipeline(repository, embeddingModel)
-        val bm25Repository = BM25Repository(storeDir, "standard")
-        val bm25SearchPipeline = BM25SearchPipeline(bm25Repository)
-        val hybridSearchPipeline = HybridSearchPipeline(repository, embeddingModel, bm25Repository)
+        val statusTool = McpStatusTool(luceneRepository)
+        val embeddingSearchPipeline = EmbeddingSearchPipeline(luceneRepository)
+        val bm25SearchPipeline = BM25SearchPipeline(luceneRepository)
+        val hybridSearchPipeline = HybridSearchPipeline(luceneRepository)
         val searchTool = McpSearchTool(hybridSearchPipeline)
         val bm25SearchTool = McpBm25SearchTool(bm25SearchPipeline)
         val embeddingSearchTool = McpEmbeddingSearchTool(embeddingSearchPipeline)

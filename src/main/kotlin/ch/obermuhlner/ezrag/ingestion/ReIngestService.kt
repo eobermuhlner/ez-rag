@@ -6,11 +6,11 @@ import java.io.PrintWriter
 import java.nio.file.Path
 
 /**
- * Service that re-ingests stale or all documents already present in the store.
+ * Service that re-ingests stale or all documents already present in the unified Lucene index.
  *
  * For each candidate source it:
  * 1. Checks whether the source file still exists on disk. If not, emits a warning and skips.
- * 2. Deletes old chunks from both vector store and BM25 index.
+ * 2. Deletes old chunks from the unified index.
  * 3. Delegates to [IngestService] to re-ingest the file.
  */
 open class ReIngestService(
@@ -25,8 +25,7 @@ open class ReIngestService(
     var onFileReIngesting: ((Path) -> Unit)? = null
 
     open fun reIngest(forceAll: Boolean = false): ReIngestResult {
-        val repository = VectorStoreRepository(embeddingModel, storeDir)
-        repository.load()
+        val repository = LuceneRepository.open(embeddingModel, storeDir, analyzerName)
 
         val metadata = repository.getMetadata()
         val allDocuments = metadata.documents
@@ -43,29 +42,25 @@ open class ReIngestService(
             candidates = staleDocuments
         }
 
-        val bm25Repository = BM25Repository(storeDir, analyzerName)
-
         var filesReIngested = 0
         var chunksCreated = 0
         var filesSkipped = 0
         val filesToReIngest = mutableListOf<File>()
 
-        for (doc in candidates) {
-            val sourceFile = File(doc.path)
-            if (!sourceFile.exists()) {
-                warningWriter.println("WARN: source file not found, skipping: ${doc.path}")
-                filesSkipped++
-                continue
+        repository.use {
+            for (doc in candidates) {
+                val sourceFile = File(doc.path)
+                if (!sourceFile.exists()) {
+                    warningWriter.println("WARN: source file not found, skipping: ${doc.path}")
+                    filesSkipped++
+                    continue
+                }
+                // Delete old chunks from the unified index
+                repository.delete(doc.path)
+                onFileReIngesting?.invoke(sourceFile.toPath())
+                filesToReIngest.add(sourceFile)
             }
-            // Delete old chunks from both stores
-            repository.delete(doc.path)
-            bm25Repository.deleteBySource(doc.path)
-            onFileReIngesting?.invoke(sourceFile.toPath())
-            filesToReIngest.add(sourceFile)
         }
-
-        bm25Repository.close()
-        repository.save()
 
         if (filesToReIngest.isNotEmpty()) {
             val ingestService = IngestService(embeddingModel, storeDir, chunkSize, chunkOverlap, warningWriter, analyzerName)

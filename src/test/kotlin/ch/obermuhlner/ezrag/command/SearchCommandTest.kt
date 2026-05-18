@@ -1,7 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.BM25Repository
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.BM25SearchPipeline
 import ch.obermuhlner.ezrag.rag.ChunkMatch
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
@@ -47,16 +46,14 @@ class SearchCommandTest {
         override fun dimensions(): Int = 4
     }
 
-    private fun createPopulatedRepository(storeDir: Path): VectorStoreRepository {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        repo.load()
+    private fun populateRepository(storeDir: Path) {
+        val repo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
         val doc = Document.builder()
             .text("Test content for searching.")
             .metadata(mapOf("source" to "test.txt", "chunk_index" to 0, "mtime" to 1000L))
             .build()
         repo.add(listOf(doc))
-        repo.save()
-        return repo
+        repo.close()
     }
 
     private fun createSearchCommand(
@@ -67,13 +64,18 @@ class SearchCommandTest {
         pipeline: EmbeddingSearchPipeline? = null,
         formatter: OutputFormatter = OutputFormatter(),
     ): SearchCommand {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        repo.load()
-        val searchPipeline = pipeline ?: EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
+        // Only create a repo/pipeline if the store already exists.
+        val searchPipeline = pipeline ?: run {
+            if (LuceneRepository.storeExists(storeDir)) {
+                val repo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
+                EmbeddingSearchPipeline(repo)
+            } else {
+                null
+            }
+        }
         return SearchCommand(
             storeDirOverride = storeDir,
             searchPipeline = searchPipeline,
-            repositoryForVerbose = repo,
             outputFormatter = formatter,
             outputWriter = PrintWriter(out, true),
             errorWriter = PrintWriter(err, true),
@@ -87,12 +89,11 @@ class SearchCommandTest {
 
     @Test
     fun `positional words are joined into single question string`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val capturedQueries = mutableListOf<SearchQuery>()
         val capturingPipeline = object : EmbeddingSearchPipeline(
-            VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() },
-            fakeEmbeddingModel
+            LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         ) {
             override fun search(query: SearchQuery): SearchResult {
                 capturedQueries.add(query)
@@ -125,12 +126,11 @@ class SearchCommandTest {
 
     @Test
     fun `single quoted token in questionArgs is used as question`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val capturedQueries = mutableListOf<SearchQuery>()
         val capturingPipeline = object : EmbeddingSearchPipeline(
-            VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() },
-            fakeEmbeddingModel
+            LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         ) {
             override fun search(query: SearchQuery): SearchResult {
                 capturedQueries.add(query)
@@ -174,14 +174,13 @@ class SearchCommandTest {
 
     @Test
     fun `absence of --question reads stdin until EOF and uses as question`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val stdinContent = "Query from stdin"
         val inputStream = ByteArrayInputStream(stdinContent.toByteArray())
         val capturedQueries = mutableListOf<SearchQuery>()
         val capturingPipeline = object : EmbeddingSearchPipeline(
-            VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() },
-            fakeEmbeddingModel
+            LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         ) {
             override fun search(query: SearchQuery): SearchResult {
                 capturedQueries.add(query)
@@ -213,7 +212,7 @@ class SearchCommandTest {
 
     @Test
     fun `empty stdin exits code 1 with non-empty error message`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val inputStream = ByteArrayInputStream(ByteArray(0))
         val out = StringWriter()
@@ -236,19 +235,18 @@ class SearchCommandTest {
         // Create .ez-rag/ in "project root" (tempDir) and populate it
         val projectRootEzRag = tempDir.resolve(".ez-rag")
         projectRootEzRag.toFile().mkdirs()
-        createPopulatedRepository(projectRootEzRag)
+        populateRepository(projectRootEzRag)
 
         // Create a separate explicit store dir with different content
         val explicitStoreDir = tempDir.resolve("explicit-store")
         explicitStoreDir.toFile().mkdirs()
-        val explicitRepo = VectorStoreRepository(fakeEmbeddingModel, explicitStoreDir)
-        explicitRepo.load()
-        val doc = org.springframework.ai.document.Document.builder()
+        val explicitRepo = LuceneRepository.open(fakeEmbeddingModel, explicitStoreDir, "standard")
+        val doc = Document.builder()
             .text("Explicit store content.")
             .metadata(mapOf("source" to "explicit.txt", "chunk_index" to 0, "mtime" to 2000L))
             .build()
         explicitRepo.add(listOf(doc))
-        explicitRepo.save()
+        explicitRepo.close()
 
         // Subdirectory from which we simulate running
         val subDir = tempDir.resolve("sub")
@@ -278,13 +276,11 @@ class SearchCommandTest {
         // Actually, let's just verify the storeDir is resolved to the explicit one —
         // use storeDirOverride pattern to avoid Spring dependency:
         val out2 = StringWriter()
-        val explicitRepo2 = VectorStoreRepository(fakeEmbeddingModel, explicitStoreDir)
-        explicitRepo2.load()
-        val pipeline = EmbeddingSearchPipeline(explicitRepo2, fakeEmbeddingModel)
+        val explicitRepo2 = LuceneRepository.open(fakeEmbeddingModel, explicitStoreDir, "standard")
+        val pipeline = EmbeddingSearchPipeline(explicitRepo2)
         val cmd2 = SearchCommand(
             storeDirOverride = explicitStoreDir,
             searchPipeline = pipeline,
-            repositoryForVerbose = explicitRepo2,
             outputFormatter = OutputFormatter(),
             outputWriter = PrintWriter(out2, true),
             errorWriter = PrintWriter(err, true),
@@ -294,6 +290,7 @@ class SearchCommandTest {
         cmd2.questionArgs = listOf("test query")
         val exitCode2 = cmd2.call()
         assertThat(exitCode2).isEqualTo(0)
+        explicitRepo2.close()
     }
 
     // -----------------------------------------------------------------------
@@ -303,12 +300,11 @@ class SearchCommandTest {
 
     @Test
     fun `springReranker from config activates reranking without CLI flag`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val capturedQueries = mutableListOf<SearchQuery>()
         val capturingPipeline = object : EmbeddingSearchPipeline(
-            VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() },
-            fakeEmbeddingModel
+            LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         ) {
             override fun search(query: SearchQuery): SearchResult {
                 capturedQueries.add(query)
@@ -353,7 +349,6 @@ class SearchCommandTest {
     @Test
     fun `non-existent store exits code 1 and error message contains store path`(@TempDir tempDir: Path) {
         val nonExistentStoreDir = tempDir.resolve("nonexistent-dir")
-        val expectedStorePath = nonExistentStoreDir.resolve("vector-store.json")
         val out = StringWriter()
         val err = StringWriter()
 
@@ -371,7 +366,7 @@ class SearchCommandTest {
         val exitCode = cmd.call()
 
         assertThat(exitCode).isEqualTo(1)
-        assertThat(out.toString()).contains(expectedStorePath.toAbsolutePath().toString())
+        assertThat(out.toString()).contains(nonExistentStoreDir.toAbsolutePath().toString())
     }
 
     // -----------------------------------------------------------------------
@@ -381,16 +376,14 @@ class SearchCommandTest {
     @Test
     fun `--mode bm25 with BM25SearchPipeline stub returns exit code 0 and stub content`(@TempDir tempDir: Path) {
         val stubContent = "unique keyword content from BM25 stub"
-        val bm25Repo = BM25Repository(tempDir, "standard")
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         val doc = Document.builder()
             .text(stubContent)
             .metadata(mapOf("source" to "bm25stub.txt", "chunk_index" to 0, "mtime" to 1000L))
             .build()
-        bm25Repo.index(listOf(doc))
-        bm25Repo.close()
+        repo.add(listOf(doc))
 
-        val bm25RepoForSearch = BM25Repository(tempDir, "standard")
-        val bm25Pipeline = BM25SearchPipeline(bm25RepoForSearch)
+        val bm25Pipeline = BM25SearchPipeline(repo)
 
         val out = StringWriter()
         val err = StringWriter()
@@ -409,22 +402,20 @@ class SearchCommandTest {
 
         assertThat(exitCode).isEqualTo(0)
         assertThat(out.toString()).contains(stubContent)
-        bm25RepoForSearch.close()
+        repo.close()
     }
 
     @Test
     fun `--mode bm25 --output json produces top-level mode field with value bm25`(@TempDir tempDir: Path) {
         val stubContent = "fox jumps content"
-        val bm25Repo = BM25Repository(tempDir, "standard")
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         val doc = Document.builder()
             .text(stubContent)
             .metadata(mapOf("source" to "fox.txt", "chunk_index" to 0, "mtime" to 1000L))
             .build()
-        bm25Repo.index(listOf(doc))
-        bm25Repo.close()
+        repo.add(listOf(doc))
 
-        val bm25RepoForSearch = BM25Repository(tempDir, "standard")
-        val bm25Pipeline = BM25SearchPipeline(bm25RepoForSearch)
+        val bm25Pipeline = BM25SearchPipeline(repo)
 
         val out = StringWriter()
         val err = StringWriter()
@@ -444,7 +435,7 @@ class SearchCommandTest {
 
         val json = out.toString()
         assertThat(json).contains("\"mode\": \"bm25\"")
-        bm25RepoForSearch.close()
+        repo.close()
     }
 
     // -----------------------------------------------------------------------
@@ -453,32 +444,24 @@ class SearchCommandTest {
 
     @Test
     fun `no --mode flag with hybrid pipeline injected routes to hybrid pipeline not embedding-only`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
-
-        // Also populate BM25 index
-        val bm25Repo = BM25Repository(tempDir, "standard")
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         val doc = Document.builder()
             .text("Test content for searching.")
             .metadata(mapOf("source" to "test.txt", "chunk_index" to 0, "mtime" to 1000L))
             .build()
-        bm25Repo.index(listOf(doc))
-        bm25Repo.close()
+        repo.add(listOf(doc))
 
         var hybridCalled = false
         var embeddingCalled = false
 
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        val bm25Repo2 = BM25Repository(tempDir, "standard")
-
-        val hybridPipeline = object : HybridSearchPipeline(repo, fakeEmbeddingModel, bm25Repo2) {
+        val hybridPipeline = object : HybridSearchPipeline(repo) {
             override fun search(query: SearchQuery): SearchResult {
                 hybridCalled = true
                 return SearchResult(chunks = listOf(ChunkMatch("hybrid.txt", 0, 0.9, "hybrid result")), mode = "hybrid")
             }
         }
 
-        val capturingEmbeddingPipeline = object : EmbeddingSearchPipeline(repo, fakeEmbeddingModel) {
+        val capturingEmbeddingPipeline = object : EmbeddingSearchPipeline(repo) {
             override fun search(query: SearchQuery): SearchResult {
                 embeddingCalled = true
                 return SearchResult(emptyList())
@@ -500,7 +483,7 @@ class SearchCommandTest {
         // modeOption is NOT set — defaults to config default "hybrid"
 
         val exitCode = cmd.call()
-        bm25Repo2.close()
+        repo.close()
 
         assertThat(exitCode).isEqualTo(0)
         assertThat(hybridCalled).isTrue()

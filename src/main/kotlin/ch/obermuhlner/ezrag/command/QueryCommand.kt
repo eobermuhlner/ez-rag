@@ -3,7 +3,7 @@ package ch.obermuhlner.ezrag.command
 import ch.obermuhlner.ezrag.EzRagCommand
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.RagPipeline
@@ -86,16 +86,13 @@ class QueryCommand(
             ?: storeDirOption?.let { Paths.get(it) }
             ?: springConfigService?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
-        val storeFilePath = storeDir.resolve("vector-store.json")
 
-        val storeFile = storeFilePath.toFile()
-        if (!storeFile.exists()) {
+        if (!LuceneRepository.storeExists(storeDir)) {
             outputWriter.println(
-                "Vector store not found at ${storeFilePath.toAbsolutePath()}. Run 'ez-rag ingest' first."
+                "Store not found at ${storeDir.toAbsolutePath()}. Run 'ez-rag ingest' first."
             )
             return 1
         }
-
 
         val resolvedQuestion = if (questionArgs.isNotEmpty()) {
             questionArgs.joinToString(" ")
@@ -107,18 +104,6 @@ class QueryCommand(
             }
             stdin
         }
-
-        val pipeline = ragPipeline
-            ?: run {
-                val embeddingModel = springEmbeddingModel
-                    ?: return exitWithError("No embedding model configured.")
-                val chatModel = springChatModel
-                    ?: return exitWithError("No chat model configured.")
-                val repository = VectorStoreRepository(embeddingModel, storeDir)
-                repository.load()
-                val embeddingSearchPipeline = EmbeddingSearchPipeline(repository, embeddingModel, springReranker)
-                RagPipeline(embeddingSearchPipeline, chatModel)
-            }
 
         val effectiveRerankCandidates = if (springReranker != null || rerankModel?.isNotEmpty() == true) {
             rerankCandidates ?: (topK * 3)
@@ -135,7 +120,19 @@ class QueryCommand(
             verbose = verbose,
         )
 
-        val result = pipeline.query(ragQuery)
+        val result = if (ragPipeline != null) {
+            ragPipeline.query(ragQuery)
+        } else {
+            val embeddingModel = springEmbeddingModel
+                ?: return exitWithError("No embedding model configured.")
+            val chatModel = springChatModel
+                ?: return exitWithError("No chat model configured.")
+            val analyzer = springConfigService?.resolve()?.analyzer ?: "standard"
+            LuceneRepository.open(embeddingModel, storeDir, analyzer).use { repo ->
+                val embeddingSearchPipeline = EmbeddingSearchPipeline(repo, springReranker)
+                RagPipeline(embeddingSearchPipeline, chatModel).query(ragQuery)
+            }
+        }
 
         if (verbose) {
             result.sources.forEach { source ->

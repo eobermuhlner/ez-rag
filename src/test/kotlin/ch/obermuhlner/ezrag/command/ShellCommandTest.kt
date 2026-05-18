@@ -1,7 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.BM25Repository
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.BM25SearchPipeline
 import ch.obermuhlner.ezrag.rag.ChunkMatch
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
@@ -54,22 +53,32 @@ class ShellCommandTest {
         ChatResponse(listOf(Generation(AssistantMessage("Stub answer"))))
     }
 
-    private fun createStoreFile(storeDir: Path) {
-        storeDir.toFile().mkdirs()
-        // Create a minimal vector-store.json so ShellCommand considers the store to exist
-        storeDir.resolve("vector-store.json").toFile().createNewFile()
+    /**
+     * Populates a Lucene index with a sample document so ShellCommand considers the store to exist.
+     * Closes the repository after writing so the caller may re-open with openRepo().
+     */
+    private fun createStore(storeDir: Path) {
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("Sample content")
+                .metadata(mapOf("source" to "sample.txt", "chunk_index" to 0, "mtime" to 1000L))
+                .build()
+            repo.add(listOf(doc))
+        }
     }
 
     private fun makeInput(vararg lines: String): InputStream =
         ByteArrayInputStream(lines.joinToString("\n").toByteArray())
 
+    private fun openRepo(storeDir: Path): LuceneRepository =
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
+
     private fun makePipeline(
-        storeDir: Path,
+        repo: LuceneRepository,
         calls: MutableList<RagQuery> = mutableListOf(),
         answer: String = "Stub answer",
     ): RagPipeline {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        val searchPipeline = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
+        val searchPipeline = EmbeddingSearchPipeline(repo)
         return object : RagPipeline(searchPipeline, stubChatModel) {
             override fun query(ragQuery: RagQuery): RagResult {
                 calls.add(ragQuery)
@@ -79,11 +88,10 @@ class ShellCommandTest {
     }
 
     private fun makeSearchPipeline(
-        storeDir: Path,
+        repo: LuceneRepository,
         calls: MutableList<SearchQuery> = mutableListOf(),
     ): EmbeddingSearchPipeline {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        return object : EmbeddingSearchPipeline(repo, fakeEmbeddingModel) {
+        return object : EmbeddingSearchPipeline(repo) {
             override fun search(query: SearchQuery): SearchResult {
                 calls.add(query)
                 return SearchResult(chunks = listOf(ChunkMatch("doc.txt", 0, 0.9, "Some content")))
@@ -92,10 +100,9 @@ class ShellCommandTest {
     }
 
     private fun makeBM25SearchPipeline(
-        storeDir: Path,
+        repo: LuceneRepository,
         calls: MutableList<SearchQuery> = mutableListOf(),
     ): BM25SearchPipeline {
-        val repo = BM25Repository(storeDir, "standard")
         return object : BM25SearchPipeline(repo) {
             override fun search(query: SearchQuery): SearchResult {
                 calls.add(query)
@@ -112,13 +119,13 @@ class ShellCommandTest {
         pipeline: RagPipeline? = null,
         searchPipeline: EmbeddingSearchPipeline? = null,
         bm25SearchPipeline: BM25SearchPipeline? = null,
-        repository: VectorStoreRepository? = null,
+        repository: LuceneRepository? = null,
     ): ShellCommand = ShellCommand(
         storeDirOverride = storeDir,
         ragPipeline = pipeline,
         embeddingSearchPipeline = searchPipeline,
         bm25SearchPipeline = bm25SearchPipeline,
-        vectorStoreRepository = repository,
+        luceneRepository = repository,
         outputFormatter = OutputFormatter(),
         outputWriter = PrintWriter(out, true),
         errorWriter = PrintWriter(err, true),
@@ -131,14 +138,16 @@ class ShellCommandTest {
 
     @Test
     fun `three non-blank questions cause query to be called exactly three times`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val calls = mutableListOf<RagQuery>()
-        val pipeline = makePipeline(tempDir, calls)
+        val pipeline = makePipeline(repo, calls)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("Q1", "Q2", "Q3"), pipeline)
 
         cmd.call()
+        repo.close()
 
         assertThat(calls).hasSize(3)
     }
@@ -149,14 +158,16 @@ class ShellCommandTest {
 
     @Test
     fun `blank lines are skipped and do not cause query to be called`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val calls = mutableListOf<RagQuery>()
-        val pipeline = makePipeline(tempDir, calls)
+        val pipeline = makePipeline(repo, calls)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("Q1", "", "Q2"), pipeline)
 
         cmd.call()
+        repo.close()
 
         assertThat(calls).hasSize(2)
     }
@@ -167,14 +178,16 @@ class ShellCommandTest {
 
     @Test
     fun `exit command causes loop to exit with return code 0 without calling query`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val calls = mutableListOf<RagQuery>()
-        val pipeline = makePipeline(tempDir, calls)
+        val pipeline = makePipeline(repo, calls)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("exit"), pipeline)
 
         val exitCode = cmd.call()
+        repo.close()
 
         assertThat(exitCode).isEqualTo(0)
         assertThat(calls).isEmpty()
@@ -186,14 +199,16 @@ class ShellCommandTest {
 
     @Test
     fun `quit command causes loop to exit with return code 0`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val calls = mutableListOf<RagQuery>()
-        val pipeline = makePipeline(tempDir, calls)
+        val pipeline = makePipeline(repo, calls)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("quit"), pipeline)
 
         val exitCode = cmd.call()
+        repo.close()
 
         assertThat(exitCode).isEqualTo(0)
         assertThat(calls).isEmpty()
@@ -205,13 +220,15 @@ class ShellCommandTest {
 
     @Test
     fun `EOF causes loop to exit with return code 0`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
-        val pipeline = makePipeline(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val pipeline = makePipeline(repo)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, ByteArrayInputStream(ByteArray(0)), pipeline)
 
         val exitCode = cmd.call()
+        repo.close()
 
         assertThat(exitCode).isEqualTo(0)
     }
@@ -222,14 +239,16 @@ class ShellCommandTest {
 
     @Test
     fun `slash-prefixed lines are silently skipped and do not cause query to be called`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val calls = mutableListOf<RagQuery>()
-        val pipeline = makePipeline(tempDir, calls)
+        val pipeline = makePipeline(repo, calls)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("/somecommand"), pipeline)
 
         cmd.call()
+        repo.close()
 
         assertThat(calls).isEmpty()
     }
@@ -257,9 +276,9 @@ class ShellCommandTest {
 
     @Test
     fun `pipeline exception on first call does not prevent second call from being processed`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        val searchPipeline0 = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
+        createStore(tempDir)
+        val luceneRepo = openRepo(tempDir)
+        val searchPipeline0 = EmbeddingSearchPipeline(luceneRepo)
         var callIndex = 0
         val pipeline = object : RagPipeline(searchPipeline0, stubChatModel) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -273,6 +292,7 @@ class ShellCommandTest {
         val cmd = createShellCommand(tempDir, out, err, makeInput("Q1", "Q2"), pipeline)
 
         cmd.call()
+        luceneRepo.close()
 
         assertThat(out.toString()).contains("SecondAnswer")
     }
@@ -283,14 +303,16 @@ class ShellCommandTest {
 
     @Test
     fun `output json formats each answer as JSON with answer field`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
-        val pipeline = makePipeline(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val pipeline = makePipeline(repo)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("Q1"), pipeline)
         cmd.outputFormat = "json"
 
         cmd.call()
+        repo.close()
 
         val output = out.toString().trim()
         assertThat(output).startsWith("{")
@@ -303,13 +325,15 @@ class ShellCommandTest {
 
     @Test
     fun `prompt is written to stderr and does not appear on stdout`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
-        val pipeline = makePipeline(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val pipeline = makePipeline(repo)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("exit"), pipeline)
 
         cmd.call()
+        repo.close()
 
         assertThat(err.toString()).contains("> ")
         assertThat(out.toString()).doesNotContain("> ")
@@ -321,12 +345,14 @@ class ShellCommandTest {
 
     @Test
     fun `slash help prints all five command names to stdout`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = createShellCommand(tempDir, out, err, makeInput("/help"), makePipeline(tempDir))
+        val cmd = createShellCommand(tempDir, out, err, makeInput("/help"), makePipeline(repo))
 
         cmd.call()
+        repo.close()
 
         val output = out.toString()
         assertThat(output).contains("/help")
@@ -342,14 +368,16 @@ class ShellCommandTest {
 
     @Test
     fun `slash exit exits with return code 0 and RagPipeline query is never called`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val calls = mutableListOf<RagQuery>()
-        val pipeline = makePipeline(tempDir, calls)
+        val pipeline = makePipeline(repo, calls)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("/exit"), pipeline)
 
         val exitCode = cmd.call()
+        repo.close()
 
         assertThat(exitCode).isEqualTo(0)
         assertThat(calls).isEmpty()
@@ -361,15 +389,15 @@ class ShellCommandTest {
 
     @Test
     fun `slash status prints chunk count to stdout`(@TempDir tempDir: Path) {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        repo.save()
-        val pipeline = makePipeline(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val pipeline = makePipeline(repo)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("/status"), pipeline, repository = repo)
 
         cmd.call()
+        repo.close()
 
         assertThat(out.toString()).matches("(?s).*\\d+.*")
     }
@@ -380,17 +408,19 @@ class ShellCommandTest {
 
     @Test
     fun `slash search calls EmbeddingSearchPipeline with correct question and topK and not RagPipeline`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val ragCalls = mutableListOf<RagQuery>()
-        val pipeline = makePipeline(tempDir, ragCalls)
+        val pipeline = makePipeline(repo, ragCalls)
         val searchCalls = mutableListOf<SearchQuery>()
-        val searchPipeline = makeSearchPipeline(tempDir, searchCalls)
+        val searchPipeline = makeSearchPipeline(repo, searchCalls)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("/search what is X"), pipeline, searchPipeline)
         cmd.topK = 7
 
         cmd.call()
+        repo.close()
 
         assertThat(ragCalls).isEmpty()
         assertThat(searchCalls).hasSize(1)
@@ -404,13 +434,15 @@ class ShellCommandTest {
 
     @Test
     fun `slash verbose prints verbose on first time and verbose off second time`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
-        val pipeline = makePipeline(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val pipeline = makePipeline(repo)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("/verbose", "/verbose"), pipeline)
 
         cmd.call()
+        repo.close()
 
         val output = out.toString()
         assertThat(output).contains("verbose on")
@@ -423,9 +455,9 @@ class ShellCommandTest {
 
     @Test
     fun `slash verbose then question writes source details to stderr`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        val searchPipelineForVerbose = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
+        createStore(tempDir)
+        val luceneRepo = openRepo(tempDir)
+        val searchPipelineForVerbose = EmbeddingSearchPipeline(luceneRepo)
         val source = SourceReference("doc.txt", 0, 0.9, "excerpt")
         val pipeline = object : RagPipeline(searchPipelineForVerbose, stubChatModel) {
             override fun query(ragQuery: RagQuery): RagResult = RagResult("Answer", listOf(source))
@@ -435,6 +467,7 @@ class ShellCommandTest {
         val cmd = createShellCommand(tempDir, out, err, makeInput("/verbose", "what is X"), pipeline)
 
         cmd.call()
+        luceneRepo.close()
 
         assertThat(err.toString()).contains("doc.txt")
     }
@@ -445,14 +478,16 @@ class ShellCommandTest {
 
     @Test
     fun `slash unknown command writes error to stderr and loop continues without exiting`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val calls = mutableListOf<RagQuery>()
-        val pipeline = makePipeline(tempDir, calls)
+        val pipeline = makePipeline(repo, calls)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("/unknown", "real question"), pipeline)
 
         val exitCode = cmd.call()
+        repo.close()
 
         assertThat(exitCode).isEqualTo(0)
         assertThat(err.toString()).isNotEmpty()
@@ -466,14 +501,16 @@ class ShellCommandTest {
 
     @Test
     fun `slash prefixed lines are never passed to RagPipeline query`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val calls = mutableListOf<RagQuery>()
-        val pipeline = makePipeline(tempDir, calls)
+        val pipeline = makePipeline(repo, calls)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("/help", "/status", "/verbose"), pipeline)
 
         cmd.call()
+        repo.close()
 
         assertThat(calls).isEmpty()
     }
@@ -484,16 +521,18 @@ class ShellCommandTest {
 
     @Test
     fun `slash search-bm25 calls BM25SearchPipeline and outputs chunk content`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val bm25Calls = mutableListOf<SearchQuery>()
-        val bm25Pipeline = makeBM25SearchPipeline(tempDir, bm25Calls)
+        val bm25Pipeline = makeBM25SearchPipeline(repo, bm25Calls)
         val ragCalls = mutableListOf<RagQuery>()
-        val pipeline = makePipeline(tempDir, ragCalls)
+        val pipeline = makePipeline(repo, ragCalls)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("/search-bm25 foxterm", "/exit"), pipeline, bm25SearchPipeline = bm25Pipeline)
 
         val exitCode = cmd.call()
+        repo.close()
 
         assertThat(exitCode).isEqualTo(0)
         assertThat(ragCalls).isEmpty()
@@ -508,16 +547,18 @@ class ShellCommandTest {
 
     @Test
     fun `slash search-embedding calls EmbeddingSearchPipeline and outputs chunk content`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val searchCalls = mutableListOf<SearchQuery>()
-        val searchPipeline = makeSearchPipeline(tempDir, searchCalls)
+        val searchPipeline = makeSearchPipeline(repo, searchCalls)
         val ragCalls = mutableListOf<RagQuery>()
-        val pipeline = makePipeline(tempDir, ragCalls)
+        val pipeline = makePipeline(repo, ragCalls)
         val out = StringWriter()
         val err = StringWriter()
         val cmd = createShellCommand(tempDir, out, err, makeInput("/search-embedding embterm", "/exit"), pipeline, searchPipeline)
 
         val exitCode = cmd.call()
+        repo.close()
 
         assertThat(exitCode).isEqualTo(0)
         assertThat(ragCalls).isEmpty()
@@ -532,12 +573,14 @@ class ShellCommandTest {
 
     @Test
     fun `slash help output contains search-bm25 and search-embedding`(@TempDir tempDir: Path) {
-        createStoreFile(tempDir)
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
         val out = StringWriter()
         val err = StringWriter()
-        val cmd = createShellCommand(tempDir, out, err, makeInput("/help"), makePipeline(tempDir))
+        val cmd = createShellCommand(tempDir, out, err, makeInput("/help"), makePipeline(repo))
 
         cmd.call()
+        repo.close()
 
         val output = out.toString()
         assertThat(output).contains("search-bm25")

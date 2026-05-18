@@ -1,15 +1,12 @@
 package ch.obermuhlner.ezrag.rag
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
-import org.springframework.ai.embedding.EmbeddingModel
-import org.springframework.ai.vectorstore.SearchRequest
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import java.io.PrintWriter
 
 open class EmbeddingSearchPipeline(
-    private val repository: VectorStoreRepository,
-    private val embeddingModel: EmbeddingModel,
+    private val luceneRepository: LuceneRepository,
     private val reranker: Reranker? = null,
-    private val errWriter: PrintWriter = PrintWriter(System.err, true)
+    private val errWriter: PrintWriter = PrintWriter(System.err, true),
 ) {
 
     open fun search(query: SearchQuery): SearchResult {
@@ -19,30 +16,15 @@ open class EmbeddingSearchPipeline(
             query.topK
         }
 
-        val similarDocs = repository.getStore().similaritySearch(
-            SearchRequest.builder()
-                .query(query.question)
-                .topK(fetchK)
-                .similarityThreshold(query.minScore)
-                .build()
-        )
-
-        if (similarDocs.isNullOrEmpty()) {
-            return SearchResult(chunks = emptyList())
-        }
-
-        val candidates = similarDocs.map { doc ->
+        val docs = luceneRepository.semanticSearch(query.question, fetchK)
+        if (docs.isEmpty()) return SearchResult(chunks = emptyList())
+        val candidates = docs.map { doc ->
             val filePath = doc.metadata["source"] as? String ?: ""
             val chunkIndex = doc.metadata["chunk_index"]?.let { toInt(it) } ?: 0
-            val score = doc.score ?: 0.0
+            val score = (doc.metadata["score"] as? Double) ?: (doc.score ?: 0.0)
             val content = doc.text ?: ""
-            ChunkMatch(
-                filePath = filePath,
-                chunkIndex = chunkIndex,
-                score = score,
-                content = content
-            )
-        }.sortedByDescending { it.score }
+            ChunkMatch(filePath = filePath, chunkIndex = chunkIndex, score = score, content = content)
+        }.filter { it.score >= query.minScore }.sortedByDescending { it.score }
 
         if (reranker != null && query.rerankCandidates != null) {
             if (query.verbose) {

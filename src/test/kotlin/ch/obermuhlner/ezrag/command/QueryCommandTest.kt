@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.RagPipeline
@@ -52,16 +52,14 @@ class QueryCommandTest {
         ChatResponse(listOf(Generation(AssistantMessage("Stub answer"))))
     }
 
-    private fun createPopulatedRepository(storeDir: Path): VectorStoreRepository {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        repo.load()
+    private fun populateRepository(storeDir: Path) {
+        val repo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
         val doc = Document.builder()
             .text("Test content for querying.")
             .metadata(mapOf("source" to "test.txt", "chunk_index" to 0, "mtime" to 1000L))
             .build()
         repo.add(listOf(doc))
-        repo.save()
-        return repo
+        repo.close()
     }
 
     private fun createQueryCommand(
@@ -72,9 +70,16 @@ class QueryCommandTest {
         pipeline: RagPipeline? = null,
         formatter: OutputFormatter = OutputFormatter(),
     ): QueryCommand {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        repo.load()
-        val ragPipeline = pipeline ?: RagPipeline(EmbeddingSearchPipeline(repo, fakeEmbeddingModel), stubChatModel)
+        // Only create a repo/pipeline if the store already exists, so that
+        // tests for non-existent stores can observe the command's own existence check.
+        val ragPipeline = pipeline ?: run {
+            if (LuceneRepository.storeExists(storeDir)) {
+                val repo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
+                RagPipeline(EmbeddingSearchPipeline(repo), stubChatModel)
+            } else {
+                null
+            }
+        }
         return QueryCommand(
             storeDirOverride = storeDir,
             ragPipeline = ragPipeline,
@@ -91,11 +96,11 @@ class QueryCommandTest {
 
     @Test
     fun `positional words are joined into single question string`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -129,11 +134,11 @@ class QueryCommandTest {
 
     @Test
     fun `single quoted token in questionArgs is used as question`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -196,7 +201,7 @@ class QueryCommandTest {
 
     @Test
     fun `positional question with populated store exits code 0 and answer on outputWriter`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val out = StringWriter()
         val err = StringWriter()
@@ -215,13 +220,13 @@ class QueryCommandTest {
 
     @Test
     fun `absence of positional args reads stdin until EOF and uses as question`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val stdinContent = "Question from stdin"
         val inputStream = ByteArrayInputStream(stdinContent.toByteArray())
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -255,7 +260,7 @@ class QueryCommandTest {
 
     @Test
     fun `empty stdin exits code 1 with message No question provided`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val inputStream = ByteArrayInputStream(ByteArray(0))
         val out = StringWriter()
@@ -275,7 +280,7 @@ class QueryCommandTest {
 
     @Test
     fun `--output json produces JSON-formatted output`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val out = StringWriter()
         val err = StringWriter()
@@ -298,11 +303,11 @@ class QueryCommandTest {
 
     @Test
     fun `--top-k 2 passes topK=2 to RagPipeline via RagQuery`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -336,11 +341,11 @@ class QueryCommandTest {
 
     @Test
     fun `--model claude-3-5-sonnet passes modelOverride to RagQuery`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -374,11 +379,11 @@ class QueryCommandTest {
 
     @Test
     fun `--system-prompt Custom passes systemPrompt to RagQuery`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val capturedQueries = mutableListOf<RagQuery>()
         val capturingPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult {
@@ -412,7 +417,7 @@ class QueryCommandTest {
 
     @Test
     fun `--verbose writes source info to errorWriter`(@TempDir tempDir: Path) {
-        createPopulatedRepository(tempDir)
+        populateRepository(tempDir)
 
         val fixedResult = RagResult(
             answer = "Answer",
@@ -426,7 +431,7 @@ class QueryCommandTest {
             )
         )
         val stubPipeline = object : RagPipeline(
-            EmbeddingSearchPipeline(VectorStoreRepository(fakeEmbeddingModel, tempDir).also { it.load() }, fakeEmbeddingModel),
+            EmbeddingSearchPipeline(LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")),
             stubChatModel
         ) {
             override fun query(ragQuery: RagQuery): RagResult = fixedResult

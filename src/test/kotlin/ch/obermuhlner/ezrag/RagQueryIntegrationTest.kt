@@ -2,7 +2,7 @@ package ch.obermuhlner.ezrag
 
 import ch.obermuhlner.ezrag.command.IngestCommand
 import ch.obermuhlner.ezrag.command.QueryCommand
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.RagPipeline
@@ -28,7 +28,7 @@ import java.nio.file.Path
  * End-to-end integration tests for the RAG query pipeline.
  *
  * Uses a fake EmbeddingModel (returns fixed vectors) and a stub ChatModel (returns a fixed answer).
- * Exercises real disk I/O through VectorStoreRepository.
+ * Exercises real disk I/O through LuceneRepository.
  * No Spring context, no live LLM, no live embedding API.
  */
 class RagQueryIntegrationTest {
@@ -79,10 +79,15 @@ class RagQueryIntegrationTest {
         err: StringWriter,
         inputStream: ByteArrayInputStream = ByteArrayInputStream(ByteArray(0)),
     ): QueryCommand {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        repo.load()
-        val searchPipeline = EmbeddingSearchPipeline(repo, fakeEmbeddingModel)
-        val pipeline = RagPipeline(searchPipeline, stubChatModel)
+        // Only create a pipeline if the store already exists so that
+        // tests for non-existent stores observe the command's own existence check.
+        val pipeline = if (LuceneRepository.storeExists(storeDir)) {
+            val luceneRepo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
+            val searchPipeline = EmbeddingSearchPipeline(luceneRepo)
+            RagPipeline(searchPipeline, stubChatModel)
+        } else {
+            null
+        }
         return QueryCommand(
             storeDirOverride = storeDir,
             ragPipeline = pipeline,

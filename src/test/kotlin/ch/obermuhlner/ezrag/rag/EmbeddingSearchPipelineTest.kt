@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.rag
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -71,10 +71,8 @@ class EmbeddingSearchPipelineTest {
         override fun dimensions(): Int = 4
     }
 
-    private fun createRepository(tempDir: Path, embeddingModel: EmbeddingModel = distinctVectorEmbeddingModel): VectorStoreRepository {
-        val repo = VectorStoreRepository(embeddingModel, tempDir)
-        repo.load()
-        return repo
+    private fun createRepository(tempDir: Path, embeddingModel: EmbeddingModel = distinctVectorEmbeddingModel): LuceneRepository {
+        return LuceneRepository.open(embeddingModel, tempDir, "standard")
     }
 
     @Test
@@ -91,7 +89,7 @@ class EmbeddingSearchPipelineTest {
             .build()
         repository.add(listOf(doc1, doc2))
 
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel)
+        val pipeline = EmbeddingSearchPipeline(repository)
         val result = pipeline.search(SearchQuery(question = "test query", topK = 5, minScore = 0.0))
 
         assertThat(result.chunks).isNotEmpty()
@@ -100,6 +98,8 @@ class EmbeddingSearchPipelineTest {
         assertThat(scores).isSortedAccordingTo(compareByDescending { it })
         // High score document should come first
         assertThat(result.chunks.first().filePath).isEqualTo("high.txt")
+
+        repository.close()
     }
 
     @Test
@@ -112,12 +112,13 @@ class EmbeddingSearchPipelineTest {
             .build()
         repository.add(listOf(doc))
 
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel)
+        val pipeline = EmbeddingSearchPipeline(repository)
         // minScore=1.0 means only exact matches pass; cosine scores will be < 1.0 unless identical
         // Use a very high threshold to ensure no results pass
         val result = pipeline.search(SearchQuery(question = "test query", topK = 5, minScore = 1.0))
 
         assertThat(result.chunks).isEmpty()
+        repository.close()
     }
 
     @Test
@@ -134,10 +135,11 @@ class EmbeddingSearchPipelineTest {
             .build()
         repository.add(listOf(doc1, doc2))
 
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel)
+        val pipeline = EmbeddingSearchPipeline(repository)
         val result = pipeline.search(SearchQuery(question = "test query", topK = 1, minScore = 0.0))
 
         assertThat(result.chunks).hasSize(1)
+        repository.close()
     }
 
     @Test
@@ -151,11 +153,12 @@ class EmbeddingSearchPipelineTest {
             .build()
         repository.add(listOf(doc))
 
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel)
+        val pipeline = EmbeddingSearchPipeline(repository)
         val result = pipeline.search(SearchQuery(question = "test query", topK = 5, minScore = 0.0))
 
         assertThat(result.chunks).isNotEmpty()
         assertThat(result.chunks.first().content).isEqualTo(longText)
+        repository.close()
     }
 
     @Test
@@ -171,11 +174,12 @@ class EmbeddingSearchPipelineTest {
         repository.add(listOf(doc))
 
         // Constructing EmbeddingSearchPipeline does not require ChatModel at all.
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel)
+        val pipeline = EmbeddingSearchPipeline(repository)
         val result = pipeline.search(SearchQuery(question = "test query", topK = 5, minScore = 0.0))
 
         // Should return results without throwing
         assertThat(result.chunks).isNotEmpty
+        repository.close()
     }
 
     // ---------------------------------------------------------------------------
@@ -199,7 +203,7 @@ class EmbeddingSearchPipelineTest {
         repository.add(listOf(doc1, doc2))
 
         val stub = StubReranker()
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub)
+        val pipeline = EmbeddingSearchPipeline(repository, reranker = stub)
         val result = pipeline.search(
             SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 2)
         )
@@ -208,6 +212,7 @@ class EmbeddingSearchPipelineTest {
         // The store returns [high.txt, low.txt] by embedding score; stub reverses → low.txt first.
         assertThat(result.chunks).hasSize(2)
         assertThat(result.chunks.first().filePath).isEqualTo("low.txt")
+        repository.close()
     }
 
     @Test
@@ -226,12 +231,13 @@ class EmbeddingSearchPipelineTest {
         repository.add(docs)
 
         val stub = StubReranker()
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub)
+        val pipeline = EmbeddingSearchPipeline(repository, reranker = stub)
         val result = pipeline.search(
             SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 6)
         )
 
         assertThat(result.chunks).hasSize(2)
+        repository.close()
     }
 
     @Test
@@ -249,7 +255,7 @@ class EmbeddingSearchPipelineTest {
         repository.add(listOf(doc1, doc2))
 
         val stub = StubReranker()
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub)
+        val pipeline = EmbeddingSearchPipeline(repository, reranker = stub)
         val result = pipeline.search(
             SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 2)
         )
@@ -258,6 +264,7 @@ class EmbeddingSearchPipelineTest {
         assertThat(result.chunks).hasSize(2)
         assertThat(result.chunks[0].score).isEqualTo(2.0)
         assertThat(result.chunks[1].score).isEqualTo(1.0)
+        repository.close()
     }
 
     @Test
@@ -275,12 +282,13 @@ class EmbeddingSearchPipelineTest {
         repository.add(listOf(doc1, doc2))
 
         // No reranker: null (default)
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel)
+        val pipeline = EmbeddingSearchPipeline(repository)
         val result = pipeline.search(SearchQuery(question = "test query", topK = 5, minScore = 0.0))
 
         // Original embedding ordering: high.txt first
         assertThat(result.chunks).isNotEmpty()
         assertThat(result.chunks.first().filePath).isEqualTo("high.txt")
+        repository.close()
     }
 
     @Test
@@ -296,13 +304,14 @@ class EmbeddingSearchPipelineTest {
         repository.add(docs)
 
         // reranker=null (default), rerankCandidates=4 set but reranker is null → must use topK
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel)
+        val pipeline = EmbeddingSearchPipeline(repository)
         val result = pipeline.search(
             SearchQuery(question = "test query", topK = 1, minScore = 0.0, rerankCandidates = 4)
         )
 
         // Even though rerankCandidates=4, reranker is null, so pipeline fetches topK=1
         assertThat(result.chunks).hasSize(1)
+        repository.close()
     }
 
     // ---------------------------------------------------------------------------
@@ -326,7 +335,7 @@ class EmbeddingSearchPipelineTest {
         val sw = StringWriter()
         val errWriter = PrintWriter(sw, true)
         val stub = StubReranker()
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub, errWriter = errWriter)
+        val pipeline = EmbeddingSearchPipeline(repository, reranker = stub, errWriter = errWriter)
 
         pipeline.search(SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 2, verbose = true))
 
@@ -334,6 +343,7 @@ class EmbeddingSearchPipelineTest {
         val lines = output.lines().filter { it.isNotEmpty() }
         assertThat(lines).anyMatch { it.startsWith("Reranker: ") }
         assertThat(lines).anyMatch { it.startsWith("Reranking: ") }
+        repository.close()
     }
 
     @Test
@@ -349,13 +359,14 @@ class EmbeddingSearchPipelineTest {
         val sw = StringWriter()
         val errWriter = PrintWriter(sw, true)
         val stub = StubReranker()
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub, errWriter = errWriter)
+        val pipeline = EmbeddingSearchPipeline(repository, reranker = stub, errWriter = errWriter)
 
         pipeline.search(SearchQuery(question = "test query", topK = 1, minScore = 0.0, rerankCandidates = 1, verbose = true))
 
         val output = sw.toString()
         val rerankerLine = output.lines().first { it.startsWith("Reranker: ") }
         assertThat(rerankerLine).contains(stub.name)
+        repository.close()
     }
 
     @Test
@@ -373,13 +384,14 @@ class EmbeddingSearchPipelineTest {
         val sw = StringWriter()
         val errWriter = PrintWriter(sw, true)
         val stub = StubReranker()
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub, errWriter = errWriter)
+        val pipeline = EmbeddingSearchPipeline(repository, reranker = stub, errWriter = errWriter)
 
         pipeline.search(SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 4, verbose = true))
 
         val output = sw.toString()
         val rerankingLine = output.lines().first { it.startsWith("Reranking: ") }
         assertThat(rerankingLine).isEqualTo("Reranking: 4 candidates → top 2")
+        repository.close()
     }
 
     @Test
@@ -399,13 +411,14 @@ class EmbeddingSearchPipelineTest {
         val sw = StringWriter()
         val errWriter = PrintWriter(sw, true)
         val stub = StubReranker()
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = stub, errWriter = errWriter)
+        val pipeline = EmbeddingSearchPipeline(repository, reranker = stub, errWriter = errWriter)
 
         pipeline.search(SearchQuery(question = "test query", topK = 2, minScore = 0.0, rerankCandidates = 2, verbose = false))
 
         val output = sw.toString()
         assertThat(output).doesNotContain("Reranker: ")
         assertThat(output).doesNotContain("Reranking: ")
+        repository.close()
     }
 
     @Test
@@ -421,12 +434,13 @@ class EmbeddingSearchPipelineTest {
         val sw = StringWriter()
         val errWriter = PrintWriter(sw, true)
         // No reranker (null)
-        val pipeline = EmbeddingSearchPipeline(repository, distinctVectorEmbeddingModel, reranker = null, errWriter = errWriter)
+        val pipeline = EmbeddingSearchPipeline(repository, reranker = null, errWriter = errWriter)
 
         pipeline.search(SearchQuery(question = "test query", topK = 1, minScore = 0.0, verbose = true))
 
         val output = sw.toString()
         assertThat(output).doesNotContain("Reranker: ")
         assertThat(output).doesNotContain("Reranking: ")
+        repository.close()
     }
 }

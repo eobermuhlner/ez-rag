@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
@@ -8,7 +8,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 /**
- * MCP tool that deletes an ingested document from the vector store.
+ * MCP tool that deletes an ingested document from the unified Lucene index.
  */
 class McpDeleteTool(
     private val embeddingModel: EmbeddingModel,
@@ -27,11 +27,10 @@ class McpDeleteTool(
     ): DeleteToolResult {
         val absolutePath = Paths.get(filePath).toAbsolutePath().normalize().toString()
         return try {
-            val repository = VectorStoreRepository(embeddingModel, storeDir)
-            repository.load()
-            val removed = repository.delete(absolutePath)
-            repository.save()
-            DeleteToolResult(filePath = absolutePath, chunksRemoved = removed)
+            LuceneRepository.open(embeddingModel, storeDir, "standard").use { repository ->
+                val removed = repository.delete(absolutePath)
+                DeleteToolResult(filePath = absolutePath, chunksRemoved = removed)
+            }
         } catch (e: Exception) {
             DeleteToolResult(
                 filePath = absolutePath,

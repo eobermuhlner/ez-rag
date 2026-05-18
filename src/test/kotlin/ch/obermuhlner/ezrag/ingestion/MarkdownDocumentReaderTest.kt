@@ -8,7 +8,6 @@ import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
-import org.springframework.ai.vectorstore.SimpleVectorStore
 import java.nio.file.Path
 
 class MarkdownDocumentReaderTest {
@@ -200,7 +199,7 @@ class MarkdownDocumentReaderTest {
     }
 
     @Test
-    fun `heading_path round-trips through SimpleVectorStore JSON serialisation`(@TempDir tempDir: Path) {
+    fun `heading_path round-trips through LuceneRepository serialisation`(@TempDir tempDir: Path) {
         val file = tempDir.resolve("roundtrip.md").toFile()
         file.writeText("""
             # Top Level
@@ -219,8 +218,7 @@ class MarkdownDocumentReaderTest {
 
         // Simulate IngestService: set source, mtime, chunk_index metadata
         val embeddingModel = makeFakeEmbeddingModel()
-        val repository = VectorStoreRepository(embeddingModel, tempDir)
-        repository.load()
+        val repository = LuceneRepository.open(embeddingModel, tempDir, "standard")
 
         val docsToStore = documents.mapIndexed { idx, doc ->
             Document.builder()
@@ -234,29 +232,17 @@ class MarkdownDocumentReaderTest {
                 .build()
         }
         repository.add(docsToStore)
-        repository.save()
+        repository.close()
 
-        // Load back via a new repository instance (simulates round-trip through JSON)
-        val repository2 = VectorStoreRepository(embeddingModel, tempDir)
-        repository2.load()
+        // Load back via a new repository instance (simulates round-trip through the index)
+        val repository2 = LuceneRepository.open(embeddingModel, tempDir, "standard")
         val chunks = repository2.getChunksForFile("/abs/roundtrip.md")
+        repository2.close()
 
         // The chunk for "Sub Section" should have heading_path stored correctly
-        // We verify via the raw store that heading_path is a list
-        val storeField = SimpleVectorStore::class.java.getDeclaredField("store")
-        storeField.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        val storeMap = storeField.get(repository2.getStore()) as Map<String, Any>
-        val subEntry = storeMap.values.find { entry ->
-            val meta = entry.javaClass.getMethod("getMetadata").invoke(entry) as? Map<*, *>
-            meta?.get("heading_title") == "Sub Section"
-        }
-        assertThat(subEntry).isNotNull()
-        val metaMethod = subEntry!!.javaClass.getMethod("getMetadata")
-        @Suppress("UNCHECKED_CAST")
-        val meta = metaMethod.invoke(subEntry) as Map<String, Any>
-        @Suppress("UNCHECKED_CAST")
-        val roundTrippedPath = meta["heading_path"] as? List<String>
+        val subChunkInfo = chunks.find { it.headingTitle == "Sub Section" }
+        assertThat(subChunkInfo).isNotNull()
+        val roundTrippedPath = subChunkInfo!!.headingPath
         assertThat(roundTrippedPath).isNotNull()
         assertThat(roundTrippedPath).containsExactly("Top Level", "Sub Section")
     }

@@ -7,7 +7,7 @@ import java.io.PrintWriter
 import java.nio.file.Path
 
 /**
- * Reusable service that ingests files into a vector store.
+ * Reusable service that ingests files into the unified Lucene index.
  *
  * Returns results as [IngestResult]; has no dependency on picocli.
  * Used by both [ch.obermuhlner.ezrag.command.IngestCommand] and the MCP ingest tool.
@@ -27,10 +27,8 @@ open class IngestService(
 
     open fun ingest(files: List<File>): IngestResult {
         val registry = DocumentReaderRegistry(chunkSize, chunkOverlap)
-        val repository = VectorStoreRepository(embeddingModel, storeDir)
-        val bm25Repository = BM25Repository(storeDir, analyzerName)
+        val repository = LuceneRepository.open(embeddingModel, storeDir, analyzerName)
         val directoryWalker = DirectoryWalker(warningWriter)
-        repository.load()
 
         var filesIngested = 0
         var chunksCreated = 0
@@ -55,32 +53,29 @@ open class IngestService(
             }
         }
 
-        for (path in resolvedPaths) {
-            val absolutePath = path.toAbsolutePath().normalize()
-            val mtime = absolutePath.toFile().lastModified()
-            val sourceKey = absolutePath.toString()
-            if (repository.isAlreadyIngested(sourceKey, mtime) && bm25Repository.isAlreadyIndexed(sourceKey, mtime)) {
-                onFileSkipped?.invoke(absolutePath, "already ingested")
-                skipped++
-                continue
+        repository.use {
+            for (path in resolvedPaths) {
+                val absolutePath = path.toAbsolutePath().normalize()
+                val mtime = absolutePath.toFile().lastModified()
+                val sourceKey = absolutePath.toString()
+                if (repository.isAlreadyIngested(sourceKey, mtime)) {
+                    onFileSkipped?.invoke(absolutePath, "already ingested")
+                    skipped++
+                    continue
+                }
+                onFileIngesting?.invoke(absolutePath)
+                val rawChunks = registry.read(absolutePath.toFile())
+                val chunks = withSourceAndMtime(rawChunks, sourceKey, mtime)
+                onFileLoaded?.invoke(absolutePath, chunks)
+                if (chunks.isEmpty()) {
+                    warningWriter.println("Warning: No chunks produced for: $absolutePath")
+                    continue
+                }
+                repository.add(chunks)
+                filesIngested++
+                chunksCreated += chunks.size
             }
-            onFileIngesting?.invoke(absolutePath)
-            val rawChunks = registry.read(absolutePath.toFile())
-            val chunks = withSourceAndMtime(rawChunks, sourceKey, mtime)
-            onFileLoaded?.invoke(absolutePath, chunks)
-            if (chunks.isEmpty()) {
-                warningWriter.println("Warning: No chunks produced for: $absolutePath")
-                continue
-            }
-            repository.add(chunks)
-            bm25Repository.deleteBySource(sourceKey)
-            bm25Repository.index(chunks)
-            filesIngested++
-            chunksCreated += chunks.size
         }
-
-        repository.save()
-        bm25Repository.close()
 
         return IngestResult(
             filesIngested = filesIngested,

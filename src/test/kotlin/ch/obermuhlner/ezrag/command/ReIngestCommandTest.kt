@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -37,16 +37,15 @@ class ReIngestCommandTest {
     }
 
     private fun ingestDoc(storeDir: Path, file: Path) {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        repo.load()
         val absolutePath = file.toAbsolutePath().normalize().toString()
         val mtime = file.toFile().lastModified()
         val doc = Document.builder()
             .text(file.toFile().readText())
             .metadata(mapOf("source" to absolutePath, "mtime" to mtime, "chunk_index" to 0))
             .build()
-        repo.add(listOf(doc))
-        repo.save()
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            repo.add(listOf(doc))
+        }
     }
 
     @Test
@@ -154,8 +153,8 @@ class ReIngestCommandTest {
 
         assertThat(exitCode).isEqualTo(0)
         // Custom store should be updated, default store should not exist
-        assertThat(customStoreDir.resolve("vector-store.json").toFile()).exists()
-        assertThat(defaultStoreDir.resolve("vector-store.json").toFile()).doesNotExist()
+        assertThat(customStoreDir.resolve("lucene").toFile()).exists()
+        assertThat(defaultStoreDir.resolve("lucene").toFile()).doesNotExist()
         val output = out.toString()
         assertThat(output).contains("1 files re-ingested")
     }

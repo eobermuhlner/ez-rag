@@ -9,7 +9,6 @@ import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
-import org.springframework.ai.vectorstore.SimpleVectorStore
 import picocli.CommandLine
 import ch.obermuhlner.ezrag.EzRagCommand
 import ch.obermuhlner.ezrag.command.IngestCommand
@@ -23,7 +22,7 @@ import java.time.Instant
 
 class IngestIntegrationTest {
 
-    private fun createCommandLine(storeFilePath: Path, embeddingModel: EmbeddingModel): CommandLine {
+    private fun createCommandLine(storeDirPath: Path, embeddingModel: EmbeddingModel): CommandLine {
         val ingestCommand = IngestCommand(embeddingModel)
         val ezRagCommand = EzRagCommand()
         val cmdLine = CommandLine(ezRagCommand)
@@ -53,33 +52,30 @@ class IngestIntegrationTest {
     }
 
     @Test
-    fun `ingest a txt file exits 0 and store file exists`(@TempDir tempDir: Path) {
+    fun `ingest a txt file exits 0 and store directory exists`(@TempDir tempDir: Path) {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for ingestion.")
 
         val storeDir = tempDir.resolve("store")
-        val storeFilePath = storeDir.resolve("vector-store.json")
+        val luceneDir = storeDir.resolve("lucene")
 
         val ingestCommand = IngestCommand(fakeEmbeddingModel, storeDir)
         val exitCode = ingestCommand.call(listOf(sampleFile.toFile()))
 
         assertThat(exitCode).isEqualTo(0)
-        assertThat(storeFilePath.toFile()).exists()
-        assertThat(storeFilePath.toFile().length()).isGreaterThan(0)
+        assertThat(luceneDir.toFile()).exists()
+        assertThat(luceneDir.toFile()).isDirectory()
     }
 
     @Test
-    fun `ingest a txt file produces valid JSON store`(@TempDir tempDir: Path) {
+    fun `ingest a txt file creates a readable Lucene index`(@TempDir tempDir: Path) {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for ingestion.")
 
         val ingestCommand = IngestCommand(fakeEmbeddingModel, tempDir)
         ingestCommand.call(listOf(sampleFile.toFile()))
 
-        val json = tempDir.resolve("vector-store.json").toFile().readText()
-        val mapper = ObjectMapper()
-        val node = mapper.readTree(json)
-        assertThat(node).isNotNull()
+        assertThat(LuceneRepository.storeExists(tempDir)).isTrue()
     }
 
     @Test
@@ -189,14 +185,12 @@ class IngestIntegrationTest {
         // File was skipped, so chunks created = 0
         assertThat(out2.toString()).contains("0 chunks created")
 
-        // Verify the store file still exists and the JSON shows the same chunk count
-        val storeFilePath = tempDir.resolve("vector-store.json")
-        assertThat(storeFilePath.toFile()).exists()
-        val json = storeFilePath.toFile().readText()
-        val mapper = ObjectMapper()
-        val node = mapper.readTree(json)
-        // SimpleVectorStore serializes as a map of id -> content
-        assertThat(node.size()).isEqualTo(chunksAfterFirst)
+        // Verify the Lucene index still exists and has the same chunk count
+        assertThat(LuceneRepository.storeExists(tempDir)).isTrue()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val metadata = repo.getMetadata()
+            assertThat(metadata.chunkCount).isEqualTo(chunksAfterFirst)
+        }
     }
 
     @Test
@@ -257,15 +251,14 @@ class IngestIntegrationTest {
         sampleFile.toFile().writeText("Hello world. This is a test document for custom store path.")
 
         val customStoreDir = tempDir.resolve("custom-store")
-        val customStorePath = customStoreDir.resolve("vector-store.json")
-        val defaultStorePath = tempDir.resolve(".ez-rag").resolve("vector-store.json")
+        val defaultStoreDir = tempDir.resolve(".ez-rag")
 
         val ingestCommand = IngestCommand(fakeEmbeddingModel, customStoreDir)
         val exitCode = ingestCommand.call(listOf(sampleFile.toFile()))
 
         assertThat(exitCode).isEqualTo(0)
-        assertThat(customStorePath.toFile()).exists()
-        assertThat(defaultStorePath.toFile()).doesNotExist()
+        assertThat(LuceneRepository.storeExists(customStoreDir)).isTrue()
+        assertThat(defaultStoreDir.resolve("lucene").toFile()).doesNotExist()
     }
 
     @Test

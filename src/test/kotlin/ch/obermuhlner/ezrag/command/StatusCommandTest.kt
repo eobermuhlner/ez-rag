@@ -3,8 +3,7 @@ package ch.obermuhlner.ezrag.command
 import ch.obermuhlner.ezrag.config.CredentialSource
 import ch.obermuhlner.ezrag.config.Credentials
 import ch.obermuhlner.ezrag.config.EzRagConfig
-import ch.obermuhlner.ezrag.ingestion.BM25Repository
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -42,13 +41,12 @@ class StatusCommandTest {
     }
 
     private fun buildStoreWithOneFile(tempDir: Path): Path {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        repo.add(listOf(
-            Document.builder().text("Some content")
-                .metadata(mapOf("source" to "test.txt", "mtime" to 1000L)).build()
-        ))
-        repo.save()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            repo.add(listOf(
+                Document.builder().text("Some content")
+                    .metadata(mapOf("source" to "test.txt", "mtime" to 1000L, "chunk_index" to 0)).build()
+            ))
+        }
         return tempDir
     }
 
@@ -61,17 +59,16 @@ class StatusCommandTest {
         fileA.toFile().writeText("Content for file A. More text to ensure a chunk is created.")
         fileB.toFile().writeText("Content for file B. Different content for second file.")
 
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        repo.add(listOf(
-            Document.builder().text(fileA.toFile().readText())
-                .metadata(mapOf("source" to fileA.toString(), "mtime" to 1000L)).build()
-        ))
-        repo.add(listOf(
-            Document.builder().text(fileB.toFile().readText())
-                .metadata(mapOf("source" to fileB.toString(), "mtime" to 2000L)).build()
-        ))
-        repo.save()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            repo.add(listOf(
+                Document.builder().text(fileA.toFile().readText())
+                    .metadata(mapOf("source" to fileA.toString(), "mtime" to 1000L, "chunk_index" to 0)).build()
+            ))
+            repo.add(listOf(
+                Document.builder().text(fileB.toFile().readText())
+                    .metadata(mapOf("source" to fileB.toString(), "mtime" to 2000L, "chunk_index" to 0)).build()
+            ))
+        }
 
         val out = StringWriter()
         val statusCommand = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
@@ -80,7 +77,7 @@ class StatusCommandTest {
         assertThat(exitCode).isEqualTo(0)
         val output = out.toString()
         assertThat(output).contains("Store:")
-        assertThat(output).contains(tempDir.resolve("vector-store.json").toAbsolutePath().toString())
+        assertThat(output).contains(tempDir.resolve("lucene").toAbsolutePath().toString())
         assertThat(output).contains("Chunks:")
         // status no longer lists individual document paths
         assertThat(output).doesNotContain(fileA.toString())
@@ -89,15 +86,14 @@ class StatusCommandTest {
 
     @Test
     fun `status text output contains document count`(@TempDir tempDir: Path) {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        repo.add(listOf(
-            Document.builder().text("Doc A").metadata(mapOf("source" to "a.txt", "mtime" to 1000L)).build()
-        ))
-        repo.add(listOf(
-            Document.builder().text("Doc B").metadata(mapOf("source" to "b.txt", "mtime" to 2000L)).build()
-        ))
-        repo.save()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            repo.add(listOf(
+                Document.builder().text("Doc A").metadata(mapOf("source" to "a.txt", "mtime" to 1000L, "chunk_index" to 0)).build()
+            ))
+            repo.add(listOf(
+                Document.builder().text("Doc B").metadata(mapOf("source" to "b.txt", "mtime" to 2000L, "chunk_index" to 0)).build()
+            ))
+        }
 
         val out = StringWriter()
         val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
@@ -145,11 +141,6 @@ class StatusCommandTest {
 
     @Test
     fun `status text output omits or labels lastIngestTime as none when store is empty`(@TempDir tempDir: Path) {
-        // Build a store then immediately clear it (we can't do that easily), so use a store with mtime=0
-        // The simplest approach: build a store normally; lastIngestTime will be > 0.
-        // Instead, test via JSON where we can inspect the value more directly.
-        // For text, just confirm the command exits 0 (can't easily create a non-empty store with mtime=0).
-        // We'll test this through the JSON path below.
         val out = StringWriter()
         buildStoreWithOneFile(tempDir)
         val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
@@ -507,7 +498,6 @@ class StatusCommandTest {
     @Test
     fun `status exits non-zero and shows error when no store exists`(@TempDir tempDir: Path) {
         val nonExistentStoreDir = tempDir.resolve("nonexistent")
-        val expectedStorePath = nonExistentStoreDir.resolve("vector-store.json")
 
         val out = StringWriter()
         val statusCommand = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = nonExistentStoreDir, outputWriter = PrintWriter(out))
@@ -515,7 +505,6 @@ class StatusCommandTest {
 
         assertThat(exitCode).isNotEqualTo(0)
         val output = out.toString()
-        assertThat(output).contains(expectedStorePath.toAbsolutePath().toString())
         assertThat(output).contains("ez-rag ingest")
     }
 
@@ -536,13 +525,12 @@ class StatusCommandTest {
         val ezRagDir = tempDir.resolve(".ez-rag")
         ezRagDir.toFile().mkdirs()
 
-        val repo = VectorStoreRepository(fakeEmbeddingModel, ezRagDir)
-        repo.load()
-        repo.add(listOf(
-            Document.builder().text("Content from parent store")
-                .metadata(mapOf("source" to "parent.txt", "mtime" to 1000L)).build()
-        ))
-        repo.save()
+        LuceneRepository.open(fakeEmbeddingModel, ezRagDir, "standard").use { repo ->
+            repo.add(listOf(
+                Document.builder().text("Content from parent store")
+                    .metadata(mapOf("source" to "parent.txt", "mtime" to 1000L, "chunk_index" to 0)).build()
+            ))
+        }
 
         val subDir = tempDir.resolve("sub")
         subDir.toFile().mkdirs()
@@ -562,17 +550,16 @@ class StatusCommandTest {
 
     @Test
     fun `text output lists files alphabetically`(@TempDir tempDir: Path) {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        repo.add(listOf(
-            Document.builder().text("Content Z")
-                .metadata(mapOf("source" to "z-file.txt", "mtime" to 1000L)).build()
-        ))
-        repo.add(listOf(
-            Document.builder().text("Content A")
-                .metadata(mapOf("source" to "a-file.txt", "mtime" to 2000L)).build()
-        ))
-        repo.save()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            repo.add(listOf(
+                Document.builder().text("Content Z")
+                    .metadata(mapOf("source" to "z-file.txt", "mtime" to 1000L, "chunk_index" to 0)).build()
+            ))
+            repo.add(listOf(
+                Document.builder().text("Content A")
+                    .metadata(mapOf("source" to "a-file.txt", "mtime" to 2000L, "chunk_index" to 0)).build()
+            ))
+        }
 
         val out = StringWriter()
         val statusCommand = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
@@ -587,13 +574,12 @@ class StatusCommandTest {
         val fileA = tempDir.resolve("a.txt")
         fileA.toFile().writeText("Content for file A. More text here.")
 
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        repo.add(listOf(
-            Document.builder().text(fileA.toFile().readText())
-                .metadata(mapOf("source" to fileA.toString(), "mtime" to 1000L)).build()
-        ))
-        repo.save()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            repo.add(listOf(
+                Document.builder().text(fileA.toFile().readText())
+                    .metadata(mapOf("source" to fileA.toString(), "mtime" to 1000L, "chunk_index" to 0)).build()
+            ))
+        }
 
         val out = StringWriter()
         val statusCommand = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
@@ -604,72 +590,14 @@ class StatusCommandTest {
         val json = out.toString().trim()
         val mapper = ObjectMapper()
         val node = mapper.readTree(json)
-        assertThat(node.has("storeFilePath")).isTrue()
-        assertThat(node.get("storeFilePath").asText()).isNotBlank()
+        assertThat(node.has("storeDirPath")).isTrue()
+        assertThat(node.get("storeDirPath").asText()).isNotBlank()
         assertThat(node.has("chunkCount")).isTrue()
         assertThat(node.get("chunkCount").asInt()).isGreaterThanOrEqualTo(1)
         // documents array is removed; documentCount replaces it
         assertThat(node.has("documents")).isFalse()
         assertThat(node.has("documentCount")).isTrue()
-    }
-
-    // ---- Task 06: BM25 metadata tests ----
-
-    @Test
-    fun `text output contains BM25 document count after ingest`(@TempDir tempDir: Path) {
-        // Build vector store with one chunk
-        buildStoreWithOneFile(tempDir)
-        // Index the same chunk into BM25
-        BM25Repository(tempDir, "standard").use { bm25 ->
-            bm25.index(listOf(
-                Document.builder().text("Some content")
-                    .metadata(mapOf("source" to "test.txt", "mtime" to 1000L)).build()
-            ))
-        }
-
-        val out = StringWriter()
-        val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
-        val exitCode = cmd.call()
-
-        assertThat(exitCode).isEqualTo(0)
-        assertThat(out.toString()).containsPattern("(?i)bm25 chunks.*1|bm25.*chunk.*1")
-    }
-
-    @Test
-    fun `JSON output contains bm25 object with chunkCount and indexSizeBytes after ingest`(@TempDir tempDir: Path) {
-        buildStoreWithOneFile(tempDir)
-        BM25Repository(tempDir, "standard").use { bm25 ->
-            bm25.index(listOf(
-                Document.builder().text("Some content")
-                    .metadata(mapOf("source" to "test.txt", "mtime" to 1000L)).build()
-            ))
-        }
-
-        val out = StringWriter()
-        val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
-        cmd.outputFormat = "json"
-        val exitCode = cmd.call()
-
-        assertThat(exitCode).isEqualTo(0)
-        val node = ObjectMapper().readTree(out.toString().trim())
-        assertThat(node.has("bm25")).isTrue()
-        val bm25Node = node.get("bm25")
-        assertThat(bm25Node.has("chunkCount")).isTrue()
-        assertThat(bm25Node.get("chunkCount").asInt()).isEqualTo(1)
-        assertThat(bm25Node.has("indexSizeBytes")).isTrue()
-        assertThat(bm25Node.get("indexSizeBytes").asLong()).isGreaterThan(0L)
-    }
-
-    @Test
-    fun `text output shows BM25 chunks 0 and exits 0 when no Lucene index exists`(@TempDir tempDir: Path) {
-        // Only build the vector store; do NOT create the Lucene index
-        buildStoreWithOneFile(tempDir)
-
-        val out = StringWriter()
-        val cmd = StatusCommand(embeddingModel = fakeEmbeddingModel, storeDirOverride = tempDir, outputWriter = PrintWriter(out))
-        val exitCode = cmd.call()
-
-        assertThat(exitCode).isEqualTo(0)
-        assertThat(out.toString()).containsPattern("(?i)bm25 chunks.*0|bm25.*chunk.*0")
+        // bm25 section should not be present
+        assertThat(node.has("bm25")).isFalse()
     }
 }

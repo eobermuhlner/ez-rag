@@ -1,50 +1,75 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.StoreDocumentInfo
-import ch.obermuhlner.ezrag.ingestion.StoreMetadata
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.`when`
+import org.junit.jupiter.api.io.TempDir
+import org.springframework.ai.document.Document
+import org.springframework.ai.embedding.Embedding
+import org.springframework.ai.embedding.EmbeddingModel
+import org.springframework.ai.embedding.EmbeddingRequest
+import org.springframework.ai.embedding.EmbeddingResponse
+import java.nio.file.Path
 
 class McpStatusToolTest {
 
-    @Test
-    fun `status returns StoreStatus mapped from VectorStoreRepository getMetadata`() {
-        val mockRepository = mock(VectorStoreRepository::class.java)
-        val metadata = StoreMetadata(
-            storeFilePath = "/path/to/store.json",
-            chunkCount = 42,
-            documents = listOf(
-                StoreDocumentInfo(path = "doc1.txt", chunkCount = 20),
-                StoreDocumentInfo(path = "doc2.txt", chunkCount = 22)
-            )
-        )
-        `when`(mockRepository.getMetadata()).thenReturn(metadata)
-
-        val tool = McpStatusTool(mockRepository)
-        val result = tool.status()
-
-        assertThat(result.storeFilePath).isEqualTo("/path/to/store.json")
-        assertThat(result.chunkCount).isEqualTo(42)
-        assertThat(result.documents).hasSize(2)
-        assertThat(result.documents[0].path).isEqualTo("doc1.txt")
-        assertThat(result.documents[0].chunkCount).isEqualTo(20)
-        assertThat(result.documents[1].path).isEqualTo("doc2.txt")
-        assertThat(result.documents[1].chunkCount).isEqualTo(22)
-        assertThat(result.error).isNull()
+    private val fakeEmbeddingModel: EmbeddingModel = object : EmbeddingModel {
+        override fun call(request: EmbeddingRequest): EmbeddingResponse {
+            val embeddings = request.instructions.mapIndexed { idx, _ ->
+                Embedding(FloatArray(4) { 0.1f * (idx + 1) }, idx)
+            }
+            return EmbeddingResponse(embeddings)
+        }
+        override fun embed(document: Document): FloatArray = FloatArray(4) { 0.1f }
+        override fun embed(text: String): FloatArray = FloatArray(4) { 0.1f }
+        override fun embedForResponse(texts: List<String>): EmbeddingResponse {
+            val embeddings = texts.mapIndexed { idx, _ ->
+                Embedding(FloatArray(4) { 0.1f * (idx + 1) }, idx)
+            }
+            return EmbeddingResponse(embeddings)
+        }
+        override fun dimensions(): Int = 4
     }
 
     @Test
-    fun `status returns StoreStatus with error field when VectorStoreRepository throws exception`() {
-        val mockRepository = mock(VectorStoreRepository::class.java)
-        `when`(mockRepository.getMetadata()).thenThrow(RuntimeException("Store not loaded"))
+    fun `status returns StoreStatus mapped from LuceneRepository getMetadata`(@TempDir tempDir: Path) {
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repository ->
+            repository.add(listOf(
+                Document.builder().text("doc1 content")
+                    .metadata(mapOf("source" to "doc1.txt", "mtime" to 1000L, "chunk_index" to 0)).build(),
+                Document.builder().text("doc1 second chunk")
+                    .metadata(mapOf("source" to "doc1.txt", "mtime" to 1000L, "chunk_index" to 1)).build(),
+                Document.builder().text("doc2 content")
+                    .metadata(mapOf("source" to "doc2.txt", "mtime" to 2000L, "chunk_index" to 0)).build(),
+            ))
 
-        val tool = McpStatusTool(mockRepository)
-        val result = tool.status()
+            val tool = McpStatusTool(repository)
+            val result = tool.status()
 
-        assertThat(result.error).isNotNull()
-        assertThat(result.error).contains("Store not loaded")
+            assertThat(result.storeDirPath).isNotBlank()
+            assertThat(result.chunkCount).isEqualTo(3)
+            assertThat(result.documents).hasSize(2)
+            val doc1 = result.documents.first { it.path == "doc1.txt" }
+            assertThat(doc1.chunkCount).isEqualTo(2)
+            val doc2 = result.documents.first { it.path == "doc2.txt" }
+            assertThat(doc2.chunkCount).isEqualTo(1)
+            assertThat(result.error).isNull()
+        }
+    }
+
+    @Test
+    fun `status returns StoreStatus with non-blank storeDirPath`(@TempDir tempDir: Path) {
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repository ->
+            repository.add(listOf(
+                Document.builder().text("Some content")
+                    .metadata(mapOf("source" to "test.txt", "mtime" to 1000L, "chunk_index" to 0)).build()
+            ))
+
+            val tool = McpStatusTool(repository)
+            val result = tool.status()
+
+            assertThat(result.storeDirPath).contains("lucene")
+            assertThat(result.error).isNull()
+        }
     }
 }

@@ -319,13 +319,12 @@ ez-rag status
 
 Output:
 ```
-Store: /path/to/.ez-rag/vector-store.json
+Store: /path/to/.ez-rag/lucene
 Chunks: 14
 Documents: 2
 Size: 142 KB
 Stale documents: 0
 Last ingest time: 2026-05-17T10:30:00Z
-BM25 chunks: 14  index size: 48321 bytes
 
 Configuration:
   storeDir:
@@ -475,7 +474,7 @@ The JSON output includes a `"mode"` field showing which pipeline produced the re
 }
 ```
 
-The BM25 index lives in `<storeDir>/lucene/` alongside the vector store. It is populated automatically during `ingest` — no extra steps needed.
+Both BM25 and embedding vectors are stored together in `<storeDir>/lucene/` — a single Lucene index that holds HNSW vector fields alongside BM25 text fields. It is populated automatically during `ingest` — no extra steps needed.
 
 ### Choosing an analyzer
 
@@ -600,7 +599,7 @@ Persistent defaults can be set in `~/.ez-rag/config.yml` so you do not have to r
 #model: gpt-4o              # default: "" (ignored for passthrough)
 #embedding-model: text-embedding-3-small   # default: all-MiniLM-L6-v2
 #ollama-url: http://localhost:11434
-#store-path: .ez-rag/vector-store.json
+#store-dir: .ez-rag
 #chunk-size: 1000
 #chunk-overlap: 200
 #top-k: 5
@@ -615,18 +614,17 @@ rerank-model: cross-encoder/ms-marco-MiniLM-L-6-v2   # default: cross-encoder/ms
 
 All keys support both camelCase (`chunkSize`) and kebab-case (`chunk-size`) spelling.
 
-## Vector store
+## Store
 
-The default store directory is `.ez-rag/` relative to the current working directory, following the same convention as `.git/` and `.claude/`. Override it with `--store <path>` or the `store-path` config key.
+The default store directory is `.ez-rag/` relative to the current working directory, following the same convention as `.git/` and `.claude/`. Override it with `--store-dir <path>` or the `store-dir` config key.
 
 Inside the store directory:
 
 | Path | Contents |
 |------|----------|
-| `vector-store.json` | Embedding vectors and chunk metadata |
-| `lucene/` | Lucene BM25 keyword index |
+| `lucene/` | Unified Lucene index: HNSW embedding vectors (COSINE similarity) and BM25 keyword index in a single on-disk store |
 
-Both are populated automatically by `ingest` and kept in sync by `delete`. The entire `.ez-rag/` directory should be excluded from version control — `ez-rag init` adds it to `.gitignore` automatically.
+The store is populated automatically by `ingest` and kept in sync by `delete`. The entire `.ez-rag/` directory should be excluded from version control — `ez-rag init` adds it to `.gitignore` automatically.
 
 ## RAG settings
 
@@ -743,7 +741,7 @@ To use an LLM provider or a non-default store location:
 |------------------------|----------------------------------|--------------------------------------------------------|
 | `--provider`           | `passthrough`                    | Chat provider used by the `query` tool                 |
 | `--embedding-provider` | `onnx`                           | Embedding provider used by all tools                   |
-| `--store`              | `.ez-rag/vector-store.json`      | Path to the vector store JSON file                     |
+| `--store-dir`          | `.ez-rag`                        | Path to the store directory                            |
 | `--verbose` / `-v`     | off                              | Enable debug logging to stderr (does not affect stdout)|
 
 ### Available MCP tools
@@ -754,12 +752,12 @@ Returns metadata about the vector store.
 
 No input parameters.
 
-| Return field | Type             | Description                             |
-|--------------|------------------|-----------------------------------------|
-| `storePath`  | String           | Absolute path of the vector store file  |
-| `chunkCount` | Int              | Total number of stored chunks           |
-| `documents`  | List of objects  | Each entry has `path` (String) and `chunkCount` (Int) |
-| `error`      | String or null   | Set when an error occurred              |
+| Return field    | Type             | Description                                    |
+|-----------------|------------------|------------------------------------------------|
+| `storeDirPath`  | String           | Absolute path of the store directory           |
+| `chunkCount`    | Int              | Total number of stored chunks                  |
+| `documents`     | List of objects  | Each entry has `path` (String) and `chunkCount` (Int) |
+| `error`         | String or null   | Set when an error occurred                     |
 
 #### `search`
 

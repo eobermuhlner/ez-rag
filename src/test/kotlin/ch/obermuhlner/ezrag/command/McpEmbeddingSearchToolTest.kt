@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.ChunkMatch
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.SearchQuery
@@ -44,9 +44,8 @@ class McpEmbeddingSearchToolTest {
         resultToReturn: SearchResult = SearchResult(emptyList()),
         throwException: Exception? = null
     ): EmbeddingSearchPipeline {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        return object : EmbeddingSearchPipeline(repo, fakeEmbeddingModel) {
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        return object : EmbeddingSearchPipeline(repo) {
             override fun search(query: SearchQuery): SearchResult {
                 capturedQueries.add(query)
                 if (throwException != null) throw throwException

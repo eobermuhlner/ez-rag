@@ -1,7 +1,6 @@
 package ch.obermuhlner.ezrag.rag
 
-import ch.obermuhlner.ezrag.ingestion.BM25Repository
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -41,8 +40,7 @@ class HybridSearchPipelineTest {
 
     @Test
     fun `chunk ranked first by both bm25 and embedding appears as top result`(@TempDir storeDir: Path) {
-        // Index "alpha content" so it is top in both embedding and BM25 for "alpha"
-        val bm25Repo = BM25Repository(storeDir, "standard")
+        val repo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
         val alphaDoc = Document.builder()
             .text("alpha content")
             .metadata(mapOf("source" to "alpha.txt", "chunk_index" to 0, "mtime" to 1L))
@@ -51,18 +49,11 @@ class HybridSearchPipelineTest {
             .text("beta content")
             .metadata(mapOf("source" to "beta.txt", "chunk_index" to 0, "mtime" to 2L))
             .build()
-        bm25Repo.index(listOf(alphaDoc, betaDoc))
-        bm25Repo.close()
+        repo.add(listOf(alphaDoc, betaDoc))
 
-        val vectorRepo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        vectorRepo.load()
-        vectorRepo.add(listOf(alphaDoc, betaDoc))
-
-        val bm25Repo2 = BM25Repository(storeDir, "standard")
-        val pipeline = HybridSearchPipeline(vectorRepo, fakeEmbeddingModel, bm25Repo2)
-
+        val pipeline = HybridSearchPipeline(repo)
         val result = pipeline.search(SearchQuery(question = "alpha content", topK = 2, minScore = 0.0, mode = "hybrid"))
-        bm25Repo2.close()
+        repo.close()
 
         assertThat(result.chunks).isNotEmpty()
         assertThat(result.chunks.first().filePath).isEqualTo("alpha.txt")
@@ -74,23 +65,16 @@ class HybridSearchPipelineTest {
 
     @Test
     fun `search result has mode set to hybrid`(@TempDir storeDir: Path) {
-        val bm25Repo = BM25Repository(storeDir, "standard")
+        val repo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
         val doc = Document.builder()
             .text("alpha content")
             .metadata(mapOf("source" to "alpha.txt", "chunk_index" to 0, "mtime" to 1L))
             .build()
-        bm25Repo.index(listOf(doc))
-        bm25Repo.close()
+        repo.add(listOf(doc))
 
-        val vectorRepo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        vectorRepo.load()
-        vectorRepo.add(listOf(doc))
-
-        val bm25Repo2 = BM25Repository(storeDir, "standard")
-        val pipeline = HybridSearchPipeline(vectorRepo, fakeEmbeddingModel, bm25Repo2)
-
+        val pipeline = HybridSearchPipeline(repo)
         val result = pipeline.search(SearchQuery(question = "alpha content", topK = 5, minScore = 0.0, mode = "hybrid"))
-        bm25Repo2.close()
+        repo.close()
 
         assertThat(result.mode).isEqualTo("hybrid")
     }
@@ -101,25 +85,18 @@ class HybridSearchPipelineTest {
 
     @Test
     fun `result size does not exceed topK`(@TempDir storeDir: Path) {
-        val bm25Repo = BM25Repository(storeDir, "standard")
+        val repo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
         val docs = (1..5).map { i ->
             Document.builder()
                 .text("content $i")
                 .metadata(mapOf("source" to "doc$i.txt", "chunk_index" to 0, "mtime" to i.toLong()))
                 .build()
         }
-        bm25Repo.index(docs)
-        bm25Repo.close()
+        repo.add(docs)
 
-        val vectorRepo = VectorStoreRepository(fakeEmbeddingModel, storeDir)
-        vectorRepo.load()
-        vectorRepo.add(docs)
-
-        val bm25Repo2 = BM25Repository(storeDir, "standard")
-        val pipeline = HybridSearchPipeline(vectorRepo, fakeEmbeddingModel, bm25Repo2)
-
+        val pipeline = HybridSearchPipeline(repo)
         val result = pipeline.search(SearchQuery(question = "content", topK = 2, minScore = 0.0, mode = "hybrid"))
-        bm25Repo2.close()
+        repo.close()
 
         assertThat(result.chunks.size).isLessThanOrEqualTo(2)
     }

@@ -2,7 +2,7 @@ package ch.obermuhlner.ezrag.eval
 
 import ch.obermuhlner.ezrag.command.IngestCommand
 import ch.obermuhlner.ezrag.command.SearchCommand
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -50,37 +50,37 @@ class EvalEngine(
         val files = scenario.documents.map { it.path.toFile() }
         ingestCommand.call(files)
 
-        // Step 2: load the store once for reuse across questions
-        val repository = VectorStoreRepository(embeddingModel, storeDir)
-        repository.load()
-        val pipeline = EmbeddingSearchPipeline(repository, embeddingModel)
+        // Step 2: open the unified Lucene index for reuse across questions
+        return LuceneRepository.open(embeddingModel, storeDir, "standard").use { repository ->
+            val pipeline = EmbeddingSearchPipeline(repository)
 
-        // Step 3: for each question, call SearchCommand.call() with JSON output
-        return scenario.questions.map { question ->
-            val (exitCode, jsonOutput) = if (searchProvider != null) {
-                searchProvider.invoke(question, scenario, storeDir, embeddingModel)
-            } else {
-                defaultSearch(question, storeDir, pipeline, repository)
-            }
+            // Step 3: for each question, call SearchCommand.call() with JSON output
+            scenario.questions.map { question ->
+                val (exitCode, jsonOutput) = if (searchProvider != null) {
+                    searchProvider.invoke(question, scenario, storeDir, embeddingModel)
+                } else {
+                    defaultSearch(question, storeDir, pipeline, repository)
+                }
 
-            if (exitCode != 0) {
-                throw RuntimeException(
-                    "Search failed (exit code $exitCode) for scenario '${scenario.name}', question '${question.id}'"
+                if (exitCode != 0) {
+                    throw RuntimeException(
+                        "Search failed (exit code $exitCode) for scenario '${scenario.name}', question '${question.id}'"
+                    )
+                }
+
+                val retrievedChunks = if (jsonOutput.isNotEmpty()) {
+                    parseRetrievedChunks(jsonOutput)
+                } else {
+                    emptyList()
+                }
+
+                EvalQuestionResult(
+                    questionId = question.id,
+                    expectedSources = question.expectedSources,
+                    expectedChunkContains = question.expectedChunkContains,
+                    retrievedChunks = retrievedChunks
                 )
             }
-
-            val retrievedChunks = if (jsonOutput.isNotEmpty()) {
-                parseRetrievedChunks(jsonOutput)
-            } else {
-                emptyList()
-            }
-
-            EvalQuestionResult(
-                questionId = question.id,
-                expectedSources = question.expectedSources,
-                expectedChunkContains = question.expectedChunkContains,
-                retrievedChunks = retrievedChunks
-            )
         }
     }
 
@@ -88,14 +88,13 @@ class EvalEngine(
         question: EvalQuestion,
         storeDir: Path,
         pipeline: EmbeddingSearchPipeline,
-        repository: VectorStoreRepository
+        repository: LuceneRepository
     ): Pair<Int, String> {
         val searchOut = StringWriter()
         val searchErr = StringWriter()
         val searchCommand = SearchCommand(
             storeDirOverride = storeDir,
             searchPipeline = pipeline,
-            repositoryForVerbose = repository,
             outputFormatter = OutputFormatter(),
             outputWriter = PrintWriter(searchOut, true),
             errorWriter = PrintWriter(searchErr, true),

@@ -293,10 +293,10 @@ class IngestCommandTest {
 
         assertThat(exitCode).isEqualTo(0)
         // Store should be in the explicit store dir, not the parent .ez-rag/
-        val explicitStoreFile = explicitStoreDir.resolve("vector-store.json")
-        assertThat(explicitStoreFile.toFile()).exists()
-        val parentStoreFile = parentEzRagDir.resolve("vector-store.json")
-        assertThat(parentStoreFile.toFile()).doesNotExist()
+        val explicitStoreDir2 = explicitStoreDir.resolve("lucene")
+        assertThat(explicitStoreDir2.toFile()).exists()
+        val parentStoreDir = parentEzRagDir.resolve("lucene")
+        assertThat(parentStoreDir.toFile()).doesNotExist()
     }
 
     @Test
@@ -332,10 +332,10 @@ class IngestCommandTest {
 
         assertThat(exitCode).isEqualTo(0)
         // Store should be in the config-specified dir, not the parent .ez-rag/
-        val explicitStoreFile = explicitStoreDir.resolve("vector-store.json")
-        assertThat(explicitStoreFile.toFile()).exists()
-        val parentStoreFile = parentEzRagDir.resolve("vector-store.json")
-        assertThat(parentStoreFile.toFile()).doesNotExist()
+        val explicitLuceneDir = explicitStoreDir.resolve("lucene")
+        assertThat(explicitLuceneDir.toFile()).exists()
+        val parentLuceneDir = parentEzRagDir.resolve("lucene")
+        assertThat(parentLuceneDir.toFile()).doesNotExist()
     }
 
     @Test
@@ -362,11 +362,11 @@ class IngestCommandTest {
         val exitCode = cmd.call(listOf(file.toFile()))
 
         assertThat(exitCode).isEqualTo(0)
-        // The vector store should be in the parent's .ez-rag/, not in subDir/.ez-rag/
-        val parentStoreFile = ezRagDir.resolve("vector-store.json")
-        assertThat(parentStoreFile.toFile()).exists()
+        // The Lucene store should be in the parent's .ez-rag/, not in subDir/.ez-rag/
+        val parentLuceneDir = ezRagDir.resolve("lucene")
+        assertThat(parentLuceneDir.toFile()).exists()
         // No .ez-rag/ should be created in subDir
-        val subStoreFile = subDir.resolve(".ez-rag").resolve("vector-store.json")
-        assertThat(subStoreFile.toFile()).doesNotExist()
+        val subLuceneDir = subDir.resolve(".ez-rag").resolve("lucene")
+        assertThat(subLuceneDir.toFile()).doesNotExist()
     }
 }

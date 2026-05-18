@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
@@ -35,25 +35,25 @@ class McpShowTool(
     ): ShowToolResult {
         val absolutePath = Paths.get(filePath).toAbsolutePath().normalize().toString()
         return try {
-            val repository = VectorStoreRepository(embeddingModel, storeDir)
-            repository.load()
-            val chunks = repository.getChunksForFile(absolutePath)
-            if (chunks.isEmpty()) {
-                return ShowToolResult(
-                    file = absolutePath,
-                    chunks = emptyList(),
-                    error = "File not found in store: $absolutePath"
-                )
+            LuceneRepository.open(embeddingModel, storeDir, "standard").use { repository ->
+                val chunks = repository.getChunksForFile(absolutePath)
+                if (chunks.isEmpty()) {
+                    return ShowToolResult(
+                        file = absolutePath,
+                        chunks = emptyList(),
+                        error = "File not found in store: $absolutePath"
+                    )
+                }
+                val chunkResults = chunks.map { chunk ->
+                    ChunkResult(
+                        chunkIndex = chunk.chunkIndex,
+                        charCount = chunk.charCount,
+                        mtime = chunk.mtime,
+                        text = if (includeChunks) chunk.text else null
+                    )
+                }
+                ShowToolResult(file = absolutePath, chunks = chunkResults)
             }
-            val chunkResults = chunks.map { chunk ->
-                ChunkResult(
-                    chunkIndex = chunk.chunkIndex,
-                    charCount = chunk.charCount,
-                    mtime = chunk.mtime,
-                    text = if (includeChunks) chunk.text else null
-                )
-            }
-            ShowToolResult(file = absolutePath, chunks = chunkResults)
         } catch (e: Exception) {
             ShowToolResult(
                 file = absolutePath,

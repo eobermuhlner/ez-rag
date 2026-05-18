@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -33,18 +33,16 @@ class McpShowToolTest {
 
     @Test
     fun `calling show tool with valid file path returns chunk metadata`(@TempDir tempDir: Path) {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-
         val absolutePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
-        val docs = (0..1).map { i ->
-            Document.builder()
-                .text("Chunk $i content")
-                .metadata(mapOf("source" to absolutePath, "mtime" to 1716000000000L, "chunk_index" to i))
-                .build()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val docs = (0..1).map { i ->
+                Document.builder()
+                    .text("Chunk $i content")
+                    .metadata(mapOf("source" to absolutePath, "mtime" to 1716000000000L, "chunk_index" to i))
+                    .build()
+            }
+            repo.add(docs)
         }
-        repo.add(docs)
-        repo.save()
 
         val tool = McpShowTool(fakeEmbeddingModel, tempDir)
         val result = tool.show(absolutePath, false)
@@ -60,16 +58,14 @@ class McpShowToolTest {
 
     @Test
     fun `calling show tool with includeChunks true returns text`(@TempDir tempDir: Path) {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-
         val absolutePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
-        val doc = Document.builder()
-            .text("Hello world content")
-            .metadata(mapOf("source" to absolutePath, "mtime" to 1000L, "chunk_index" to 0))
-            .build()
-        repo.add(listOf(doc))
-        repo.save()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("Hello world content")
+                .metadata(mapOf("source" to absolutePath, "mtime" to 1000L, "chunk_index" to 0))
+                .build()
+            repo.add(listOf(doc))
+        }
 
         val tool = McpShowTool(fakeEmbeddingModel, tempDir)
         val result = tool.show(absolutePath, true)
@@ -80,9 +76,8 @@ class McpShowToolTest {
 
     @Test
     fun `calling show tool with unknown file path returns error`(@TempDir tempDir: Path) {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        repo.save()
+        // Create an empty store so LuceneRepository.open() succeeds
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
 
         val unknownPath = tempDir.resolve("unknown.txt").toAbsolutePath().toString()
         val tool = McpShowTool(fakeEmbeddingModel, tempDir)

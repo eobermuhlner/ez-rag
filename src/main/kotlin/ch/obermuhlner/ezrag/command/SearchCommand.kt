@@ -3,8 +3,7 @@ package ch.obermuhlner.ezrag.command
 import ch.obermuhlner.ezrag.EzRagCommand
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
-import ch.obermuhlner.ezrag.ingestion.BM25Repository
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.BM25SearchPipeline
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.HybridSearchPipeline
@@ -35,7 +34,6 @@ class SearchCommand(
     private val searchPipeline: EmbeddingSearchPipeline? = null,
     private val bm25Pipeline: BM25SearchPipeline? = null,
     private val hybridPipeline: HybridSearchPipeline? = null,
-    private val repositoryForVerbose: VectorStoreRepository? = null,
     private val outputFormatter: OutputFormatter = OutputFormatter(),
     private val outputWriter: PrintWriter = PrintWriter(System.out, true),
     private val errorWriter: PrintWriter = PrintWriter(System.err, true),
@@ -88,18 +86,16 @@ class SearchCommand(
             ?: storeDirOption?.let { Paths.get(it) }
             ?: springConfigService?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
-        val storeFilePath = storeDir.resolve("vector-store.json")
 
         val resolvedMode = modeOption
             ?: springConfigService?.resolve()?.searchMode
             ?: "hybrid"
 
-        // For bm25-only mode, we don't need the vector store file
-        if (resolvedMode != "bm25") {
-            val storeFile = storeFilePath.toFile()
-            if (!storeFile.exists()) {
+        // Check store existence for non-BM25 modes (when no pre-wired pipeline)
+        if (resolvedMode != "bm25" && searchPipeline == null && hybridPipeline == null) {
+            if (!LuceneRepository.storeExists(storeDir)) {
                 outputWriter.println(
-                    "Vector store not found at ${storeFilePath.toAbsolutePath()}. Run 'ez-rag ingest' first."
+                    "Store not found at ${storeDir.toAbsolutePath()}. Run 'ez-rag ingest' first."
                 )
                 return 1
             }
@@ -133,23 +129,21 @@ class SearchCommand(
             }
             resolvedMode == "bm25" -> {
                 val analyzer = springConfigService?.resolve()?.analyzer ?: "standard"
-                val bm25Repo = BM25Repository(storeDir, analyzer)
-                val r = BM25SearchPipeline(bm25Repo).search(searchQuery)
-                bm25Repo.close()
-                r
+                val embeddingModel = springEmbeddingModel
+                    ?: return exitWithError("No embedding model configured.")
+                LuceneRepository.open(embeddingModel, storeDir, analyzer).use { repo ->
+                    BM25SearchPipeline(repo).search(searchQuery)
+                }
             }
             resolvedMode == "hybrid" && hybridPipeline != null -> {
                 hybridPipeline.search(searchQuery)
             }
             resolvedMode == "hybrid" && springEmbeddingModel != null -> {
                 val embeddingModel = springEmbeddingModel!!
-                val repo = VectorStoreRepository(embeddingModel, storeDir)
-                repo.load()
                 val analyzer = springConfigService?.resolve()?.analyzer ?: "standard"
-                val bm25Repo = BM25Repository(storeDir, analyzer)
-                val r = HybridSearchPipeline(repo, embeddingModel, bm25Repo).search(searchQuery)
-                bm25Repo.close()
-                r
+                LuceneRepository.open(embeddingModel, storeDir, analyzer).use { repo ->
+                    HybridSearchPipeline(repo).search(searchQuery)
+                }
             }
             searchPipeline != null -> {
                 val effectiveRerankCandidates = if (springReranker != null || rerankModel?.isNotEmpty() == true) {
@@ -162,31 +156,20 @@ class SearchCommand(
             else -> {
                 val embeddingModel = springEmbeddingModel
                     ?: return exitWithError("No embedding model configured.")
-                val repo = VectorStoreRepository(embeddingModel, storeDir)
-                repo.load()
+                val analyzer = springConfigService?.resolve()?.analyzer ?: "standard"
                 val effectiveRerankCandidates = if (springReranker != null || rerankModel?.isNotEmpty() == true) {
                     rerankCandidates ?: (topK * 3)
                 } else {
                     null
                 }
-                val embeddingResult = EmbeddingSearchPipeline(repo, embeddingModel, springReranker)
-                    .search(searchQuery.copy(rerankCandidates = effectiveRerankCandidates, minScore = minScore))
-
-                if (verbose) {
-                    errorWriter.println("Embedding dimension: ${embeddingModel.dimensions()}")
-                    errorWriter.println("Total chunks in store: ${repo.getMetadata().chunkCount}")
+                LuceneRepository.open(embeddingModel, storeDir, analyzer).use { repo ->
+                    if (verbose) {
+                        errorWriter.println("Embedding dimension: ${embeddingModel.dimensions()}")
+                        errorWriter.println("Total chunks in store: ${repo.getMetadata().chunkCount}")
+                    }
+                    EmbeddingSearchPipeline(repo, springReranker)
+                        .search(searchQuery.copy(rerankCandidates = effectiveRerankCandidates, minScore = minScore))
                 }
-                embeddingResult
-            }
-        }
-
-        if (verbose && searchPipeline != null) {
-            val embeddingModel = springEmbeddingModel
-            if (embeddingModel != null) {
-                errorWriter.println("Embedding dimension: ${embeddingModel.dimensions()}")
-            }
-            if (repositoryForVerbose != null) {
-                errorWriter.println("Total chunks in store: ${repositoryForVerbose.getMetadata().chunkCount}")
             }
         }
 

@@ -1,9 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.BM25Repository
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.ChunkMatch
-import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.HybridSearchPipeline
 import ch.obermuhlner.ezrag.rag.SearchQuery
 import ch.obermuhlner.ezrag.rag.SearchResult
@@ -46,10 +44,8 @@ class McpSearchToolTest {
         resultToReturn: SearchResult = SearchResult(emptyList()),
         throwException: Exception? = null
     ): HybridSearchPipeline {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        val bm25Repo = BM25Repository(tempDir, "standard")
-        return object : HybridSearchPipeline(repo, fakeEmbeddingModel, bm25Repo) {
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        return object : HybridSearchPipeline(repo) {
             override fun search(query: SearchQuery): SearchResult {
                 capturedQueries.add(query)
                 if (throwException != null) throw throwException

@@ -102,7 +102,7 @@ class McpIngestToolTest {
     }
 
     @Test
-    fun `after successful ingest the vector store file is updated on disk`(@TempDir tempDir: Path) {
+    fun `after successful ingest the Lucene index is created on disk`(@TempDir tempDir: Path) {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world for ingest disk persistence test.")
         val storeDir = tempDir.resolve("store-dir")
@@ -111,7 +111,7 @@ class McpIngestToolTest {
         val tool = McpIngestTool(fakeEmbeddingModel, storeDir)
         tool.ingest(sampleFile.toString(), null, null)
 
-        assertThat(storeDir.resolve("vector-store.json").toFile()).exists()
+        assertThat(ch.obermuhlner.ezrag.ingestion.LuceneRepository.storeExists(storeDir)).isTrue()
     }
 
     @Test

@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -33,18 +33,16 @@ class McpDeleteToolTest {
 
     @Test
     fun `calling delete tool with valid file path removes document and returns confirmation`(@TempDir tempDir: Path) {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-
         val absolutePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
-        val docs = (0..2).map { i ->
-            Document.builder()
-                .text("Chunk $i content")
-                .metadata(mapOf("source" to absolutePath, "mtime" to 1000L, "chunk_index" to i))
-                .build()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val docs = (0..2).map { i ->
+                Document.builder()
+                    .text("Chunk $i content")
+                    .metadata(mapOf("source" to absolutePath, "mtime" to 1000L, "chunk_index" to i))
+                    .build()
+            }
+            repo.add(docs)
         }
-        repo.add(docs)
-        repo.save()
 
         val tool = McpDeleteTool(fakeEmbeddingModel, tempDir)
         val result = tool.delete(absolutePath)
@@ -53,16 +51,15 @@ class McpDeleteToolTest {
         assertThat(result.error).isNull()
 
         // Verify the store no longer contains the file
-        val repo2 = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo2.load()
-        assertThat(repo2.getMetadata().documents.find { it.path == absolutePath }).isNull()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            assertThat(repo.getMetadata().documents.find { it.path == absolutePath }).isNull()
+        }
     }
 
     @Test
     fun `calling delete tool with unknown file path returns 0 chunks removed`(@TempDir tempDir: Path) {
-        val repo = VectorStoreRepository(fakeEmbeddingModel, tempDir)
-        repo.load()
-        repo.save()
+        // Create an empty store
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
 
         val unknownPath = tempDir.resolve("unknown.txt").toAbsolutePath().toString()
         val tool = McpDeleteTool(fakeEmbeddingModel, tempDir)

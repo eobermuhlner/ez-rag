@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.VectorStoreRepository
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.BM25SearchPipeline
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.HybridSearchPipeline
@@ -35,7 +35,7 @@ class ShellCommand(
     private val embeddingSearchPipeline: EmbeddingSearchPipeline? = null,
     private val hybridSearchPipeline: HybridSearchPipeline? = null,
     private val bm25SearchPipeline: BM25SearchPipeline? = null,
-    private val vectorStoreRepository: VectorStoreRepository? = null,
+    private val luceneRepository: LuceneRepository? = null,
     private val outputFormatter: OutputFormatter = OutputFormatter(),
     private val outputWriter: PrintWriter = PrintWriter(System.out, true),
     private val errorWriter: PrintWriter = PrintWriter(System.err, true),
@@ -64,12 +64,10 @@ class ShellCommand(
         val storeDir = storeDirOverride
             ?: storeDirOption?.let { Paths.get(it) }
             ?: Paths.get(".ez-rag")
-        val storeFilePath = storeDir.resolve("vector-store.json")
 
-        val storeFile = storeFilePath.toFile()
-        if (!storeFile.exists()) {
+        if (!LuceneRepository.storeExists(storeDir)) {
             outputWriter.println(
-                "Vector store not found at ${storeFilePath.toAbsolutePath()}. Run 'ez-rag ingest' first."
+                "Store not found at ${storeDir.toAbsolutePath()}. Run 'ez-rag ingest' first."
             )
             return 1
         }
@@ -79,24 +77,23 @@ class ShellCommand(
             val embeddingSearchPipeline: EmbeddingSearchPipeline?,
             val hybridSearchPipeline: HybridSearchPipeline?,
             val bm25SearchPipeline: BM25SearchPipeline?,
-            val repository: VectorStoreRepository?
+            val repository: LuceneRepository?
         )
 
         val resolved = if (ragPipeline != null) {
-            ResolvedPipelines(ragPipeline, embeddingSearchPipeline, hybridSearchPipeline, bm25SearchPipeline, vectorStoreRepository)
+            ResolvedPipelines(ragPipeline, embeddingSearchPipeline, hybridSearchPipeline, bm25SearchPipeline, luceneRepository)
         } else {
             val embeddingModel = springEmbeddingModel
                 ?: return exitWithError("No embedding model configured.")
             val chatModel = springChatModel
                 ?: return exitWithError("No chat model configured.")
-            val repository = VectorStoreRepository(embeddingModel, storeDir)
-            repository.load()
-            val esp = EmbeddingSearchPipeline(repository, embeddingModel)
+            val repository = LuceneRepository.open(embeddingModel, storeDir, "standard")
+            val esp = EmbeddingSearchPipeline(repository)
             ResolvedPipelines(
                 RagPipeline(esp, chatModel),
                 esp,
-                null, // HybridSearchPipeline not wired in production shell (built lazily if needed)
-                null, // BM25SearchPipeline not wired in production shell (built lazily if needed)
+                null,
+                null,
                 repository
             )
         }
@@ -147,7 +144,7 @@ class ShellCommand(
         hybridPipeline: HybridSearchPipeline?,
         embeddingPipeline: EmbeddingSearchPipeline?,
         bm25Pipeline: BM25SearchPipeline?,
-        repository: VectorStoreRepository?,
+        repository: LuceneRepository?,
     ): Boolean {
         val parts = line.split(" ", limit = 2)
         val command = parts[0]
