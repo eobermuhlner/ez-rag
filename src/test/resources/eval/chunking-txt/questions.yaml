@@ -1,0 +1,113 @@
+documents:
+  - file: stellar_evolution.txt
+    role: relevant
+  - file: exoplanets.txt
+    role: relevant
+  - file: dark_matter.txt
+    role: relevant
+  - file: space_telescopes.txt
+    role: hard-negative  # mentions neutron stars, pulsars, exoplanets, dark matter — must not outrank relevant docs
+
+questions:
+  # --- Paragraph-boundary questions (expected_chunk_contains) ---
+  # These target key sentences in the final 1–2 sentences of paragraphs that begin after character 4500
+  # of their source document. TokenTextSplitter(chunkSize=1000, overlap=200) cuts paragraphs at the
+  # token boundary, leaving these concluding sentences in an overlap chunk that does not retrieve well.
+
+  - id: q1
+    question: "What rotation rate do the fastest known millisecond pulsars achieve?"
+    expected_sources: ["stellar_evolution.txt"]
+    expected_chunk_contains: ["millisecond pulsars complete over seven hundred rotations per second"]
+
+  - id: q2
+    question: "To what field strength does the magnetic field of a recycled pulsar decay as a result of the accretion phase?"
+    expected_sources: ["stellar_evolution.txt"]
+    expected_chunk_contains: ["magnetic field of a recycled pulsar decays to between one million and one billion gauss"]
+
+  - id: q3
+    question: "What fraction of Earth's solar flux does the exoplanet TRAPPIST-1e receive from its host star?"
+    expected_sources: ["exoplanets.txt"]
+    expected_chunk_contains: ["TRAPPIST-1e receives approximately sixty-six percent of the stellar flux that Earth receives from the Sun"]
+
+  - id: q4
+    question: "How many transit observations of an Earth-size planet does the James Webb Space Telescope need to detect water vapour at five-sigma confidence?"
+    expected_sources: ["exoplanets.txt"]
+    expected_chunk_contains: ["detecting water vapour in an Earth-size exoplanet atmosphere requires a minimum of fifty transits with the James Webb Space Telescope to achieve a five-sigma detection confidence"]
+
+  - id: q5
+    question: "What cross-section-to-mass ratio is required by self-interacting dark matter models to reproduce the observed core density profiles of dwarf galaxies?"
+    expected_sources: ["dark_matter.txt"]
+    expected_chunk_contains: ["self-interacting dark matter models require a cross-section-to-mass ratio of between zero point one and ten centimetres squared per gram to reproduce the observed core profiles of dwarf galaxies"]
+
+  - id: q6
+    question: "What mass range must the QCD axion occupy to account for the full observed dark matter density?"
+    expected_sources: ["dark_matter.txt"]
+    expected_chunk_contains: ["The QCD axion must have a mass between two and one thousand microelectronvolts to account for the full dark matter density observed by Planck"]
+
+  # --- Source-level questions (expected_sources only) ---
+  # These target section-level content where source retrieval is sufficient to score a hit.
+
+  - id: q7
+    question: "What physical process halts the gravitational collapse of a newly formed star and brings it onto the main sequence?"
+    expected_sources: ["stellar_evolution.txt"]
+
+  - id: q8
+    question: "What is the Chandrasekhar limit and why is it significant for the fate of massive stars?"
+    expected_sources: ["stellar_evolution.txt"]
+
+  - id: q9
+    question: "On what diagram do astronomers plot stellar luminosity against surface temperature to classify stars by evolutionary stage?"
+    expected_sources: ["stellar_evolution.txt"]
+
+  - id: q10
+    question: "What nuclear reaction mechanism dominates hydrogen burning in stars more massive than about one and a half solar masses?"
+    expected_sources: ["stellar_evolution.txt"]
+
+  - id: q11
+    question: "Which detection method measures the periodic Doppler shift in stellar spectra caused by an orbiting planet?"
+    expected_sources: ["exoplanets.txt"]
+
+  - id: q12
+    question: "Approximately how many exoplanets did the Kepler space telescope confirm during its nine-year mission?"
+    expected_sources: ["exoplanets.txt"]
+
+  - id: q13
+    question: "What is the radius gap observed in the exoplanet population, and which two groups of planets does it separate?"
+    expected_sources: ["exoplanets.txt"]
+
+  - id: q14
+    question: "Which biosignature gases does the exoplanets document identify as most relevant to detecting biological activity on other worlds?"
+    expected_sources: ["exoplanets.txt"]
+
+  - id: q15
+    question: "Whose observations of galaxy rotation curves in the 1970s provided some of the first strong evidence for dark matter?"
+    expected_sources: ["dark_matter.txt"]
+
+  - id: q16
+    question: "What is the WIMP miracle, and why does it make weakly interacting massive particles compelling dark matter candidates?"
+    expected_sources: ["dark_matter.txt"]
+
+  - id: q17
+    question: "How does the Bullet Cluster provide evidence that dark matter behaves differently from ordinary hot gas during a galaxy cluster merger?"
+    expected_sources: ["dark_matter.txt"]
+
+  - id: q18
+    question: "What experimental technique does the Axion Dark Matter eXperiment use to search for axions?"
+    expected_sources: ["dark_matter.txt"]
+
+  # --- Hard-negative document questions (expected_sources: space_telescopes.txt) ---
+  # These questions target space_telescopes.txt content. They enable hard-negative metric
+  # computation and verify that telescope vocabulary does not cause false positives for
+  # the astronomy content questions above.
+
+  - id: q19
+    question: "What is the angular resolution in arcseconds of the Chandra X-ray Observatory?"
+    expected_sources: ["space_telescopes.txt"]
+
+  - id: q20
+    question: "In what year was the Spitzer Space Telescope decommissioned after its mission ended?"
+    expected_sources: ["space_telescopes.txt"]
+
+  - id: q21
+    question: "What gamma-ray structures extending above and below the galactic centre did the Fermi Large Area Telescope discover?"
+    expected_sources: ["space_telescopes.txt"]

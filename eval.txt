@@ -1,9 +1,17 @@
 Scenario         Questions  Recall@3  MRR     Hit@3   Status
 ────────────────────────────────────────────────────────────
+chunking-md      23         1.00      0.93    1.00
+  hard-negative             1.00      1.00    1.00
+chunking-pdf     23         0.26      0.26    0.26
+  hard-negative             1.00      1.00    1.00
+chunking-txt     21         1.00      0.95    1.00
+  hard-negative             1.00      1.00    1.00
+complex-md       26         1.00      0.98    1.00    PASS
+complex-pdf      26         1.00      1.00    1.00    PASS
 factual          16         0.94      0.88    0.94    PASS
 factual-md       16         0.94      0.91    0.94    PASS
 hard-negatives   12         1.00      1.00    1.00    PASS
   hard-negative             1.00      1.00    1.00
-multi-chunk      14         1.00      0.85    1.00    PASS
+multi-chunk      14         1.00      0.92    1.00    PASS
 ────────────────────────────────────────────────────────────
-Overall          58         0.97      0.91    0.97
+Overall          177        0.90      0.87    0.90

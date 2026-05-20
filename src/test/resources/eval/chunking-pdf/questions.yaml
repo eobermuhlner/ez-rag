@@ -1,0 +1,133 @@
+documents:
+  - file: software_architecture.pdf
+    role: relevant
+  - file: api_design.pdf
+    role: relevant
+  - file: release_engineering.pdf
+    role: relevant
+  - file: renaissance_art.pdf
+    role: distractor
+  - file: devops_tooling.pdf
+    role: hard-negative  # mentions microservices, APIs, deployments, releases — must not outrank relevant docs
+
+questions:
+  # --- Table-cell questions (expected_chunk_contains) ---
+  # These target specific cell values inside large comparison tables buried across page splits.
+  # The current PagePdfDocumentReader produces one document per page; tables spanning two pages
+  # are split mid-table, so rows on page N+1 appear in a separate document fragment.
+
+  - id: q1
+    question: "What is the horizontal scalability characteristic of a monolithic architecture?"
+    expected_sources: ["software_architecture.pdf"]
+    expected_chunk_contains: ["Limited to vertical scaling only"]
+
+  - id: q2
+    question: "How does a microservices architecture handle fault isolation compared to a monolith?"
+    expected_sources: ["software_architecture.pdf"]
+    expected_chunk_contains: ["Excellent — failure contained per service"]
+
+  - id: q3
+    question: "What is the deployment complexity characteristic of event-driven architecture?"
+    expected_sources: ["software_architecture.pdf"]
+    expected_chunk_contains: ["High — requires message broker infrastructure"]
+
+  - id: q4
+    question: "What type of technology overhead does a service mesh impose on a deployment?"
+    expected_sources: ["software_architecture.pdf"]
+    expected_chunk_contains: ["Significant — requires sidecar proxies"]
+
+  - id: q5
+    question: "What caching capability does a REST Level 0 (Plain Old XML) API provide?"
+    expected_sources: ["api_design.pdf"]
+    expected_chunk_contains: ["None — single endpoint, POST-only"]
+
+  - id: q6
+    question: "What discoverability benefit does HATEOAS (REST Level 3) offer compared to lower REST maturity levels?"
+    expected_sources: ["api_design.pdf"]
+    expected_chunk_contains: ["Full — clients navigate via hypermedia links"]
+
+  - id: q7
+    question: "How does GraphQL address the overfetching problem found in REST APIs?"
+    expected_sources: ["api_design.pdf"]
+    expected_chunk_contains: ["Eliminated — client specifies exact fields"]
+
+  - id: q8
+    question: "What is the rollback speed of a blue-green deployment strategy?"
+    expected_sources: ["release_engineering.pdf"]
+    expected_chunk_contains: ["Instant — switch traffic back to blue"]
+
+  - id: q9
+    question: "What traffic split pattern does a canary deployment use for progressive rollout?"
+    expected_sources: ["release_engineering.pdf"]
+    expected_chunk_contains: ["1%→10%→50%→100% progressive rollout"]
+
+  - id: q10
+    question: "What production risk does shadow deployment carry for end users?"
+    expected_sources: ["release_engineering.pdf"]
+    expected_chunk_contains: ["Zero — shadow traffic never returns responses to callers"]
+
+  # --- Paragraph-boundary questions (expected_chunk_contains) ---
+  # These target specific sentences in the 3rd or 4th paragraph of long heading sections.
+
+  - id: q11
+    question: "What mechanism does the circuit breaker pattern use to prevent cascading failures in microservices?"
+    expected_sources: ["software_architecture.pdf"]
+    expected_chunk_contains: ["prevents cascading failures by tracking failure rates over a rolling time window of sixty seconds"]
+
+  - id: q12
+    question: "How does the strangler fig pattern enable incremental microservices migration from a monolith?"
+    expected_sources: ["software_architecture.pdf"]
+    expected_chunk_contains: ["routing new functionality to the new service while legacy routes remain in the monolith until fully replaced"]
+
+  - id: q13
+    question: "What HTTP response code does a client receive when using ETag conditional requests and the resource has not changed?"
+    expected_sources: ["api_design.pdf"]
+    expected_chunk_contains: ["receives HTTP 304 Not Modified when the resource has not changed, reducing bandwidth consumption by up to 80 percent"]
+
+  - id: q14
+    question: "Which HTTP response headers should an API use to communicate its rate limiting policy to clients?"
+    expected_sources: ["api_design.pdf"]
+    expected_chunk_contains: ["Retry-After and X-RateLimit-Remaining response headers"]
+
+  - id: q15
+    question: "What does semantic versioning specify about a MAJOR version number increment?"
+    expected_sources: ["release_engineering.pdf"]
+    expected_chunk_contains: ["a MAJOR version increment signals breaking API changes"]
+
+  - id: q16
+    question: "What improvement in mean time to recover does the DORA 2022 report associate with teams that enforce the four-eyes principle?"
+    expected_sources: ["release_engineering.pdf"]
+    expected_chunk_contains: ["reduce mean time to recover from forty-eight hours to under four hours"]
+
+  - id: q17
+    question: "What request header does a client supply to perform a conditional GET that avoids downloading an unchanged resource?"
+    expected_sources: ["api_design.pdf"]
+    expected_chunk_contains: ["If-None-Match with the current ETag value"]
+
+  # --- Citation and cross-section questions (expected_sources only) ---
+
+  - id: q18
+    question: "Which book is cited in the software architecture document for the foundational theory of software architecture in practice, and who are its authors?"
+    expected_sources: ["software_architecture.pdf"]
+
+  - id: q19
+    question: "Which book on continuous delivery is cited in the release engineering document, and who wrote it?"
+    expected_sources: ["release_engineering.pdf"]
+
+  - id: q20
+    question: "Which section of the API design document discusses strategies for evolving an API without breaking existing consumers?"
+    expected_sources: ["api_design.pdf"]
+
+  # --- Hard-negative document questions ---
+
+  - id: q21
+    question: "Which tool provides a declarative language called HCL for provisioning cloud infrastructure across multiple providers?"
+    expected_sources: ["devops_tooling.pdf"]
+
+  - id: q22
+    question: "What three observability signals does an effective observability stack combine to understand distributed system behaviour?"
+    expected_sources: ["devops_tooling.pdf"]
+
+  - id: q23
+    question: "What AWS-managed service provides an alternative to self-hosted HashiCorp Vault for secret management?"
+    expected_sources: ["devops_tooling.pdf"]
