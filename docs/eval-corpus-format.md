@@ -98,11 +98,15 @@ The `ez-rag eval` command exits non-zero when any threshold-bearing scenario fai
 
 ## Example
 
-The built-in corpus in `src/test/resources/eval/` contains three ready-made scenarios:
+The built-in corpus in `src/test/resources/eval/` contains several ready-made scenarios:
 
-- `factual/` — short documents with unambiguous factual content and direct-lookup questions.
+- `factual/` — short plain-text documents with unambiguous factual content and direct-lookup questions.
+- `factual-md/` — same content as `factual/` but in Markdown format, to verify format handling.
 - `multi-chunk/` — longer documents where answers span chunk boundaries.
 - `hard-negatives/` — documents with topically similar but non-answering hard negatives.
+- `complex-md/` — Markdown documents with complex formatting (multi-column tables, nested bullet
+  lists, inline citations, blockquotes, YAML front matter) to verify that structured content is
+  chunked and indexed correctly.
 
 To run these scenarios:
 

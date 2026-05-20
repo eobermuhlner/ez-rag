@@ -1,0 +1,163 @@
+documents:
+  - file: database_systems.md
+    role: relevant
+  - file: machine_learning.md
+    role: relevant
+  - file: network_protocols.md
+    role: relevant
+  - file: world_geography.md
+    role: distractor
+  - file: cloud_computing.md
+    role: hard-negative    # mentions PostgreSQL, Redis, ML training, Layer 7/HTTP — must not outrank relevant docs
+
+questions:
+  # --- database_systems.md ---
+  - id: q1
+    question: "Which relational database was released in 1996 and uses the PostgreSQL BSD license?"
+    expected_sources: ["database_systems.md"]
+    expected_answer_contains: ["PostgreSQL"]
+
+  - id: q2
+    question: "What does Atomicity mean in ACID database properties and how is it typically implemented?"
+    expected_sources: ["database_systems.md"]
+    expected_answer_contains: ["transaction", "rolled back", "write-ahead"]
+
+  - id: q3
+    question: "What is the CAP theorem and who introduced it in the year 2000?"
+    expected_sources: ["database_systems.md"]
+    expected_answer_contains: ["Consistency", "Availability", "Partition", "Brewer"]
+
+  - id: q4
+    question: "Which NoSQL database uses the Cypher query language and what is it best suited for?"
+    expected_sources: ["database_systems.md"]
+    expected_answer_contains: ["Neo4j", "Graph", "relationship"]
+
+  - id: q5
+    question: "According to the Cattell 2011 citation, what topic does the referenced paper cover?"
+    expected_sources: ["database_systems.md"]
+    expected_answer_contains: ["NoSQL", "SQL"]
+
+  # --- machine_learning.md ---
+  - id: q6
+    question: "Which supervised learning algorithm has O(n²–n³) time complexity and is recommended for small high-dimensional datasets?"
+    expected_sources: ["machine_learning.md"]
+    expected_answer_contains: ["SVM"]
+
+  - id: q7
+    question: "What percentage range is recommended for the test split in a standard ML training pipeline?"
+    expected_sources: ["machine_learning.md"]
+    expected_answer_contains: ["10", "15"]
+
+  - id: q8
+    question: "What does the unsupervised algorithm LDA output and what task is it best suited for?"
+    expected_sources: ["machine_learning.md"]
+    expected_answer_contains: ["Topics", "topic modeling", "text"]
+
+  - id: q9
+    question: "What is the F1-Score formula and what does the metric represent?"
+    expected_sources: ["machine_learning.md"]
+    expected_answer_contains: ["precision", "recall", "harmonic"]
+
+  - id: q10
+    question: "Why is accuracy a misleading metric for imbalanced datasets and which metrics should be preferred?"
+    expected_sources: ["machine_learning.md"]
+    expected_answer_contains: ["majority class", "AUC-ROC", "F1"]
+
+  # --- network_protocols.md ---
+  - id: q11
+    question: "What data unit is used at the Transport layer of the OSI model?"
+    expected_sources: ["network_protocols.md"]
+    expected_answer_contains: ["Segment"]
+
+  - id: q12
+    question: "What problem does QUIC solve that TCP suffers from and who originally designed QUIC?"
+    expected_sources: ["network_protocols.md"]
+    expected_answer_contains: ["head-of-line blocking", "Google"]
+
+  - id: q13
+    question: "What new capabilities did HTTP/2 introduce compared to HTTP/1.1?"
+    expected_sources: ["network_protocols.md"]
+    expected_answer_contains: ["multiplexing", "Binary", "HPACK", "Server push"]
+
+  - id: q14
+    question: "How many root name server clusters exist worldwide in the DNS hierarchy?"
+    expected_sources: ["network_protocols.md"]
+    expected_answer_contains: ["13"]
+
+  # --- cross-document questions (paraphrased; shared vocabulary with cloud_computing.md hard-negative) ---
+  - id: q15
+    question: "Which storage technology should be chosen when the primary need is caching and session data?"
+    expected_sources: ["database_systems.md"]
+    expected_answer_contains: ["Caching", "sessions"]
+    # cross-doc: cloud_computing.md discusses Redis/ElastiCache for cloud deployments; no cues to "comparison table"
+
+  - id: q16
+    question: "How does PostgreSQL control the visibility of uncommitted changes between concurrent transactions?"
+    expected_sources: ["database_systems.md"]
+    expected_answer_contains: ["Read Committed", "Serializable"]
+    # cross-doc: cloud_computing.md mentions managed PostgreSQL on RDS but not isolation semantics
+
+  - id: q17
+    question: "Which self-supervised approach reconstructs its input to detect unusual patterns in unlabeled data?"
+    expected_sources: ["machine_learning.md"]
+    expected_answer_contains: ["Autoencoder"]
+    # cross-doc: cloud_computing.md covers ML platforms and training pipelines but not specific algorithms
+
+  - id: q18
+    question: "What is the name of the data unit exchanged at the topmost layer of the network stack?"
+    expected_sources: ["network_protocols.md"]
+    expected_answer_contains: ["Message"]
+    # cross-doc: cloud_computing.md mentions Layer 7 load balancers but never names OSI data units
+
+  - id: q19
+    question: "How does the second major version of HTTP reduce the overhead caused by large repeated request headers?"
+    expected_sources: ["network_protocols.md"]
+    expected_answer_contains: ["HPACK"]
+    # cross-doc: cloud_computing.md mentions HTTP/HTTPS and CDN but not the header compression mechanism
+
+  - id: q20
+    question: "What transformation strategies convert non-numeric class labels into numeric representations for model training?"
+    expected_sources: ["machine_learning.md"]
+    expected_answer_contains: ["one-hot", "target encoding", "label encoding"]
+    # cross-doc: cloud_computing.md uses "feature engineering" in passing; no cue pointing to machine_learning.md
+
+  # --- harder questions: cross-row comparison, footnote lookup, negation, implicit reasoning ---
+  - id: q21
+    question: "How do MongoDB and Neo4j differ in their consistency models?"
+    expected_sources: ["database_systems.md"]
+    expected_answer_contains: ["Neo4j", "ACID", "MongoDB", "Tunable"]
+    # cross-row: answer requires comparing two rows in the NoSQL table
+
+  - id: q22
+    question: "Which NoSQL databases rely on eventual consistency and are therefore unsuitable for workloads that cannot tolerate stale reads?"
+    expected_sources: ["database_systems.md"]
+    expected_answer_contains: ["Cassandra", "Eventual"]
+    # negation: must identify the subset with Eventual consistency from the table
+
+  - id: q23
+    question: "What do the variables t and l represent in the Big-O complexity expressions for the learning algorithms?"
+    expected_sources: ["machine_learning.md"]
+    expected_answer_contains: ["trees", "layers"]
+    # footnote: answer is in the italicised footnote line below the supervised learning table
+
+  - id: q24
+    question: "Which supervised learning algorithm has the lowest interpretability rating?"
+    expected_sources: ["machine_learning.md"]
+    expected_answer_contains: ["Neural Network", "Very Low"]
+    # negation: must scan the Interpretable column and pick the minimum value
+
+  - id: q25
+    question: "What is TCP's handshake latency and how does QUIC improve on it?"
+    expected_sources: ["network_protocols.md"]
+    expected_answer_contains: ["1.5 RTT", "QUIC"]
+    # cross-row: answer spans two rows of the TCP/UDP/QUIC comparison table
+
+  - id: q26
+    question: "Which protocol should be chosen over HTTP/2 to remove the head-of-line blocking that HTTP/2 still suffers from at the transport layer?"
+    expected_sources: ["network_protocols.md"]
+    expected_answer_contains: ["HTTP/3", "QUIC"]
+    # implicit: requires connecting HTTP/2's known limitation to HTTP/3's QUIC foundation
+
+thresholds:
+  recall_at_k: 0.80
+  hit_rate_at_k: 0.80
