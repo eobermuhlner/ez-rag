@@ -11,6 +11,7 @@ class MarkdownDocumentReader(
 ) {
 
     private val headingRegex = Regex("""^(#{1,6})\s+(.+)$""")
+    private val sectionSplitter = SectionSplitter(chunkSize, chunkOverlap, TokenCounter::countTokens)
 
     fun read(): List<Document> {
         val raw = file.readText()
@@ -36,29 +37,30 @@ class MarkdownDocumentReader(
             if (bodyText.isEmpty()) return
 
             if (currentStack.isEmpty()) {
-                // Pre-heading content: no heading metadata
-                result.add(
-                    Document.builder()
-                        .text(bodyText)
-                        .build()
-                )
+                val subChunks = sectionSplitter.splitSection(bodyText, "")
+                for (chunk in subChunks) {
+                    result.add(Document.builder().text(chunk).build())
+                }
             } else {
                 val headingPrefix = currentStack.joinToString("\n") { (level, title) ->
                     "#".repeat(level) + " " + title
                 }
-                val fullText = headingPrefix + "\n" + bodyText
                 val immediateHeading = currentStack.last()
                 val headingPath = currentStack.map { it.second }
-                result.add(
-                    Document.builder()
-                        .text(fullText)
-                        .metadata(mapOf(
-                            "heading_title" to immediateHeading.second,
-                            "heading_level" to immediateHeading.first,
-                            "heading_path" to headingPath
-                        ))
-                        .build()
+                val metadata = mapOf(
+                    "heading_title" to immediateHeading.second,
+                    "heading_level" to immediateHeading.first,
+                    "heading_path" to headingPath
                 )
+                val subChunks = sectionSplitter.splitSection(bodyText, headingPrefix)
+                for (chunk in subChunks) {
+                    result.add(
+                        Document.builder()
+                            .text(chunk)
+                            .metadata(metadata)
+                            .build()
+                    )
+                }
             }
         }
 

@@ -247,6 +247,95 @@ class MarkdownDocumentReaderTest {
         assertThat(roundTrippedPath).containsExactly("Top Level", "Sub Section")
     }
 
+    @Test
+    fun `a large section produces multiple Documents all with the correct heading metadata`(@TempDir tempDir: Path) {
+        val loremBody = (1..30).joinToString("\n\n") { "Paragraph $it with enough words to consume token budget." }
+        val file = tempDir.resolve("large-section.md").toFile()
+        file.writeText("# Big Section\n$loremBody")
+
+        val reader = MarkdownDocumentReader(file, chunkSize = 30, chunkOverlap = 5)
+        val documents = reader.read()
+
+        val sectionDocs = documents.filter { it.metadata["heading_title"] == "Big Section" }
+        assertThat(sectionDocs.size).isGreaterThan(1)
+        sectionDocs.forEach { doc ->
+            assertThat(doc.metadata["heading_title"]).isEqualTo("Big Section")
+            assertThat(doc.metadata["heading_level"]).isEqualTo(1)
+            @Suppress("UNCHECKED_CAST")
+            val path = doc.metadata["heading_path"] as List<String>
+            assertThat(path).containsExactly("Big Section")
+            assertThat(doc.text).startsWith("# Big Section\n")
+        }
+    }
+
+    @Test
+    fun `a section fitting within chunkSize still produces exactly one Document`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("small-section.md").toFile()
+        file.writeText("# Small\nShort content.")
+
+        val reader = MarkdownDocumentReader(file, chunkSize = 1000, chunkOverlap = 200)
+        val documents = reader.read()
+
+        val sectionDocs = documents.filter { it.metadata["heading_title"] == "Small" }
+        assertThat(sectionDocs).hasSize(1)
+        assertThat(sectionDocs[0].text).startsWith("# Small\n")
+        assertThat(sectionDocs[0].text).contains("Short content.")
+    }
+
+    @Test
+    fun `a horizontal rule within a section body produces two Documents neither containing the rule`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("hrule.md").toFile()
+        file.writeText("""
+            # Section
+            First part of content.
+
+            ---
+
+            Second part of content.
+        """.trimIndent())
+
+        val reader = MarkdownDocumentReader(file, chunkSize = 1000, chunkOverlap = 200)
+        val documents = reader.read()
+
+        val sectionDocs = documents.filter { it.metadata["heading_title"] == "Section" }
+        assertThat(sectionDocs).hasSize(2)
+        sectionDocs.forEach { doc ->
+            assertThat(doc.text).doesNotContain("---")
+        }
+        assertThat(sectionDocs[0].text).contains("First part of content.")
+        assertThat(sectionDocs[1].text).contains("Second part of content.")
+    }
+
+    @Test
+    fun `YAML front matter followed by a horizontal rule mid-body produces no front-matter content in chunks`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("yaml-hrule.md").toFile()
+        file.writeText("""
+            ---
+            title: Secret Title
+            author: Hidden Author
+            ---
+            # Section
+            Before the rule.
+
+            ---
+
+            After the rule.
+        """.trimIndent())
+
+        val reader = MarkdownDocumentReader(file, chunkSize = 1000, chunkOverlap = 200)
+        val documents = reader.read()
+
+        assertThat(documents).isNotEmpty()
+        documents.forEach { doc ->
+            assertThat(doc.text).doesNotContain("Secret Title")
+            assertThat(doc.text).doesNotContain("Hidden Author")
+        }
+        val sectionDocs = documents.filter { it.metadata["heading_title"] == "Section" }
+        assertThat(sectionDocs).hasSize(2)
+        assertThat(sectionDocs[0].text).contains("Before the rule.")
+        assertThat(sectionDocs[1].text).contains("After the rule.")
+    }
+
     private fun makeFakeEmbeddingModel(): EmbeddingModel = object : EmbeddingModel {
         override fun call(request: EmbeddingRequest): EmbeddingResponse {
             val embeddings = request.instructions.mapIndexed { idx, _ ->
