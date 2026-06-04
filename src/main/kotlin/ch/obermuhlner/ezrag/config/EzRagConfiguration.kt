@@ -3,13 +3,26 @@ package ch.obermuhlner.ezrag.config
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
+import java.io.File
 import java.io.PrintWriter
+import java.nio.file.Paths
 
 @Configuration
 class EzRagConfiguration(private val environment: Environment) {
 
     @Bean
-    fun configService(): ConfigService {
+    fun configSources(): ConfigSources {
+        val homeConfigPath = System.getProperty("user.home") + "/.ez-rag/config.yml"
+        val ezRagDir = EzRagDirResolver().resolve(Paths.get("").toAbsolutePath())
+        val localConfigPath = ezRagDir.resolve("config.yml").toString()
+        return ConfigSources(
+            homeConfigPath = if (File(homeConfigPath).exists()) homeConfigPath else null,
+            localConfigPath = if (File(localConfigPath).exists()) localConfigPath else null
+        )
+    }
+
+    @Bean
+    fun configService(configSources: ConfigSources): ConfigService {
         // Collect pre-parsed CLI provider flags that were injected into the Spring
         // environment before context startup (via SpringApplicationBuilder.properties).
         val startupFlags = CliFlags(
@@ -23,7 +36,11 @@ class EzRagConfiguration(private val environment: Environment) {
             storeDir = environment.getProperty("ez.rag.storeDir"),
         )
         return ConfigService(
-            configFileSource = { readConfigFile() },
+            configFileSource = {
+                val homeRaw = configSources.homeConfigPath?.let { readConfigRaw(it) }
+                val localRaw = configSources.localConfigPath?.let { readConfigRaw(it) }
+                mergeConfigRaw(homeRaw, localRaw)
+            },
             envVars = System.getenv(),
             startupFlags = startupFlags
         )

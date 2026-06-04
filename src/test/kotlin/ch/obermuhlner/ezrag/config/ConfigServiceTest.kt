@@ -295,6 +295,53 @@ class ConfigServiceTest {
         assertThat(service.resolve().searchMode).isEqualTo("hybrid")
     }
 
+    // ---- two-tier config tests ----
+
+    @Test
+    fun `local config field beats home config field`() {
+        val service = ConfigService(
+            configFileSource = { mergeConfigRaw(mapOf("provider" to "anthropic"), mapOf("provider" to "openai")) },
+            envVars = emptyMap()
+        )
+        assertThat(service.resolve().provider).isEqualTo("openai")
+    }
+
+    @Test
+    fun `home config field used when local config omits it`() {
+        val service = ConfigService(
+            configFileSource = { mergeConfigRaw(mapOf("provider" to "anthropic"), emptyMap()) },
+            envVars = emptyMap()
+        )
+        assertThat(service.resolve().provider).isEqualTo("anthropic")
+    }
+
+    @Test
+    fun `env var beats local config field`() {
+        val service = ConfigService(
+            configFileSource = { mergeConfigRaw(emptyMap(), mapOf("provider" to "local-provider")) },
+            envVars = mapOf("PROVIDER" to "env-provider")
+        )
+        assertThat(service.resolve().provider).isEqualTo("env-provider")
+    }
+
+    @Test
+    fun `CLI flag beats local config field`() {
+        val service = ConfigService(
+            configFileSource = { mergeConfigRaw(emptyMap(), mapOf("provider" to "local-provider")) },
+            envVars = emptyMap()
+        )
+        assertThat(service.resolve(CliFlags(provider = "cli-provider")).provider).isEqualTo("cli-provider")
+    }
+
+    @Test
+    fun `resolveExplicitStoreDir is unaffected by storeDir in local config`() {
+        val service = ConfigService(
+            configFileSource = { mergeConfigRaw(null, mapOf("store-dir" to "/local/store")) },
+            envVars = emptyMap()
+        )
+        assertThat(service.resolveExplicitStoreDir()).isNull()
+    }
+
     // ---- analyzer resolution tests ----
 
     @Test

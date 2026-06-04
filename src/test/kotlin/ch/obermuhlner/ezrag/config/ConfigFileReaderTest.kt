@@ -72,4 +72,89 @@ class ConfigFileReaderTest {
         assertThat(config).isNotNull()
         assertThat(config!!.analyzer).isEqualTo("english")
     }
+
+    // ---- readConfigRaw tests ----
+
+    @Test
+    fun `readConfigRaw returns null when file does not exist`(@TempDir tempDir: Path) {
+        val result = readConfigRaw(tempDir.resolve("nonexistent.yml").toString())
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `readConfigRaw returns raw map when file exists`(@TempDir tempDir: Path) {
+        val configFile = tempDir.resolve("config.yml").toFile()
+        configFile.writeText("provider: anthropic\nchunk-size: 500\n")
+
+        val result = readConfigRaw(configFile.absolutePath)
+
+        assertThat(result).isNotNull()
+        assertThat(result!!["provider"]).isEqualTo("anthropic")
+        assertThat(result["chunk-size"]).isEqualTo(500)
+    }
+
+    // ---- mergeConfigRaw tests ----
+
+    @Test
+    fun `mergeConfigRaw uses home field when local omits it`() {
+        val home = mapOf("provider" to "anthropic", "chunk-size" to 500)
+        val local = mapOf("search-mode" to "bm25")
+
+        val result = mergeConfigRaw(home, local)
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.provider).isEqualTo("anthropic")
+        assertThat(result.chunkSize).isEqualTo(500)
+    }
+
+    @Test
+    fun `mergeConfigRaw uses local field when both home and local set it`() {
+        val home = mapOf("provider" to "anthropic")
+        val local = mapOf("provider" to "openai")
+
+        val result = mergeConfigRaw(home, local)
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.provider).isEqualTo("openai")
+    }
+
+    @Test
+    fun `mergeConfigRaw strips storeDir from local map`() {
+        val home = mapOf("store-dir" to "/home/store")
+        val local = mapOf("store-dir" to "/local/store")
+
+        val result = mergeConfigRaw(home, local)
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.storeDir).isEqualTo("/home/store")
+    }
+
+    @Test
+    fun `mergeConfigRaw returns null when both inputs are null`() {
+        val result = mergeConfigRaw(null, null)
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `mergeConfigRaw returns defaults when both maps are empty`() {
+        val result = mergeConfigRaw(emptyMap<String, Any>(), emptyMap<String, Any>())
+        assertThat(result).isNotNull()
+        assertThat(result!!.provider).isEqualTo("passthrough")
+    }
+
+    @Test
+    fun `EzRagDirResolver locates local config when invoked two levels below the project dir`(@TempDir tempDir: Path) {
+        val ezRagDir = tempDir.resolve(".ez-rag").toFile().also { it.mkdirs() }
+        val localConfig = ezRagDir.resolve("config.yml").also { it.writeText("provider: local-provider\n") }
+        val subSubDir = tempDir.resolve("sub/sub2")
+        subSubDir.toFile().mkdirs()
+
+        val resolvedDir = EzRagDirResolver().resolve(subSubDir)
+        val localRaw = readConfigRaw(resolvedDir.resolve("config.yml").toString())
+        val config = mergeConfigRaw(null, localRaw)
+
+        assertThat(localConfig.exists()).isTrue()
+        assertThat(config).isNotNull()
+        assertThat(config!!.provider).isEqualTo("local-provider")
+    }
 }
