@@ -67,6 +67,46 @@ ez-rag query --provider onnx "What are the main features?"
 echo "What is X?" | ez-rag search
 ```
 
+## Using ez-rag with agentic coding tools
+
+One of the primary use cases for ez-rag is giving agentic coding tools a local document knowledge base. Index your docs once; the agent answers questions from them without you having to paste file contents into the chat.
+
+Any agent that can run shell commands can use ez-rag directly. For agents with a skill/instruction system — such as Claude Code — drop the skill file from this repository into the agent's skill directory and it will follow the full retrieve-and-synthesize workflow automatically.
+
+### Installing the skill (Claude Code example)
+
+Copy the skill file into your project's `.claude/skills/` directory:
+
+```shag
+mkdir -p .claude/skills/ez-rag
+cp /path/to/ez-rag/.claude/skills/ez-rag/SKILL.md .claude/skills/ez-rag/SKILL.md
+```
+
+Claude Code picks it up automatically. Trigger it with natural-language requests:
+
+- "Ingest the `docs/` folder"
+- "What does the architecture doc say about connection pooling?"
+- "Search the knowledge base for retry configuration"
+- "What do the docs say about authentication?"
+
+### How the workflow works
+
+When asked a document question, the agent runs:
+
+1. **Check the store** — `ez-rag list` shows which files are indexed and flags any that have changed on disk since ingest (`[STALE]`).
+2. **Ingest or refresh** — `ez-rag ingest <path>` for new files; `ez-rag reingest` to refresh stale ones.
+3. **Search with multiple phrasings** — `ez-rag search <question>` returns the most relevant chunks using hybrid BM25 + embedding search. Running 2–3 different phrasings often surfaces different chunks, especially when scores are flat.
+4. **Load surrounding context** — `ez-rag chunk <file> <chunkIndex> --window 1` retrieves adjacent chunks when a result is too short or references content that continues in a neighbouring chunk.
+5. **Synthesize** — the agent reads the chunks and answers in its own words, citing which file each piece of information came from.
+
+No API key is required: search uses a local embedding model by default and involves no LLM call.
+
+### Alternative: MCP server
+
+For tighter integration, run ez-rag as an [MCP server](#mcp-server) so the agent calls it as a structured tool rather than shell commands — useful when you want to expose the knowledge base to multiple agents or control it from a custom host.
+
+---
+
 ## Commands
 
 | Command                        | Description                                                                                        |
