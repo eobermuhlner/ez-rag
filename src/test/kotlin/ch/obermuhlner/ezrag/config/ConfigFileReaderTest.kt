@@ -143,6 +143,62 @@ class ConfigFileReaderTest {
     }
 
     @Test
+    fun `embeddingProvider defaults to provider when provider is openai and embeddingProvider is absent`(@TempDir tempDir: Path) {
+        val configFile = tempDir.resolve("config.yml").toFile()
+        configFile.writeText("provider: openai\n")
+
+        val config = readConfigFile(configFile.absolutePath)
+
+        assertThat(config).isNotNull()
+        assertThat(config!!.embeddingProvider).isEqualTo("openai")
+    }
+
+    @Test
+    fun `embeddingModel defaults to text-embedding-3-small when provider is openai and embeddingModel is absent`(@TempDir tempDir: Path) {
+        val configFile = tempDir.resolve("config.yml").toFile()
+        configFile.writeText("provider: openai\n")
+
+        val config = readConfigFile(configFile.absolutePath)
+
+        assertThat(config).isNotNull()
+        assertThat(config!!.embeddingModel).isEqualTo("text-embedding-3-small")
+    }
+
+    @Test
+    fun `embeddingProvider explicit override is respected when provider is openai`(@TempDir tempDir: Path) {
+        val configFile = tempDir.resolve("config.yml").toFile()
+        configFile.writeText("provider: openai\nembedding-provider: onnx\n")
+
+        val config = readConfigFile(configFile.absolutePath)
+
+        assertThat(config).isNotNull()
+        assertThat(config!!.embeddingProvider).isEqualTo("onnx")
+    }
+
+    @Test
+    fun `embeddingProvider defaults to onnx when no provider is set`(@TempDir tempDir: Path) {
+        val configFile = tempDir.resolve("config.yml").toFile()
+        configFile.writeText("chunk-size: 500\n")
+
+        val config = readConfigFile(configFile.absolutePath)
+
+        assertThat(config).isNotNull()
+        assertThat(config!!.embeddingProvider).isEqualTo("onnx")
+    }
+
+    @Test
+    fun `mergeConfigRaw derives embeddingProvider and embeddingModel from home provider when embeddingProvider is absent`() {
+        val home = mapOf("provider" to "openai")
+        val local = mapOf("search-mode" to "bm25")
+
+        val result = mergeConfigRaw(home, local)
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.embeddingProvider).isEqualTo("openai")
+        assertThat(result.embeddingModel).isEqualTo("text-embedding-3-small")
+    }
+
+    @Test
     fun `EzRagDirResolver locates local config when invoked two levels below the project dir`(@TempDir tempDir: Path) {
         val ezRagDir = tempDir.resolve(".ez-rag").toFile().also { it.mkdirs() }
         val localConfig = ezRagDir.resolve("config.yml").also { it.writeText("provider: local-provider\n") }

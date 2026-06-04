@@ -21,13 +21,21 @@ fun mergeConfigRaw(home: Map<String, Any>?, local: Map<String, Any>?): EzRagConf
     return configFromRaw(merged)
 }
 
+private fun defaultEmbeddingModelFor(embeddingProvider: String): String = when (embeddingProvider) {
+    "openai" -> "text-embedding-3-small"
+    "ollama" -> "nomic-embed-text"
+    else     -> EzRagConfig().embeddingModel
+}
+
 private fun configFromRaw(data: Map<String, Any>): EzRagConfig {
     val d = EzRagConfig()
+    val embeddingProvider = data.string("embeddingProvider") ?: data.string("embedding-provider")
+        ?: data.string("provider") ?: d.embeddingProvider
     return EzRagConfig(
         provider = data.string("provider") ?: d.provider,
-        embeddingProvider = data.string("embeddingProvider") ?: data.string("embedding-provider") ?: d.embeddingProvider,
+        embeddingProvider = embeddingProvider,
         model = data.string("model") ?: d.model,
-        embeddingModel = data.string("embeddingModel") ?: data.string("embedding-model") ?: d.embeddingModel,
+        embeddingModel = data.string("embeddingModel") ?: data.string("embedding-model") ?: defaultEmbeddingModelFor(embeddingProvider),
         ollamaUrl = data.string("ollamaUrl") ?: data.string("ollama-url") ?: d.ollamaUrl,
         storeDir = data.string("storeDir") ?: data.string("store-dir"),
         chunkSize = data.int("chunkSize") ?: data.int("chunk-size") ?: d.chunkSize,
