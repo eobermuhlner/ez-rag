@@ -1,15 +1,3 @@
----
-name: ez-rag
-description: >
-  Maintain and query a local document knowledge base using ez-rag. Use this skill whenever
-  the user wants to index files or a directory so Claude can answer questions from them,
-  search for relevant information across ingested documents, check what documents are
-  already in the store, or asks "what do the docs say about X?". Trigger on: "ingest these
-  files", "add to the knowledge base", "search for X in the docs", "what does the
-  README say about Y?", "index this folder", or any document-retrieval or RAG workflow.
-  Do NOT use this for the `ez-rag mcp-server` subcommand.
----
-
 # ez-rag — Local Document Knowledge Base
 
 `ez-rag` builds and queries a local vector store.
@@ -30,9 +18,12 @@ whether anything needs re-ingesting.
 
 ```sh
 ez-rag ingest <file-or-directory> [<more-paths>...]
+ez-rag ingest <https://...> [<more-urls>...]
 ```
 
 Recursively indexes `.txt`, `.md`, and `.pdf` files into the vector store.
+Also accepts HTTP/HTTPS URLs — the page is fetched, its text extracted, and ingested
+like any other document. Mix files, directories, and URLs freely in a single command.
 
 ### Refresh stale documents
 
@@ -82,7 +73,8 @@ When the user asks about document content:
 
 1. **Check first** — `ez-rag list` to see which files are already indexed and whether
    any are stale.
-2. **Ingest if needed** — `ez-rag ingest <path>` for new files not yet in the store.
+2. **Ingest if needed** — `ez-rag ingest <path>` for new files not yet in the store;
+   `ez-rag ingest <https://...>` to fetch and index a web page by URL.
    For files already indexed but marked `[STALE]`, run `ez-rag reingest` instead.
 3. **Search** — run `ez-rag search` with 2–3 different phrasings of the question.
    Different wording often surfaces different chunks, especially when scores are flat.
@@ -100,5 +92,5 @@ chunks were added.
 
 ## Sandbox note
 
-You MUST run the `ez-rag` commands outside of the sandbox. 
-They require `dangerouslyDisableSandbox: true` 
+You MUST run the `ez-rag` commands outside of the sandbox.
+They require `dangerouslyDisableSandbox: true`

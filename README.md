@@ -73,16 +73,33 @@ One of the primary use cases for ez-rag is giving agentic coding tools a local d
 
 Any agent that can run shell commands can use ez-rag directly. For agents with a skill/instruction system — such as Claude Code — drop the skill file from this repository into the agent's skill directory and it will follow the full retrieve-and-synthesize workflow automatically.
 
-### Installing the skill (Claude Code example)
+### Installing the skill
 
-Copy the skill file into your project's `.claude/skills/` directory:
+Run `install-skill` from your project directory after `init`:
 
-```shag
-mkdir -p .claude/skills/ez-rag
-cp /path/to/ez-rag/.claude/skills/ez-rag/SKILL.md .claude/skills/ez-rag/SKILL.md
+```sh
+ez-rag install-skill
 ```
 
-Claude Code picks it up automatically. Trigger it with natural-language requests:
+The command auto-detects which agentic coding tools are present (Claude Code, OpenCode, or a generic fallback) and installs the skill to the correct location for each. You can also do it in one step:
+
+```sh
+ez-rag init --install-skill
+```
+
+Or force a specific tool:
+
+```sh
+ez-rag install-skill --tool claude-code
+```
+
+Install globally (available in every project):
+
+```sh
+ez-rag install-skill --global
+```
+
+Once installed, trigger it with natural-language requests:
 
 - "Ingest the `docs/` folder"
 - "What does the architecture doc say about connection pooling?"
@@ -112,6 +129,7 @@ For tighter integration, run ez-rag as an [MCP server](#mcp-server) so the agent
 | Command                        | Description                                                                                        |
 |--------------------------------|----------------------------------------------------------------------------------------------------|
 | `init`                         | Initialize a `.ez-rag/` workspace in the current directory and add the store to `.gitignore`.      |
+| `install-skill`                | Install the ez-rag skill for your AI coding tool. Auto-detects Claude Code, OpenCode, or falls back to generic. |
 | `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`. Prints each file as it is ingested. |
 | `delete <file> [<file>...]`    | Remove one or more ingested documents from the vector store without touching other content.        |
 | `list`                         | List all ingested documents with chunk counts and staleness flags. Use `--output-format json` for machine-readable output with absolute paths. |
@@ -146,6 +164,50 @@ Output (already exists):
 ```
 
 `init` also adds `.ez-rag/` to the project's `.gitignore` (if the file exists) so the entire store directory (vector store and Lucene index) is never accidentally committed. Running `ingest` without calling `init` first works too — the directory is created automatically.
+
+To initialise and install the skill in one step:
+
+```sh
+ez-rag init --install-skill
+```
+
+### install-skill
+
+Install the ez-rag skill for your AI coding tool:
+
+```sh
+ez-rag install-skill
+```
+
+The command auto-detects which tools are present and installs to the correct path:
+
+| Tool | Detection signal | Project-level path | Global path (`--global`) |
+|---|---|---|---|
+| Claude Code | `.claude/` in project or home | `.claude/skills/ez-rag/SKILL.md` | `~/.claude/skills/ez-rag/SKILL.md` |
+| OpenCode | `.opencode/` in project or `~/.config/opencode/` | `.agents/skills/ez-rag/SKILL.md` | `~/.config/opencode/skills/ez-rag/SKILL.md` |
+| Generic | fallback when no known tool detected | `.agents/skills/ez-rag/SKILL.md` | `~/.agents/skills/ez-rag/SKILL.md` |
+
+Re-running after upgrading ez-rag overwrites the previous file with the latest skill content.
+
+**Flags:**
+
+| Flag | Description |
+|---|---|
+| `--global` | Install into the user's home-level skill directory instead of the project directory. |
+| `--tool <name>` | Install for a specific tool, bypassing auto-detection. Repeatable. Valid values: `claude-code`, `opencode`, `generic`. |
+
+**Examples:**
+
+```sh
+# Auto-detect and install project-level
+ez-rag install-skill
+
+# Install globally for Claude Code
+ez-rag install-skill --global --tool claude-code
+
+# Install for both Claude Code and OpenCode at once
+ez-rag install-skill --tool claude-code --tool opencode
+```
 
 ## Ingest-specific flags
 

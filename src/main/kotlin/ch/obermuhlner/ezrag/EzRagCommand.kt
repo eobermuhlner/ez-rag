@@ -6,6 +6,7 @@ import ch.obermuhlner.ezrag.command.EvalCommand
 import ch.obermuhlner.ezrag.command.DownloadEvalCorpusCommand
 import ch.obermuhlner.ezrag.command.InitCommand
 import ch.obermuhlner.ezrag.command.IngestCommand
+import ch.obermuhlner.ezrag.command.InstallSkillCommand
 import ch.obermuhlner.ezrag.command.ListCommand
 import ch.obermuhlner.ezrag.command.McpServerCommand
 import ch.obermuhlner.ezrag.command.QueryCommand
@@ -30,6 +31,7 @@ import java.util.concurrent.Callable
     description = ["A command-line tool for RAG (retrieval-augmented generation)."],
     subcommands = [
         InitCommand::class,
+        InstallSkillCommand::class,
         IngestCommand::class,
         ChunkCommand::class,
         ReIngestCommand::class,

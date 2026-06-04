@@ -127,4 +127,66 @@ class InitCommandTest {
         assertThat(content.lines().count { it.trim() == ".ez-rag/credentials.yml" }).isEqualTo(1)
         assertThat(content.lines().count { it.trim() == ".ez-rag/" }).isEqualTo(1)
     }
+
+    @Test
+    fun `prints install-skill tip after workspace init`(@TempDir tempDir: Path) {
+        val (sw, pw) = makeWriter()
+        val cmd = InitCommand(cwdOverride = tempDir, outputWriter = pw)
+        cmd.call()
+
+        assertThat(sw.toString()).contains("ez-rag install-skill")
+    }
+
+    @Test
+    fun `does not write any SKILL-md file when install-skill not set`(@TempDir tempDir: Path) {
+        val (_, pw) = makeWriter()
+        val cmd = InitCommand(cwdOverride = tempDir, outputWriter = pw)
+        cmd.call()
+
+        assertThat(tempDir.resolve(".claude/skills/ez-rag/SKILL.md").toFile().exists()).isFalse()
+        assertThat(tempDir.resolve(".agents/skills/ez-rag/SKILL.md").toFile().exists()).isFalse()
+    }
+
+    @Test
+    fun `writes SKILL-md for detected tool when install-skill flag is set`(@TempDir tempDir: Path) {
+        tempDir.resolve(".claude").toFile().mkdirs()
+        val homeDir = tempDir.resolve("home").also { it.toFile().mkdirs() }
+        val (_, pw) = makeWriter()
+        val cmd = InitCommand(cwdOverride = tempDir, homeOverride = homeDir, outputWriter = pw, installSkill = true)
+        cmd.call()
+
+        assertThat(tempDir.resolve(".claude/skills/ez-rag/SKILL.md").toFile().exists()).isTrue()
+    }
+
+    @Test
+    fun `prints install line when install-skill flag is set`(@TempDir tempDir: Path) {
+        tempDir.resolve(".claude").toFile().mkdirs()
+        val homeDir = tempDir.resolve("home").also { it.toFile().mkdirs() }
+        val (sw, pw) = makeWriter()
+        val cmd = InitCommand(cwdOverride = tempDir, homeOverride = homeDir, outputWriter = pw, installSkill = true)
+        cmd.call()
+
+        assertThat(sw.toString()).contains("ez-rag skill for claude-code")
+    }
+
+    @Test
+    fun `install-skill with global flag writes to home path`(@TempDir tempDir: Path) {
+        val homeDir = tempDir.resolve("home").also { it.toFile().mkdirs() }
+        homeDir.resolve(".claude").toFile().mkdirs()
+        val (_, pw) = makeWriter()
+        val cmd = InitCommand(cwdOverride = tempDir, homeOverride = homeDir, outputWriter = pw, installSkill = true, isGlobal = true)
+        cmd.call()
+
+        assertThat(homeDir.resolve(".claude/skills/ez-rag/SKILL.md").toFile().exists()).isTrue()
+    }
+
+    @Test
+    fun `install-skill with tool flag installs for specified tool regardless of detection`(@TempDir tempDir: Path) {
+        val homeDir = tempDir.resolve("home").also { it.toFile().mkdirs() }
+        val (_, pw) = makeWriter()
+        val cmd = InitCommand(cwdOverride = tempDir, homeOverride = homeDir, outputWriter = pw, installSkill = true, explicitToolNames = listOf("opencode"))
+        cmd.call()
+
+        assertThat(tempDir.resolve(".agents/skills/ez-rag/SKILL.md").toFile().exists()).isTrue()
+    }
 }
