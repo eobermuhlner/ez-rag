@@ -7,6 +7,17 @@ import java.io.File
 import java.io.PrintWriter
 import java.nio.file.Paths
 
+fun resolveConfigSources(homeConfigPath: String, localConfigPath: String): ConfigSources {
+    val homeExists = File(homeConfigPath).exists()
+    val localExists = File(localConfigPath).exists()
+    val sameFile = homeExists && localExists &&
+        File(homeConfigPath).canonicalPath == File(localConfigPath).canonicalPath
+    return ConfigSources(
+        homeConfigPath = if (homeExists) homeConfigPath else null,
+        localConfigPath = if (localExists && !sameFile) localConfigPath else null
+    )
+}
+
 @Configuration
 class EzRagConfiguration(private val environment: Environment) {
 
@@ -15,10 +26,7 @@ class EzRagConfiguration(private val environment: Environment) {
         val homeConfigPath = System.getProperty("user.home") + "/.ez-rag/config.yml"
         val ezRagDir = EzRagDirResolver().resolve(Paths.get("").toAbsolutePath())
         val localConfigPath = ezRagDir.resolve("config.yml").toString()
-        return ConfigSources(
-            homeConfigPath = if (File(homeConfigPath).exists()) homeConfigPath else null,
-            localConfigPath = if (File(localConfigPath).exists()) localConfigPath else null
-        )
+        return resolveConfigSources(homeConfigPath, localConfigPath)
     }
 
     @Bean

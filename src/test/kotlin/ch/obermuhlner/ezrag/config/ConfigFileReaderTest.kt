@@ -199,6 +199,17 @@ class ConfigFileReaderTest {
     }
 
     @Test
+    fun `resolveConfigSources sets localConfigPath to null when both paths point to the same file`(@TempDir tempDir: Path) {
+        val configFile = tempDir.resolve("config.yml").toFile().also { it.writeText("provider: test\n") }
+        val configPath = configFile.absolutePath
+
+        val result = resolveConfigSources(configPath, configPath)
+
+        assertThat(result.homeConfigPath).isEqualTo(configPath)
+        assertThat(result.localConfigPath).isNull()
+    }
+
+    @Test
     fun `EzRagDirResolver locates local config when invoked two levels below the project dir`(@TempDir tempDir: Path) {
         val ezRagDir = tempDir.resolve(".ez-rag").toFile().also { it.mkdirs() }
         val localConfig = ezRagDir.resolve("config.yml").also { it.writeText("provider: local-provider\n") }
