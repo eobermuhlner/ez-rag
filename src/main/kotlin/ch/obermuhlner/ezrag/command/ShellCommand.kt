@@ -2,6 +2,7 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.BM25SearchPipeline
+import ch.obermuhlner.ezrag.rag.ConversationTurn
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.HybridSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
@@ -98,6 +99,7 @@ class ShellCommand(
             )
         }
 
+        val history = mutableListOf<ConversationTurn>()
         val reader = BufferedReader(InputStreamReader(inputStream))
         while (true) {
             errorWriter.print("> ")
@@ -107,7 +109,7 @@ class ShellCommand(
             if (trimmed.isEmpty()) continue
             if (trimmed == "exit" || trimmed == "quit") break
             if (trimmed.startsWith("/")) {
-                if (handleSlashCommand(trimmed, resolved.hybridSearchPipeline, resolved.embeddingSearchPipeline, resolved.bm25SearchPipeline, resolved.repository)) break
+                if (handleSlashCommand(trimmed, resolved.hybridSearchPipeline, resolved.embeddingSearchPipeline, resolved.bm25SearchPipeline, resolved.repository, history)) break
                 continue
             }
 
@@ -117,8 +119,10 @@ class ShellCommand(
                     topK = topK,
                     systemPrompt = "",
                     modelOverride = modelOverride,
+                    conversationHistory = history.toList()
                 )
                 val result = resolved.ragPipeline.query(ragQuery)
+                history.add(ConversationTurn(trimmed, result.answer))
 
                 if (verbose) {
                     result.sources.forEach { source ->
@@ -145,6 +149,7 @@ class ShellCommand(
         embeddingPipeline: EmbeddingSearchPipeline?,
         bm25Pipeline: BM25SearchPipeline?,
         repository: LuceneRepository?,
+        history: MutableList<ConversationTurn>,
     ): Boolean {
         val parts = line.split(" ", limit = 2)
         val command = parts[0]
@@ -153,8 +158,15 @@ class ShellCommand(
         return when (command) {
             "/exit" -> true
 
+            "/clear" -> {
+                history.clear()
+                outputWriter.println("conversation history cleared")
+                false
+            }
+
             "/help" -> {
                 outputWriter.println("/help                        - Show this help")
+                outputWriter.println("/clear                       - Clear conversation history")
                 outputWriter.println("/status                      - Show vector store metadata")
                 outputWriter.println("/search <question>           - Run hybrid search without LLM")
                 outputWriter.println("/search-bm25 <question>      - Run BM25 (keyword) search without LLM")

@@ -3,6 +3,7 @@ package ch.obermuhlner.ezrag.command
 import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.BM25SearchPipeline
 import ch.obermuhlner.ezrag.rag.ChunkMatch
+import ch.obermuhlner.ezrag.rag.ConversationTurn
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.OutputFormatter
 import ch.obermuhlner.ezrag.rag.RagPipeline
@@ -340,11 +341,11 @@ class ShellCommandTest {
     }
 
     // -----------------------------------------------------------------------
-    // Test 11: /help prints all five command names
+    // Test 11: /help prints all six command names
     // -----------------------------------------------------------------------
 
     @Test
-    fun `slash help prints all five command names to stdout`(@TempDir tempDir: Path) {
+    fun `slash help prints all six command names to stdout`(@TempDir tempDir: Path) {
         createStore(tempDir)
         val repo = openRepo(tempDir)
         val out = StringWriter()
@@ -356,6 +357,7 @@ class ShellCommandTest {
 
         val output = out.toString()
         assertThat(output).contains("/help")
+        assertThat(output).contains("/clear")
         assertThat(output).contains("/status")
         assertThat(output).contains("/search")
         assertThat(output).contains("/verbose")
@@ -585,5 +587,160 @@ class ShellCommandTest {
         val output = out.toString()
         assertThat(output).contains("search-bm25")
         assertThat(output).contains("search-embedding")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 22: after one successful turn, second RagQuery has history size 1
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `after one successful turn second RagQuery has conversationHistory size 1 with correct question and answer`(@TempDir tempDir: Path) {
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val calls = mutableListOf<RagQuery>()
+        val pipeline = makePipeline(repo, calls, answer = "Answer one")
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createShellCommand(tempDir, out, err, makeInput("Question one", "Question two"), pipeline)
+
+        cmd.call()
+        repo.close()
+
+        assertThat(calls).hasSize(2)
+        assertThat(calls[1].conversationHistory).hasSize(1)
+        assertThat(calls[1].conversationHistory[0].userQuestion).isEqualTo("Question one")
+        assertThat(calls[1].conversationHistory[0].assistantAnswer).isEqualTo("Answer one")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 23: after two successful turns, third RagQuery has history size 2
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `after two successful turns third RagQuery has conversationHistory size 2`(@TempDir tempDir: Path) {
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val calls = mutableListOf<RagQuery>()
+        val pipeline = makePipeline(repo, calls)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createShellCommand(tempDir, out, err, makeInput("Q1", "Q2", "Q3"), pipeline)
+
+        cmd.call()
+        repo.close()
+
+        assertThat(calls).hasSize(3)
+        assertThat(calls[2].conversationHistory).hasSize(2)
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 24: when turn 1 throws, turn 2 has empty conversationHistory
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `when turn 1 throws exception turn 2 RagQuery has empty conversationHistory`(@TempDir tempDir: Path) {
+        createStore(tempDir)
+        val luceneRepo = openRepo(tempDir)
+        val searchPipeline0 = EmbeddingSearchPipeline(luceneRepo)
+        val calls = mutableListOf<RagQuery>()
+        var callIndex = 0
+        val pipeline = object : RagPipeline(searchPipeline0, stubChatModel) {
+            override fun query(ragQuery: RagQuery): RagResult {
+                calls.add(ragQuery)
+                val idx = callIndex++
+                if (idx == 0) throw RuntimeException("Simulated failure")
+                return RagResult("Answer two", emptyList())
+            }
+        }
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createShellCommand(tempDir, out, err, makeInput("Q1", "Q2"), pipeline)
+
+        cmd.call()
+        luceneRepo.close()
+
+        assertThat(calls).hasSize(2)
+        assertThat(calls[1].conversationHistory).isEmpty()
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 25: slash commands after successful turn do not add to history
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `slash command turns do not add entries to conversation history`(@TempDir tempDir: Path) {
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val calls = mutableListOf<RagQuery>()
+        val pipeline = makePipeline(repo, calls)
+        val searchCalls = mutableListOf<SearchQuery>()
+        val searchPipeline = makeSearchPipeline(repo, searchCalls)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createShellCommand(tempDir, out, err, makeInput("Real question", "/search something", "Follow up"), pipeline, searchPipeline)
+
+        cmd.call()
+        repo.close()
+
+        assertThat(calls).hasSize(2)
+        assertThat(calls[1].conversationHistory).hasSize(1)
+        assertThat(calls[1].conversationHistory[0].userQuestion).isEqualTo("Real question")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 26: /clear causes next RagQuery to have empty conversationHistory
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `slash clear after two successful turns causes next RagQuery to have empty conversationHistory`(@TempDir tempDir: Path) {
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val calls = mutableListOf<RagQuery>()
+        val pipeline = makePipeline(repo, calls)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createShellCommand(tempDir, out, err, makeInput("Q1", "Q2", "/clear", "Q3"), pipeline)
+
+        cmd.call()
+        repo.close()
+
+        assertThat(calls).hasSize(3)
+        assertThat(calls[2].conversationHistory).isEmpty()
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 27: /clear prints "conversation history cleared"
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `slash clear prints conversation history cleared to stdout`(@TempDir tempDir: Path) {
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createShellCommand(tempDir, out, err, makeInput("/clear"), makePipeline(repo))
+
+        cmd.call()
+        repo.close()
+
+        assertThat(out.toString()).contains("conversation history cleared")
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 28: /help output contains /clear
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `slash help output contains slash clear`(@TempDir tempDir: Path) {
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = createShellCommand(tempDir, out, err, makeInput("/help"), makePipeline(repo))
+
+        cmd.call()
+        repo.close()
+
+        assertThat(out.toString()).contains("/clear")
     }
 }

@@ -1,5 +1,7 @@
 package ch.obermuhlner.ezrag.rag
 
+import org.springframework.ai.chat.messages.AssistantMessage
+import org.springframework.ai.chat.messages.Message
 import org.springframework.ai.chat.messages.SystemMessage
 import org.springframework.ai.chat.messages.UserMessage
 import org.springframework.ai.chat.model.ChatModel
@@ -13,7 +15,8 @@ open class RagPipeline(
     companion object {
         const val DEFAULT_RAG_SYSTEM_PROMPT = """You are a helpful assistant. Answer the user's question using ONLY the context documents provided below.
 If the answer is not found in the context, say "I don't know based on the provided documents."
-Always cite which document(s) your answer is based on."""
+Always cite which document(s) your answer is based on.
+The conversation history shows earlier exchanges; you may refer to them when answering follow-up questions."""
         private const val EXCERPT_MAX_LENGTH = 200
     }
 
@@ -61,7 +64,14 @@ Always cite which document(s) your answer is based on."""
 
         val userContent = "$contextText\n\n<question>${ragQuery.question}</question>"
 
-        val prompt = Prompt(listOf(SystemMessage(effectiveSystemPrompt), UserMessage(userContent)))
+        val messages = mutableListOf<Message>()
+        messages.add(SystemMessage(effectiveSystemPrompt))
+        ragQuery.conversationHistory.forEach { turn ->
+            messages.add(UserMessage(turn.userQuestion))
+            messages.add(AssistantMessage(turn.assistantAnswer))
+        }
+        messages.add(UserMessage(userContent))
+        val prompt = Prompt(messages)
         val response = chatModel.call(prompt)
         val answer = response.result?.output?.text ?: ""
 

@@ -310,4 +310,153 @@ class RagPipelineTest {
         val query = RagQuery(question = "test", topK = 5, systemPrompt = "", modelOverride = null)
         assertThat(query.rerankCandidates).isNull()
     }
+
+    @Test
+    fun `empty conversationHistory produces two-message prompt structure`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+        val doc = Document.builder()
+            .text("The capital of France is Paris.")
+            .metadata(mapOf("source" to "geography.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc))
+
+        var capturedPrompt: Prompt? = null
+        val capturingChatModel: ChatModel = ChatModel { prompt ->
+            capturedPrompt = prompt
+            ChatResponse(listOf(Generation(AssistantMessage("Paris"))))
+        }
+
+        val pipeline = createPipeline(repository, capturingChatModel)
+        val query = RagQuery(
+            question = "What is the capital of France?",
+            topK = 5,
+            systemPrompt = "",
+            modelOverride = null,
+            conversationHistory = emptyList()
+        )
+        pipeline.query(query)
+
+        val messages = capturedPrompt!!.instructions
+        assertThat(messages).hasSize(2)
+        assertThat(messages[0]).isInstanceOf(SystemMessage::class.java)
+        assertThat(messages[1]).isInstanceOf(UserMessage::class.java)
+    }
+
+    @Test
+    fun `with one history turn prompt has four messages in correct order and content`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+        val doc = Document.builder()
+            .text("The capital of France is Paris.")
+            .metadata(mapOf("source" to "geography.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc))
+
+        var capturedPrompt: Prompt? = null
+        val capturingChatModel: ChatModel = ChatModel { prompt ->
+            capturedPrompt = prompt
+            ChatResponse(listOf(Generation(AssistantMessage("Paris"))))
+        }
+
+        val pipeline = createPipeline(repository, capturingChatModel)
+        val history = listOf(ConversationTurn(userQuestion = "What is 1+1?", assistantAnswer = "2"))
+        val query = RagQuery(
+            question = "What is the capital of France?",
+            topK = 5,
+            systemPrompt = "",
+            modelOverride = null,
+            conversationHistory = history
+        )
+        pipeline.query(query)
+
+        val messages = capturedPrompt!!.instructions
+        assertThat(messages).hasSize(4)
+        assertThat(messages[0]).isInstanceOf(SystemMessage::class.java)
+        assertThat(messages[1]).isInstanceOf(UserMessage::class.java)
+        assertThat((messages[1] as UserMessage).text).isEqualTo("What is 1+1?")
+        assertThat(messages[2]).isInstanceOf(AssistantMessage::class.java)
+        assertThat((messages[2] as AssistantMessage).text).isEqualTo("2")
+        assertThat(messages[3]).isInstanceOf(UserMessage::class.java)
+        assertThat((messages[3] as UserMessage).text).contains("What is the capital of France?")
+        assertThat((messages[3] as UserMessage).text).contains("<document source=")
+    }
+
+    @Test
+    fun `with two history turns prompt has six messages in correct order`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+        val doc = Document.builder()
+            .text("Content.")
+            .metadata(mapOf("source" to "test.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc))
+
+        var capturedPrompt: Prompt? = null
+        val capturingChatModel: ChatModel = ChatModel { prompt ->
+            capturedPrompt = prompt
+            ChatResponse(listOf(Generation(AssistantMessage("answer"))))
+        }
+
+        val pipeline = createPipeline(repository, capturingChatModel)
+        val history = listOf(
+            ConversationTurn(userQuestion = "Q1", assistantAnswer = "A1"),
+            ConversationTurn(userQuestion = "Q2", assistantAnswer = "A2"),
+        )
+        val query = RagQuery(
+            question = "Q3",
+            topK = 5,
+            systemPrompt = "",
+            modelOverride = null,
+            conversationHistory = history
+        )
+        pipeline.query(query)
+
+        val messages = capturedPrompt!!.instructions
+        assertThat(messages).hasSize(6)
+        assertThat(messages[0]).isInstanceOf(SystemMessage::class.java)
+        assertThat(messages[1]).isInstanceOf(UserMessage::class.java)
+        assertThat((messages[1] as UserMessage).text).isEqualTo("Q1")
+        assertThat(messages[2]).isInstanceOf(AssistantMessage::class.java)
+        assertThat((messages[2] as AssistantMessage).text).isEqualTo("A1")
+        assertThat(messages[3]).isInstanceOf(UserMessage::class.java)
+        assertThat((messages[3] as UserMessage).text).isEqualTo("Q2")
+        assertThat(messages[4]).isInstanceOf(AssistantMessage::class.java)
+        assertThat((messages[4] as AssistantMessage).text).isEqualTo("A2")
+        assertThat(messages[5]).isInstanceOf(UserMessage::class.java)
+    }
+
+    @Test
+    fun `history UserMessage contains only prior question text without RAG context documents`(@TempDir tempDir: Path) {
+        val repository = createRepository(tempDir)
+        val doc = Document.builder()
+            .text("The capital of France is Paris.")
+            .metadata(mapOf("source" to "geography.txt", "chunk_index" to 0))
+            .build()
+        repository.add(listOf(doc))
+
+        var capturedPrompt: Prompt? = null
+        val capturingChatModel: ChatModel = ChatModel { prompt ->
+            capturedPrompt = prompt
+            ChatResponse(listOf(Generation(AssistantMessage("answer"))))
+        }
+
+        val pipeline = createPipeline(repository, capturingChatModel)
+        val history = listOf(ConversationTurn(userQuestion = "What is 1+1?", assistantAnswer = "2"))
+        val query = RagQuery(
+            question = "Tell me more",
+            topK = 5,
+            systemPrompt = "",
+            modelOverride = null,
+            conversationHistory = history
+        )
+        pipeline.query(query)
+
+        val messages = capturedPrompt!!.instructions
+        val historyUserMessage = messages[1] as UserMessage
+        assertThat(historyUserMessage.text).isEqualTo("What is 1+1?")
+        assertThat(historyUserMessage.text).doesNotContain("<document")
+    }
+
+    @Test
+    fun `default system prompt contains multi-turn acknowledgement sentence`() {
+        assertThat(RagPipeline.DEFAULT_RAG_SYSTEM_PROMPT).contains("conversation history")
+    }
 }

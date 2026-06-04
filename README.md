@@ -141,7 +141,7 @@ For tighter integration, run ez-rag as an [MCP server](#mcp-server) so the agent
 | `reingest`                     | Re-ingest all stale documents (mtime changed since last ingest). Use `--all` to force re-ingest of every document. |
 | `eval <corpus-dir>`            | Evaluate retrieval quality against a corpus of scenarios. Exits 1 if any threshold fails.          |
 | `mcp-server`                   | Run as an MCP server over stdio (for Claude Code and other agentic tools).                         |
-| `shell`                        | _(not yet implemented)_ Interactive REPL mode.                                                     |
+| `shell`                        | Interactive REPL mode with multi-turn conversation history and slash commands.                     |
 
 Every command accepts `--help` for details.
 
@@ -601,6 +601,43 @@ thresholds:               # optional; eval exits 1 if any threshold is missed
 | `Recall@3`   | Fraction of questions for which the expected chunk appears anywhere in the top 3 results. The primary pass/fail metric. |
 | `MRR`        | Mean Reciprocal Rank. For each question, the score is 1/rank of the first relevant result (1.0 if rank 1, 0.5 if rank 2, 0.33 if rank 3, 0 if not found). Averaged across all questions. Sensitive to ordering — a high MRR means relevant chunks tend to appear first. |
 | `Hit@3`      | Same as Recall@3 when each question has a single expected source. Differs when a question has multiple expected sources: Recall@3 counts partial credit, Hit@3 is binary (1 if any expected source is found, 0 otherwise). |
+
+### shell
+
+Start an interactive REPL session for multi-turn question answering:
+
+```sh
+ez-rag shell
+```
+
+Each prompt is answered using RAG, and the conversation history is accumulated across turns so the LLM sees prior exchanges as context:
+
+```
+> What is the chunk size?
+The default chunk size is 512 tokens.
+
+> And the overlap?
+The default overlap is 50 tokens.
+
+> /clear
+conversation history cleared
+
+> What is the chunk size?
+...
+```
+
+**Slash commands available inside the shell:**
+
+| Command           | Description                                                              |
+|-------------------|--------------------------------------------------------------------------|
+| `/clear`          | Reset the conversation history and start a fresh session.                |
+| `/search <query>` | Run a hybrid search and print raw chunks without LLM involvement.        |
+| `/search-bm25 <query>` | Run a BM25-only keyword search and print raw chunks.               |
+| `/search-embedding <query>` | Run a vector-only semantic search and print raw chunks.       |
+| `/help`           | Print available slash commands.                                          |
+| `/exit`           | Exit the REPL.                                                           |
+
+Slash-command turns are not added to the conversation history. Only successful RAG query turns are accumulated. Turns that produce an error are also not added, so the history always contains only complete, successful exchanges.
 
 ## Hybrid search
 
