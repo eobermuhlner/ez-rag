@@ -1,6 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.config.ConfigService
+import ch.obermuhlner.ezrag.config.ConfigSources
 import ch.obermuhlner.ezrag.config.CredentialSource
 import ch.obermuhlner.ezrag.config.Credentials
 import ch.obermuhlner.ezrag.config.CredentialsService
@@ -39,6 +40,7 @@ class StatusCommand(
     private val credentials: Credentials = allUnsetCredentials(),
     private val startDirOverride: Path? = null,
     private val config: EzRagConfig? = null,
+    private val configSources: ConfigSources = ConfigSources(null, null),
 ) : Callable<Int> {
 
     @Autowired(required = false)
@@ -50,6 +52,9 @@ class StatusCommand(
     @Autowired(required = false)
     private var springCredentialsService: CredentialsService? = null
 
+    @Autowired(required = false)
+    private var springConfigSources: ConfigSources? = null
+
     @Option(names = ["--store-dir"], description = ["Path to the store directory."])
     var storeDirOption: String? = null
 
@@ -57,7 +62,6 @@ class StatusCommand(
     var outputFormat: String = "text"
 
     override fun call(): Int {
-        val model = embeddingModel ?: springEmbeddingModel ?: stubEmbeddingModel()
         val storeDir = storeDirOverride
             ?: storeDirOption?.let { Paths.get(it) }
             ?: springConfigService?.resolveExplicitStoreDir()?.let { Paths.get(it) }
@@ -66,6 +70,7 @@ class StatusCommand(
         val resolvedCredentials = springCredentialsService?.resolve() ?: credentials
         // Resolve config: constructor param > Spring service > defaults
         val resolvedConfig = config ?: springConfigService?.resolve() ?: EzRagConfig()
+        val resolvedConfigSources = springConfigSources ?: configSources
 
         if (!LuceneRepository.storeExists(storeDir)) {
             outputWriter.println(
@@ -74,7 +79,7 @@ class StatusCommand(
             return 1
         }
 
-        LuceneRepository.open(model, storeDir, resolvedConfig.analyzer).use { repository ->
+        LuceneRepository.open(stubEmbeddingModel(), storeDir, resolvedConfig.analyzer).use { repository ->
             val metadata = repository.getMetadata()
 
             if (outputFormat == "json") {
@@ -96,6 +101,11 @@ class StatusCommand(
 
                 val lastIngestTimeValue: Any? = if (metadata.lastIngestTime > 0L) metadata.lastIngestTime else null
 
+                val configSourcesList = listOfNotNull(
+                    resolvedConfigSources.homeConfigPath,
+                    resolvedConfigSources.localConfigPath
+                )
+
                 val result = mutableMapOf<String, Any?>(
                     "storeDirPath" to metadata.storeDirPath,
                     "chunkCount" to metadata.chunkCount,
@@ -104,6 +114,7 @@ class StatusCommand(
                     "staleDocumentCount" to metadata.staleDocumentCount,
                     "lastIngestTime" to lastIngestTimeValue,
                     "configuration" to configMap,
+                    "configSources" to configSourcesList,
                 )
 
                 if (credentialsMap.isNotEmpty()) {
@@ -136,6 +147,15 @@ class StatusCommand(
                 outputWriter.println("  chunkSize: ${resolvedConfig.chunkSize}")
                 outputWriter.println("  chunkOverlap: ${resolvedConfig.chunkOverlap}")
                 outputWriter.println("  topK: ${resolvedConfig.topK}")
+                outputWriter.println()
+
+                outputWriter.println("Config files:")
+                if (resolvedConfigSources.homeConfigPath == null && resolvedConfigSources.localConfigPath == null) {
+                    outputWriter.println("  none")
+                } else {
+                    resolvedConfigSources.homeConfigPath?.let { outputWriter.println("  home config: $it") }
+                    resolvedConfigSources.localConfigPath?.let { outputWriter.println("  local config: $it") }
+                }
                 outputWriter.println()
 
                 val needsOpenai = resolvedConfig.provider == "openai" || resolvedConfig.embeddingProvider == "openai"

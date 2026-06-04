@@ -1,5 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.config.ConfigSources
 import ch.obermuhlner.ezrag.config.CredentialSource
 import ch.obermuhlner.ezrag.config.Credentials
 import ch.obermuhlner.ezrag.config.EzRagConfig
@@ -491,6 +492,131 @@ class StatusCommandTest {
         assertThat(conf.has("chunkOverlap")).isTrue()
         assertThat(conf.has("topK")).isTrue()
         assertThat(conf.has("storeDir")).isTrue()
+    }
+
+    // ---- Config sources tests ----
+
+    @Test
+    fun `text output lists home config path when only home config was loaded`(@TempDir tempDir: Path) {
+        buildStoreWithOneFile(tempDir)
+        val configSources = ConfigSources(homeConfigPath = "/home/user/.ez-rag/config.yml", localConfigPath = null)
+        val out = StringWriter()
+        val cmd = StatusCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out),
+            configSources = configSources
+        )
+        cmd.call()
+        val output = out.toString()
+        assertThat(output).contains("Config files")
+        assertThat(output).contains("/home/user/.ez-rag/config.yml")
+    }
+
+    @Test
+    fun `text output lists local config path when only local config was loaded`(@TempDir tempDir: Path) {
+        buildStoreWithOneFile(tempDir)
+        val configSources = ConfigSources(homeConfigPath = null, localConfigPath = "/project/.ez-rag/config.yml")
+        val out = StringWriter()
+        val cmd = StatusCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out),
+            configSources = configSources
+        )
+        cmd.call()
+        val output = out.toString()
+        assertThat(output).contains("Config files")
+        assertThat(output).contains("/project/.ez-rag/config.yml")
+    }
+
+    @Test
+    fun `text output lists both paths when both configs were loaded`(@TempDir tempDir: Path) {
+        buildStoreWithOneFile(tempDir)
+        val configSources = ConfigSources(
+            homeConfigPath = "/home/user/.ez-rag/config.yml",
+            localConfigPath = "/project/.ez-rag/config.yml"
+        )
+        val out = StringWriter()
+        val cmd = StatusCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out),
+            configSources = configSources
+        )
+        cmd.call()
+        val output = out.toString()
+        assertThat(output).contains("Config files")
+        assertThat(output).contains("/home/user/.ez-rag/config.yml")
+        assertThat(output).contains("/project/.ez-rag/config.yml")
+    }
+
+    @Test
+    fun `text output shows none indicator when neither config file was loaded`(@TempDir tempDir: Path) {
+        buildStoreWithOneFile(tempDir)
+        val configSources = ConfigSources(homeConfigPath = null, localConfigPath = null)
+        val out = StringWriter()
+        val cmd = StatusCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out),
+            configSources = configSources
+        )
+        cmd.call()
+        val output = out.toString()
+        assertThat(output).contains("Config files")
+        assertThat(output.lowercase()).contains("none")
+    }
+
+    @Test
+    fun `JSON output includes configSources array with loaded paths`(@TempDir tempDir: Path) {
+        buildStoreWithOneFile(tempDir)
+        val configSources = ConfigSources(
+            homeConfigPath = "/home/user/.ez-rag/config.yml",
+            localConfigPath = "/project/.ez-rag/config.yml"
+        )
+        val out = StringWriter()
+        val cmd = StatusCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out),
+            configSources = configSources
+        )
+        cmd.outputFormat = "json"
+        cmd.call()
+        val json = out.toString().trim()
+        val mapper = ObjectMapper()
+        val node = mapper.readTree(json)
+        assertThat(node.has("configSources")).isTrue()
+        val sources = node.get("configSources")
+        assertThat(sources.isArray).isTrue()
+        val paths = (0 until sources.size()).map { sources.get(it).asText() }
+        assertThat(paths).containsExactlyInAnyOrder(
+            "/home/user/.ez-rag/config.yml",
+            "/project/.ez-rag/config.yml"
+        )
+    }
+
+    @Test
+    fun `JSON output includes empty configSources array when neither config was loaded`(@TempDir tempDir: Path) {
+        buildStoreWithOneFile(tempDir)
+        val configSources = ConfigSources(homeConfigPath = null, localConfigPath = null)
+        val out = StringWriter()
+        val cmd = StatusCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out),
+            configSources = configSources
+        )
+        cmd.outputFormat = "json"
+        cmd.call()
+        val json = out.toString().trim()
+        val mapper = ObjectMapper()
+        val node = mapper.readTree(json)
+        assertThat(node.has("configSources")).isTrue()
+        val sources = node.get("configSources")
+        assertThat(sources.isArray).isTrue()
+        assertThat(sources.size()).isEqualTo(0)
     }
 
     // ---- Existing tests retained ----

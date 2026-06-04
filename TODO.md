@@ -1,2 +1,2 @@
 - add pdf to markdown converter
-- add local .ez-rag/config.yaml support (overriding defaults in ~/.ez-rag/config.yaml)
+- performance improvements at startup (presumably spring, but maybe also other things)
