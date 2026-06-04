@@ -714,6 +714,7 @@ These flags apply to all subcommands:
 | `--search-mode`           | `hybrid`                 | Search mode: `hybrid` (BM25 + embedding), `bm25`, or `embedding` |
 | `--analyzer`              | `standard`               | Lucene analyzer for BM25: `standard` or `english` (enables stemming) |
 | `--verbose` / `-v`        | off                      | Enable debug logging; for `query`, also prints each source file path, similarity score, and chunk index to stderr. When reranking is active also prints reranker name and candidate pool size. |
+| `--stack-trace`           | off                      | Print the full Java stack trace when an error occurs. Useful for diagnosing unexpected failures. |
 
 ## Providers
 
