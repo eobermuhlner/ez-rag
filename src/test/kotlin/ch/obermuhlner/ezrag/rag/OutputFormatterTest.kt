@@ -147,6 +147,15 @@ class OutputFormatterTest {
     // ---- SearchResult JSON format tests ----
 
     @Test
+    fun `formatJson SearchResult uses source key not file for file path field`() {
+        val result = twoChunkSearchResult()
+        val json = formatter.formatJson(result)
+
+        assertThat(json).contains("\"source\"")
+        assertThat(json).doesNotContain("\"file\"")
+    }
+
+    @Test
     fun `formatJson SearchResult uses chunks as top-level key not sources or results`() {
         val result = twoChunkSearchResult()
         val json = formatter.formatJson(result)
@@ -157,11 +166,11 @@ class OutputFormatterTest {
     }
 
     @Test
-    fun `formatJson SearchResult entries include file chunkIndex score and content keys`() {
+    fun `formatJson SearchResult entries include source chunkIndex score and content keys`() {
         val result = twoChunkSearchResult()
         val json = formatter.formatJson(result)
 
-        assertThat(json).contains("\"file\"")
+        assertThat(json).contains("\"source\"")
         assertThat(json).contains("\"chunkIndex\"")
         assertThat(json).contains("\"score\"")
         assertThat(json).contains("\"content\"")
@@ -174,6 +183,60 @@ class OutputFormatterTest {
 
         assertThat(json).contains("\"chunks\"")
         assertThat(json).contains("[]")
+    }
+
+    // ---- SearchResult XML format tests ----
+
+    @Test
+    fun `formatXml SearchResult has results root element with mode attribute`() {
+        val chunk1 = ChunkMatch(filePath = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
+        val chunk2 = ChunkMatch(filePath = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
+        val result = SearchResult(chunks = listOf(chunk1, chunk2), mode = "hybrid")
+        val xml = formatter.formatXml(result)
+
+        assertThat(xml).contains("<results mode=\"hybrid\">")
+        assertThat(xml.trim()).endsWith("</results>")
+    }
+
+    @Test
+    fun `formatXml SearchResult result elements have correct index score source chunk attributes`() {
+        val chunk1 = ChunkMatch(filePath = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
+        val chunk2 = ChunkMatch(filePath = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
+        val result = SearchResult(chunks = listOf(chunk1, chunk2), mode = "hybrid")
+        val xml = formatter.formatXml(result)
+
+        assertThat(xml).contains("<result index=\"1\" score=\"0.87\" source=\"docs/arch.md\" chunk=\"3\">")
+        assertThat(xml).contains("<result index=\"2\" score=\"0.74\" source=\"docs/overview.md\" chunk=\"1\">")
+    }
+
+    @Test
+    fun `formatXml SearchResult chunk content appears between result tags`() {
+        val chunk1 = ChunkMatch(filePath = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
+        val chunk2 = ChunkMatch(filePath = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
+        val result = SearchResult(chunks = listOf(chunk1, chunk2), mode = "hybrid")
+        val xml = formatter.formatXml(result)
+
+        assertThat(xml).contains("arch content")
+        assertThat(xml).contains("overview content")
+        assertThat(xml).contains("</result>")
+    }
+
+    @Test
+    fun `formatXml SearchResult with zero chunks produces empty results element`() {
+        val result = SearchResult(chunks = emptyList(), mode = "bm25")
+        val xml = formatter.formatXml(result)
+
+        assertThat(xml).isEqualTo("<results mode=\"bm25\"></results>")
+        assertThat(xml).doesNotContain("<result ")
+    }
+
+    @Test
+    fun `formatXml SearchResult score 0_9799999 is rendered as 0_98`() {
+        val chunk = ChunkMatch(filePath = "test.md", chunkIndex = 1, score = 0.9799999, content = "some content")
+        val result = SearchResult(chunks = listOf(chunk), mode = "embedding")
+        val xml = formatter.formatXml(result)
+
+        assertThat(xml).contains("score=\"0.98\"")
     }
 
     @Test

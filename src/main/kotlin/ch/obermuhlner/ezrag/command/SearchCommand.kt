@@ -65,7 +65,7 @@ class SearchCommand(
     @Option(names = ["--store-dir"], description = ["Path to the store directory."])
     var storeDirOption: String? = null
 
-    @Option(names = ["--output"], description = ["Output format: text (default) or json."])
+    @Option(names = ["--output"], description = ["Output format: text (default), json, or xml."])
     var outputFormat: String = "text"
 
     @Option(names = ["--mode"], description = ["Search mode: embedding, bm25, or hybrid (default from config)."])
@@ -173,10 +173,10 @@ class SearchCommand(
             }
         }
 
-        val formatted = if (outputFormat == "json") {
-            outputFormatter.formatJson(result)
-        } else {
-            outputFormatter.formatText(result)
+        val formatted = when (outputFormat) {
+            "json" -> outputFormatter.formatJson(result)
+            "xml" -> outputFormatter.formatXml(result)
+            else -> outputFormatter.formatText(result)
         }
 
         outputWriter.println(formatted)

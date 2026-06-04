@@ -696,7 +696,7 @@ analyzer: english
 | `--mode`        | `hybrid`   | Search mode: `hybrid` (BM25 + embedding), `bm25`, or `embedding`    |
 | `--top-k N`     | `5`        | Maximum number of chunks to return                                   |
 | `--min-score T` | `0.0`      | Minimum similarity score; lower-scoring chunks are filtered out      |
-| `--output`      | `text`     | Output format: `text` or `json`                                      |
+| `--output`      | `text`     | Output format: `text`, `json`, or `xml`                              |
 
 ## Global flags
 
@@ -900,7 +900,56 @@ Reranking: 15 candidates → top 5
 
 ## Output format
 
-By default, responses are human-readable with source citations. Pass `--output json` for machine-readable output suitable for agentic pipelines.
+### search output formats
+
+`search` supports three output formats via `--output`:
+
+**`text` (default)** — human-readable, one block per chunk:
+
+```
+[1] score=0.98  source=/abs/path/to/file.md  chunk=10
+raw chunk content here
+
+[2] score=0.74  source=https://example.com/page  chunk=3
+raw chunk content here
+```
+
+**`json`** — machine-readable JSON with a top-level `mode` field and a `chunks` array:
+
+```json
+{
+  "mode": "hybrid",
+  "chunks": [
+    {"source": "/abs/path/to/file.md", "chunkIndex": 10, "score": 0.9799999, "content": "raw chunk content here"},
+    {"source": "https://example.com/page", "chunkIndex": 3, "score": 0.74, "content": "raw chunk content here"}
+  ]
+}
+```
+
+**`xml`** — XML-delimited format optimised for LLM consumption. Tags act as structural delimiters; chunk content is placed verbatim between them with no XML escaping. Suitable for piping `search` output directly into a Claude Code prompt or another agent:
+
+```xml
+<results mode="hybrid">
+<result index="1" score="0.98" source="/abs/path/to/file.md" chunk="10">
+raw chunk content here
+</result>
+<result index="2" score="0.74" source="https://example.com/page" chunk="3">
+raw chunk content here
+</result>
+</results>
+```
+
+When no chunks are found, the XML output is `<results mode="..."></results>`.
+
+The `source` attribute (and the `source` key in JSON) holds the file path or URL exactly as it was passed to `ez-rag ingest`.
+
+```sh
+# Pipe XML output into another tool
+ez-rag search --output xml "connection timeout configuration"
+
+# JSON output for scripting with jq
+ez-rag search --output json "retry policy" | jq '.chunks[].source'
+```
 
 ## MCP Server
 

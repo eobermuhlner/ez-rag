@@ -38,11 +38,25 @@ of every document regardless of staleness.
 ### Search for relevant chunks
 
 ```sh
-ez-rag search <question words...>
+ez-rag search --output xml <question words...>
 ```
 
-Returns the most semantically similar document chunks to your question. No LLM call —
-pure embedding similarity. Read the returned chunks and synthesize an answer for the user.
+Returns the most semantically similar document chunks to your question using hybrid
+BM25 + embedding search. No LLM call. The XML-delimited output uses tags as structural
+delimiters — chunk content is placed verbatim between them, no XML escaping:
+
+```xml
+<results mode="hybrid">
+<result index="1" score="0.98" source="/abs/path/to/file.md" chunk="10">
+chunk content here
+</result>
+<result index="2" score="0.74" source="https://example.com/page" chunk="3">
+chunk content here
+</result>
+</results>
+```
+
+Read the returned chunks and synthesize an answer for the user.
 
 ### Load surrounding context
 
@@ -76,10 +90,10 @@ When the user asks about document content:
 2. **Ingest if needed** — `ez-rag ingest <path>` for new files not yet in the store;
    `ez-rag ingest <https://...>` to fetch and index a web page by URL.
    For files already indexed but marked `[STALE]`, run `ez-rag reingest` instead.
-3. **Search** — run `ez-rag search` with 2–3 different phrasings of the question.
-   Different wording often surfaces different chunks, especially when scores are flat.
-   Example: search for both `"connection timeout"` and `"retry configuration"` when
-   the user asks how to handle network errors.
+3. **Search** — run `ez-rag search --output xml` with 2–3 different phrasings of the
+   question. Different wording often surfaces different chunks, especially when scores
+   are flat. Example: search for both `"connection timeout"` and `"retry configuration"`
+   when the user asks how to handle network errors.
 4. **Load chunk context** — for each result chunk that is the primary source of an
    answer, run `ez-rag chunk <file> <chunkIndex> --window 1` to retrieve the
    surrounding chunks. Skip this only when the chunk is clearly self-contained (a

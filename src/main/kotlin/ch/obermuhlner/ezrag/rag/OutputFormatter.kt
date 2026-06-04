@@ -16,13 +16,28 @@ class OutputFormatter {
         val chunksJson = result.chunks.joinToString(",\n    ") { chunk ->
             val escapedFile = escapeJsonString(chunk.filePath)
             val escapedContent = escapeJsonString(chunk.content)
-            """{"file": "$escapedFile", "chunkIndex": ${chunk.chunkIndex}, "score": ${chunk.score}, "content": "$escapedContent"}"""
+            """{"source": "$escapedFile", "chunkIndex": ${chunk.chunkIndex}, "score": ${chunk.score}, "content": "$escapedContent"}"""
         }
         val chunksArray = if (result.chunks.isEmpty()) "[]" else "[\n    $chunksJson\n  ]"
         return """{
   "mode": "${result.mode}",
   "chunks": $chunksArray
 }"""
+    }
+
+    fun formatXml(result: SearchResult): String {
+        val sb = StringBuilder()
+        sb.append("<results mode=\"${result.mode}\">")
+        result.chunks.forEachIndexed { idx, chunk ->
+            sb.append("\n<result index=\"${idx + 1}\" score=\"${"%.2f".format(chunk.score)}\" source=\"${chunk.filePath}\" chunk=\"${chunk.chunkIndex}\">")
+            sb.append("\n${chunk.content}")
+            sb.append("\n</result>")
+        }
+        if (result.chunks.isNotEmpty()) {
+            sb.append("\n")
+        }
+        sb.append("</results>")
+        return sb.toString()
     }
 
     fun formatText(result: RagResult): String {

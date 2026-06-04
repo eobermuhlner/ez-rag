@@ -522,6 +522,47 @@ class SearchCommandTest {
         assertThat(embeddingCalled).isFalse()
     }
 
+    // -----------------------------------------------------------------------
+    // XML output tests
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--output xml produces output containing results root and result element tags`(@TempDir tempDir: Path) {
+        populateRepository(tempDir)
+
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        val stubPipeline = object : EmbeddingSearchPipeline(repo) {
+            override fun search(query: SearchQuery): SearchResult {
+                return SearchResult(
+                    chunks = listOf(ChunkMatch("docs/arch.md", 3, 0.87, "architecture content")),
+                    mode = "hybrid"
+                )
+            }
+        }
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = SearchCommand(
+            storeDirOverride = tempDir,
+            searchPipeline = stubPipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        cmd.questionArgs = listOf("test query")
+        cmd.outputFormat = "xml"
+
+        val exitCode = cmd.call()
+        repo.close()
+
+        assertThat(exitCode).isEqualTo(0)
+        val output = out.toString()
+        assertThat(output).contains("<results")
+        assertThat(output).contains("mode=\"hybrid\"")
+        assertThat(output).contains("<result ")
+    }
+
     @Test
     fun `--min-score is forwarded to bm25 pipeline in bm25 mode`(@TempDir tempDir: Path) {
         val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
