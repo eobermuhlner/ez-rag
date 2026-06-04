@@ -16,6 +16,7 @@ class EzRagApplication(
     override fun run(vararg args: String) {
         val factory = SpringPicocliFactory(applicationContext)
         val commandLine = CommandLine(ezRagCommand, factory)
+        commandLine.setExecutionExceptionHandler(EzRagExecutionExceptionHandler(ezRagCommand))
         val exitCode = commandLine.execute(*args)
         exitProcess(exitCode)
     }

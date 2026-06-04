@@ -55,6 +55,9 @@ class EzRagCommand : Callable<Int> {
     @Option(names = ["--verbose", "-v"], description = ["Enable verbose/debug logging."], scope = ScopeType.INHERIT)
     var verbose: Boolean = false
 
+    @Option(names = ["--stack-trace"], description = ["Print full stack trace on error."], scope = ScopeType.INHERIT)
+    var stackTrace: Boolean = false
+
     @Option(names = ["--provider"], description = ["Chat provider: openai, anthropic, ollama."], scope = ScopeType.INHERIT)
     var provider: String? = null
 
