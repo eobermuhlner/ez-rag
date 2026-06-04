@@ -26,6 +26,7 @@ class SubcommandTest {
         assertThat(output).contains("mcp-server")
         assertThat(output).contains("shell")
         assertThat(output).contains("eval")
+        assertThat(output).contains("help")
     }
 
     @Test

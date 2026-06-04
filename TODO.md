@@ -1,4 +1,2 @@
-- add command to read explicit chunks (use-case: LLM can load surrounding chunks after the initial search)
 - add pdf to markdown converter
 - add local .ez-rag/config.yaml support (overriding defaults in ~/.ez-rag/config.yaml)
-- sub-command `shell` should support multi-message history and follow-up questions (maintaining conversation state across iterations)

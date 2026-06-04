@@ -4,6 +4,7 @@ import ch.obermuhlner.ezrag.command.ChunkCommand
 import ch.obermuhlner.ezrag.command.DeleteCommand
 import ch.obermuhlner.ezrag.command.EvalCommand
 import ch.obermuhlner.ezrag.command.DownloadEvalCorpusCommand
+import ch.obermuhlner.ezrag.command.HelpCommand
 import ch.obermuhlner.ezrag.command.InitCommand
 import ch.obermuhlner.ezrag.command.IngestCommand
 import ch.obermuhlner.ezrag.command.InstallSkillCommand
@@ -45,6 +46,7 @@ import java.util.concurrent.Callable
         ShellCommand::class,
         EvalCommand::class,
         DownloadEvalCorpusCommand::class,
+        HelpCommand::class,
     ]
 )
 @Component
