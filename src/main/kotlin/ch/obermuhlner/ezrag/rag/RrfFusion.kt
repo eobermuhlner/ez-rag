@@ -48,12 +48,14 @@ object RrfFusion {
         val bm25WorstRank = totalUnique + 1
         val embWorstRank = totalUnique + 1
 
-        // Compute RRF score for each unique chunk
+        // Compute RRF score for each unique chunk, then normalize to [0, 1]
+        // Maximum possible score is when ranked #1 in both lists: 2/(k+1)
+        val maxPossibleScore = 2.0 / (k + 1)
         val scored = allChunks.entries.map { (key, chunk) ->
             val rankBm25 = bm25Ranks[key] ?: bm25WorstRank
             val rankEmb  = embRanks[key]  ?: embWorstRank
             val rrfScore = 1.0 / (k + rankBm25) + 1.0 / (k + rankEmb)
-            chunk.copy(score = rrfScore)
+            chunk.copy(score = rrfScore / maxPossibleScore)
         }
 
         return scored

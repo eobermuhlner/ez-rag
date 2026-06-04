@@ -443,6 +443,38 @@ class SearchCommandTest {
     // -----------------------------------------------------------------------
 
     @Test
+    fun `--min-score is forwarded to hybrid pipeline in hybrid mode`(@TempDir tempDir: Path) {
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        val capturedQueries = mutableListOf<SearchQuery>()
+        val hybridPipeline = object : HybridSearchPipeline(repo) {
+            override fun search(query: SearchQuery): SearchResult {
+                capturedQueries.add(query)
+                return SearchResult(emptyList(), mode = "hybrid")
+            }
+        }
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = SearchCommand(
+            storeDirOverride = tempDir,
+            hybridPipeline = hybridPipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        cmd.questionArgs = listOf("test query")
+        cmd.modeOption = "hybrid"
+        cmd.minScore = 0.5
+
+        cmd.call()
+        repo.close()
+
+        assertThat(capturedQueries).hasSize(1)
+        assertThat(capturedQueries[0].minScore).isEqualTo(0.5)
+    }
+
+    @Test
     fun `no --mode flag with hybrid pipeline injected routes to hybrid pipeline not embedding-only`(@TempDir tempDir: Path) {
         val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         val doc = Document.builder()

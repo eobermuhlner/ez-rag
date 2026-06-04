@@ -7,8 +7,8 @@ import ch.obermuhlner.ezrag.ingestion.LuceneRepository
  * using Reciprocal Rank Fusion (RRF).
  *
  * Fetches [topK * 2] candidates from each source, fuses them via [RrfFusion], and returns
- * the top [topK] results. [SearchQuery.minScore] is ignored (consistent with BM25 and hybrid
- * mode semantics defined in the PRD).
+ * the top [topK] results with normalized scores in [0, 1]. [SearchQuery.minScore] is applied
+ * to the fused results after normalization.
  */
 open class HybridSearchPipeline(
     private val luceneRepository: LuceneRepository
@@ -27,12 +27,12 @@ open class HybridSearchPipeline(
         val bm25Result = bm25Pipeline.search(query.copy(topK = candidateK))
         val bm25Chunks = bm25Result.chunks
 
-        // Fuse and return top topK
+        // Fuse, apply minScore filter, and return top topK
         val fused = RrfFusion.fuse(
             bm25Results = bm25Chunks,
             embeddingResults = embeddingResult.chunks,
             topK = query.topK
-        )
+        ).filter { it.score >= query.minScore }
 
         return SearchResult(chunks = fused, mode = "hybrid")
     }

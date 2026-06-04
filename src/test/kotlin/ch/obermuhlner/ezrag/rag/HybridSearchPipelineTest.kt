@@ -84,6 +84,37 @@ class HybridSearchPipelineTest {
     // -----------------------------------------------------------------------
 
     @Test
+    fun `minScore filters out chunks whose normalized RRF score is below threshold`(@TempDir storeDir: Path) {
+        val repo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
+        // alpha.txt: vector [1,0,0,0] — top embedding match for "alpha content"
+        // beta.txt:  vector [0,1,0,0] — ranked second in both BM25 and embedding
+        val alphaDoc = Document.builder()
+            .text("alpha content")
+            .metadata(mapOf("source" to "alpha.txt", "chunk_index" to 0, "mtime" to 1L))
+            .build()
+        val betaDoc = Document.builder()
+            .text("beta content")
+            .metadata(mapOf("source" to "beta.txt", "chunk_index" to 0, "mtime" to 2L))
+            .build()
+        repo.add(listOf(alphaDoc, betaDoc))
+
+        val pipeline = HybridSearchPipeline(repo)
+
+        // minScore = 0.0 → both chunks returned
+        val all = pipeline.search(SearchQuery(question = "alpha content", topK = 5, minScore = 0.0, mode = "hybrid"))
+        assertThat(all.chunks).hasSize(2)
+
+        // alpha.txt is rank 1 in both lists (normalized score = 1.0);
+        // beta.txt is rank 2 in both lists (normalized score = 61/62 ≈ 0.984).
+        // minScore = 0.99 keeps alpha.txt but filters beta.txt.
+        val filtered = pipeline.search(SearchQuery(question = "alpha content", topK = 5, minScore = 0.99, mode = "hybrid"))
+        assertThat(filtered.chunks).hasSize(1)
+        assertThat(filtered.chunks[0].filePath).isEqualTo("alpha.txt")
+
+        repo.close()
+    }
+
+    @Test
     fun `result size does not exceed topK`(@TempDir storeDir: Path) {
         val repo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
         val docs = (1..5).map { i ->

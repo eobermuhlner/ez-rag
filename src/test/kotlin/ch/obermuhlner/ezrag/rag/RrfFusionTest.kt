@@ -62,8 +62,9 @@ class RrfFusionTest {
 
         val result = RrfFusion.fuse(bm25Results = emptyList(), embeddingResults = emb, k = k, topK = 5)
 
-        // E1 is rank 1 in embedding, worst rank in bm25
-        val expectedE1 = 1.0 / (k + 1) + 1.0 / (k + worstRank)
+        // E1 is rank 1 in embedding, worst rank in bm25; scores are normalized by 2/(k+1)
+        val maxPossibleScore = 2.0 / (k + 1)
+        val expectedE1 = (1.0 / (k + 1) + 1.0 / (k + worstRank)) / maxPossibleScore
         val actualE1 = result.first { it.filePath == "E1" }.score
         assertThat(actualE1).isEqualTo(expectedE1)
     }
@@ -88,7 +89,9 @@ class RrfFusionTest {
 
         val result = RrfFusion.fuse(bm25Results = bm25, embeddingResults = emptyList(), k = k, topK = 5)
 
-        val expectedB1 = 1.0 / (k + 1) + 1.0 / (k + worstRank)
+        // Scores are normalized by 2/(k+1)
+        val maxPossibleScore = 2.0 / (k + 1)
+        val expectedB1 = (1.0 / (k + 1) + 1.0 / (k + worstRank)) / maxPossibleScore
         val actualB1 = result.first { it.filePath == "B1" }.score
         assertThat(actualB1).isEqualTo(expectedB1)
     }
@@ -123,6 +126,30 @@ class RrfFusionTest {
     // -----------------------------------------------------------------------
     // Test 7: deduplication by (filePath, chunkIndex)
     // -----------------------------------------------------------------------
+
+    // -----------------------------------------------------------------------
+    // Test 8: scores are normalized to [0, 1]
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `chunk ranked first in both lists has score of 1_0`() {
+        val bm25 = listOf(chunk("A"))
+        val emb  = listOf(chunk("A"))
+        val result = RrfFusion.fuse(bm25Results = bm25, embeddingResults = emb, topK = 1)
+
+        assertThat(result[0].score).isEqualTo(1.0)
+    }
+
+    @Test
+    fun `all scores are in the range 0_0 to 1_0`() {
+        val bm25 = (1..10).map { chunk("B$it") }
+        val emb  = (1..10).map { chunk("E$it") } + listOf(chunk("B1")) // B1 appears in both
+        val result = RrfFusion.fuse(bm25Results = bm25, embeddingResults = emb, topK = 10)
+
+        for (chunk in result) {
+            assertThat(chunk.score).isBetween(0.0, 1.0)
+        }
+    }
 
     @Test
     fun `deduplication is based on filePath and chunkIndex pair`() {
