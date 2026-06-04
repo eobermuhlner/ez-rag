@@ -26,6 +26,16 @@ Verify the installation:
 ez-rag --help
 ```
 
+### Faster startup with AppCDS
+
+Generate an Application Class Data Sharing archive once after installing to reduce startup time by ~300ms:
+
+```sh
+./gradlew generateCdsArchive
+```
+
+This creates `build/install/ez-rag/lib/ez-rag.jsa` which the start scripts use automatically. Re-run after any dependency or code change.
+
 ## Quick start
 
 No configuration needed — works out of the box:
