@@ -2,7 +2,12 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
+import ch.obermuhlner.ezrag.ingestion.FileSource
 import ch.obermuhlner.ezrag.ingestion.IngestService
+import ch.obermuhlner.ezrag.ingestion.IngestSource
+import ch.obermuhlner.ezrag.ingestion.JsoupUrlFetcher
+import ch.obermuhlner.ezrag.ingestion.UrlFetcher
+import ch.obermuhlner.ezrag.ingestion.UrlSource
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.transformers.TransformersEmbeddingModel
 import org.springframework.beans.factory.annotation.Autowired
@@ -34,6 +39,7 @@ class IngestCommand(
     private val modelCachePath: Path = Paths.get(System.getProperty("user.home"), ".ez-rag", "models"),
     private val startDirOverride: Path? = null,
     private val configServiceOverride: ConfigService? = null,
+    private val urlFetcher: UrlFetcher = JsoupUrlFetcher(),
 ) : Callable<Int> {
 
     @Autowired(required = false)
@@ -42,8 +48,8 @@ class IngestCommand(
     @Autowired(required = false)
     private var springConfigService: ConfigService? = null
 
-    @Parameters(arity = "1..*", description = ["Files or directories to ingest."])
-    var paths: List<File> = emptyList()
+    @Parameters(arity = "1..*", description = ["Files, directories, or HTTP/HTTPS URLs to ingest."])
+    var paths: List<String> = emptyList()
 
     @Option(names = ["--store-dir"], description = ["Path to the store directory."])
     var storeDirOption: String? = null
@@ -60,9 +66,17 @@ class IngestCommand(
     @Option(names = ["--details"], description = ["Print chunk details (token count and text preview) for each ingested file."])
     var detailsOption: Boolean = false
 
-    override fun call(): Int = call(paths)
+    override fun call(): Int {
+        val sources = paths.map { path ->
+            if (path.startsWith("http://") || path.startsWith("https://")) UrlSource(path)
+            else FileSource(File(path))
+        }
+        return doCall(sources)
+    }
 
-    fun call(files: List<File>): Int {
+    fun call(files: List<File>): Int = doCall(files.map { FileSource(it) })
+
+    private fun doCall(sources: List<IngestSource>): Int {
         val model = embeddingModel ?: springEmbeddingModel ?: return exitWithError("No embedding model configured.")
 
         // First-run detection: print a one-line message if the ONNX model has not been downloaded yet
@@ -88,7 +102,10 @@ class IngestCommand(
         val resolvedChunkSize = chunkSize ?: chunkSizeOption ?: 1000
         val resolvedChunkOverlap = chunkOverlap ?: chunkOverlapOption ?: 200
 
-        val service = IngestService(model, resolvedStoreDir, resolvedChunkSize, resolvedChunkOverlap, warningWriter)
+        val service = IngestService(
+            model, resolvedStoreDir, resolvedChunkSize, resolvedChunkOverlap, warningWriter,
+            urlFetcher = urlFetcher,
+        )
 
         val isQuiet = quiet || quietOption
         val isVerbose = verbose || detailsOption
@@ -110,7 +127,7 @@ class IngestCommand(
             }
         }
 
-        val result = service.ingest(files)
+        val result = service.ingest(sources)
         outputWriter.println("${result.filesIngested} files ingested, ${result.chunksCreated} chunks created, ${result.skipped} skipped")
         return 0
     }

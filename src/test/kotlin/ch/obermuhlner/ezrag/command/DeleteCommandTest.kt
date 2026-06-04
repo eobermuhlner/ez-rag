@@ -122,6 +122,27 @@ class DeleteCommandTest {
     }
 
     @Test
+    fun `delete URL source uses URL as the source key without path mangling`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page.html"
+        ingestFile(tempDir, url, chunkCount = 3)
+
+        val out = StringWriter()
+        val cmd = DeleteCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+        )
+        cmd.filePaths = listOf(url)
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(out.toString()).contains("Deleted: $url (3 chunks)")
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            assertThat(repo.getMetadata().documents.find { it.path == url }).isNull()
+        }
+    }
+
+    @Test
     fun `delete multiple files deletes both and prints result for each`(@TempDir tempDir: Path) {
         val file1 = tempDir.resolve("file1.txt").toAbsolutePath().toString()
         val file2 = tempDir.resolve("file2.txt").toAbsolutePath().toString()

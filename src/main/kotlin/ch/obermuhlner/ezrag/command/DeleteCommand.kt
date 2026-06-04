@@ -57,7 +57,11 @@ class DeleteCommand(
 
         LuceneRepository.open(model, resolvedStoreDir, "standard").use { repository ->
             for (rawPath in filePaths) {
-                val absolutePath = Paths.get(rawPath).toAbsolutePath().normalize().toString()
+                val absolutePath = if (rawPath.startsWith("http://") || rawPath.startsWith("https://")) {
+                    rawPath
+                } else {
+                    Paths.get(rawPath).toAbsolutePath().normalize().toString()
+                }
                 val removed = repository.delete(absolutePath)
                 if (removed == 0) {
                     outputWriter.println("Warning: not found in store: $absolutePath")

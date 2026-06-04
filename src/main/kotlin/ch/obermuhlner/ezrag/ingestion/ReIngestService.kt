@@ -8,14 +8,14 @@ import org.springframework.ai.embedding.EmbeddingResponse
 import java.io.File
 import java.io.PrintWriter
 import java.nio.file.Path
+import java.security.MessageDigest
 
 /**
  * Service that re-ingests stale or all documents already present in the unified Lucene index.
  *
  * For each candidate source it:
- * 1. Checks whether the source file still exists on disk. If not, emits a warning and skips.
- * 2. Deletes old chunks from the unified index.
- * 3. Delegates to [IngestService] to re-ingest the file.
+ * 1. For file sources: checks existence, deletes old chunks, delegates to IngestService.
+ * 2. For URL sources: fetches first, skips if hash unchanged, deletes and re-ingests if changed.
  */
 open class ReIngestService(
     private val embeddingModel: EmbeddingModel,
@@ -24,9 +24,10 @@ open class ReIngestService(
     private val chunkOverlap: Int = 200,
     private val warningWriter: PrintWriter = PrintWriter(System.err, true),
     private val analyzerName: String = "standard",
+    private val urlFetcher: UrlFetcher = JsoupUrlFetcher(),
 ) {
 
-    var onFileReIngesting: ((Path) -> Unit)? = null
+    var onFileReIngesting: ((String) -> Unit)? = null
 
     open fun reIngest(forceAll: Boolean = false): ReIngestResult {
         // Use a stub model (dimension=0) for reading metadata and deleting — no embedding needed.
@@ -52,31 +53,49 @@ open class ReIngestService(
         var filesReIngested = 0
         var chunksCreated = 0
         var filesSkipped = 0
-        val filesToReIngest = mutableListOf<File>()
+        val sourcesToReIngest = mutableListOf<IngestSource>()
 
         repository.use {
             for (doc in candidates) {
-                val sourceFile = File(doc.path)
-                if (!sourceFile.exists()) {
-                    warningWriter.println("WARN: source file not found, skipping: ${doc.path}")
-                    filesSkipped++
-                    continue
+                val isUrl = doc.path.startsWith("http://") || doc.path.startsWith("https://")
+                if (isUrl) {
+                    val fetchResult = try {
+                        urlFetcher.fetch(doc.path)
+                    } catch (e: Exception) {
+                        warningWriter.println("WARN: Failed to fetch URL, skipping: ${doc.path}")
+                        filesSkipped++
+                        continue
+                    }
+                    val contentHash = computeSha256(fetchResult.bytes)
+                    if (repository.isContentUnchanged(doc.path, fetchResult.lastModifiedEpochMs, contentHash)) {
+                        filesSkipped++
+                        continue
+                    }
+                    repository.delete(doc.path)
+                    onFileReIngesting?.invoke(doc.path)
+                    sourcesToReIngest.add(UrlSource(doc.path))
+                } else {
+                    val sourceFile = File(doc.path)
+                    if (!sourceFile.exists()) {
+                        warningWriter.println("WARN: source file not found, skipping: ${doc.path}")
+                        filesSkipped++
+                        continue
+                    }
+                    repository.delete(doc.path)
+                    onFileReIngesting?.invoke(sourceFile.absolutePath)
+                    sourcesToReIngest.add(FileSource(sourceFile))
                 }
-                // Delete old chunks from the unified index
-                repository.delete(doc.path)
-                onFileReIngesting?.invoke(sourceFile.toPath())
-                filesToReIngest.add(sourceFile)
             }
         }
 
-        if (filesToReIngest.isNotEmpty()) {
+        if (sourcesToReIngest.isNotEmpty()) {
             // When all documents are being re-ingested the embedding model may have changed.
             // Reset the stored dimension so IngestService can write the new one.
             if (forceAll) {
                 LuceneRepository.resetStoredDimension(storeDir)
             }
-            val ingestService = IngestService(embeddingModel, storeDir, chunkSize, chunkOverlap, warningWriter, analyzerName)
-            val ingestResult = ingestService.ingest(filesToReIngest)
+            val ingestService = IngestService(embeddingModel, storeDir, chunkSize, chunkOverlap, warningWriter, analyzerName, urlFetcher)
+            val ingestResult = ingestService.ingest(sourcesToReIngest)
             filesReIngested = ingestResult.filesIngested
             chunksCreated = ingestResult.chunksCreated
         }
@@ -87,6 +106,11 @@ open class ReIngestService(
             chunksCreated = chunksCreated,
             filesSkipped = filesSkipped,
         )
+    }
+
+    private fun computeSha256(bytes: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(bytes).joinToString("") { "%02x".format(it) }
     }
 
     private fun stubEmbeddingModel(): EmbeddingModel = object : EmbeddingModel {

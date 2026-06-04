@@ -291,6 +291,28 @@ class ShowCommandTest {
     }
 
     @Test
+    fun `show URL source uses URL as the source key without path mangling`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page.html"
+        ingestChunks(tempDir, url, listOf("Web content chunk one", "Web content chunk two"))
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = ShowCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+        )
+        cmd.filePath = url
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(out.toString()).contains(url)
+        assertThat(out.toString()).contains("Chunks: 2")
+        assertThat(err.toString()).isEmpty()
+    }
+
+    @Test
     fun `show of unknown file exits non-zero with error message`(@TempDir tempDir: Path) {
         // Create an empty store so LuceneRepository.open() succeeds
         LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }

@@ -1,7 +1,12 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.ingestion.FetchResult
+import ch.obermuhlner.ezrag.ingestion.FileSource
 import ch.obermuhlner.ezrag.ingestion.IngestResult
 import ch.obermuhlner.ezrag.ingestion.IngestService
+import ch.obermuhlner.ezrag.ingestion.IngestSource
+import ch.obermuhlner.ezrag.ingestion.UrlFetcher
+import ch.obermuhlner.ezrag.ingestion.UrlSource
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -10,7 +15,6 @@ import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
-import java.io.File
 import java.nio.file.Path
 
 class McpIngestToolTest {
@@ -40,19 +44,19 @@ class McpIngestToolTest {
         tempDir: Path,
         capturedChunkSizes: MutableList<Int> = mutableListOf(),
         capturedChunkOverlaps: MutableList<Int> = mutableListOf(),
-        capturedFiles: MutableList<List<File>> = mutableListOf(),
+        capturedSources: MutableList<List<IngestSource>> = mutableListOf(),
         resultToReturn: IngestResult = IngestResult(0, 0, 0),
         throwException: Exception? = null
     ): McpIngestTool {
         return McpIngestTool(
             embeddingModel = fakeEmbeddingModel,
             storeDir = tempDir,
-            ingestServiceFactory = { chunkSize, chunkOverlap ->
+            ingestServiceFactory = { chunkSize, chunkOverlap, _ ->
                 capturedChunkSizes.add(chunkSize)
                 capturedChunkOverlaps.add(chunkOverlap)
                 object : IngestService(fakeEmbeddingModel, tempDir, chunkSize, chunkOverlap) {
-                    override fun ingest(files: List<File>): IngestResult {
-                        capturedFiles.add(files)
+                    override fun ingest(sources: Iterable<IngestSource>): IngestResult {
+                        capturedSources.add(sources.toList())
                         if (throwException != null) throw throwException
                         return resultToReturn
                     }
@@ -65,8 +69,8 @@ class McpIngestToolTest {
     fun `ingest with only path uses default chunkSize and chunkOverlap`(@TempDir tempDir: Path) {
         val capturedChunkSizes = mutableListOf<Int>()
         val capturedChunkOverlaps = mutableListOf<Int>()
-        val capturedFiles = mutableListOf<List<File>>()
-        val tool = makeTool(tempDir, capturedChunkSizes, capturedChunkOverlaps, capturedFiles,
+        val capturedSources = mutableListOf<List<IngestSource>>()
+        val tool = makeTool(tempDir, capturedChunkSizes, capturedChunkOverlaps, capturedSources,
             resultToReturn = IngestResult(1, 3, 0))
 
         val targetPath = tempDir.resolve("docs").toString()
@@ -74,7 +78,7 @@ class McpIngestToolTest {
 
         assertThat(capturedChunkSizes).containsExactly(1000)
         assertThat(capturedChunkOverlaps).containsExactly(200)
-        assertThat(capturedFiles[0][0]).isEqualTo(File(targetPath))
+        assertThat(capturedSources[0][0]).isEqualTo(FileSource(java.io.File(targetPath)))
     }
 
     @Test
@@ -125,5 +129,100 @@ class McpIngestToolTest {
         assertThat(result.filesIngested).isEqualTo(0)
         assertThat(result.chunksCreated).isEqualTo(0)
         assertThat(result.skipped).isEqualTo(0)
+    }
+
+    // --- Task 05: URL ingestion ---
+
+    @Test
+    fun `ingest URL with fake UrlFetcher returns filesIngested 1 and at least one chunk`(@TempDir tempDir: Path) {
+        val html = "<html><head><title>Test Page</title></head><body><p>Hello world content to ingest for MCP URL test.</p></body></html>"
+        val fakeUrlFetcher = object : UrlFetcher {
+            override fun fetch(url: String) = FetchResult(html.toByteArray(), "text/html", 0L, 200)
+        }
+        val storeDir = tempDir.resolve("store")
+        storeDir.toFile().mkdirs()
+        val tool = McpIngestTool(fakeEmbeddingModel, storeDir, urlFetcher = fakeUrlFetcher)
+
+        val result = tool.ingest("https://example.com/page.html", null, null)
+
+        assertThat(result.filesIngested).isEqualTo(1)
+        assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+        assertThat(result.skipped).isEqualTo(0)
+        assertThat(result.error).isNull()
+    }
+
+    @Test
+    fun `ingest URL second call with unchanged bytes returns skipped 1`(@TempDir tempDir: Path) {
+        val html = "<html><head><title>Test Page</title></head><body><p>Content for unchanged skip test in MCP tool.</p></body></html>"
+        val fakeUrlFetcher = object : UrlFetcher {
+            override fun fetch(url: String) = FetchResult(html.toByteArray(), "text/html", 0L, 200)
+        }
+        val storeDir = tempDir.resolve("store")
+        storeDir.toFile().mkdirs()
+        McpIngestTool(fakeEmbeddingModel, storeDir, urlFetcher = fakeUrlFetcher)
+            .ingest("https://example.com/page.html", null, null)
+
+        val result = McpIngestTool(fakeEmbeddingModel, storeDir, urlFetcher = fakeUrlFetcher)
+            .ingest("https://example.com/page.html", null, null)
+
+        assertThat(result.filesIngested).isEqualTo(0)
+        assertThat(result.skipped).isEqualTo(1)
+        assertThat(result.error).isNull()
+    }
+
+    @Test
+    fun `ingest URL when IngestService throws returns error`(@TempDir tempDir: Path) {
+        val tool = McpIngestTool(
+            embeddingModel = fakeEmbeddingModel,
+            storeDir = tempDir,
+            ingestServiceFactory = { cs, co, _ ->
+                object : IngestService(fakeEmbeddingModel, tempDir, cs, co) {
+                    override fun ingest(sources: Iterable<IngestSource>): IngestResult {
+                        throw RuntimeException("Connection refused")
+                    }
+                }
+            }
+        )
+
+        val result = tool.ingest("https://unreachable.example.com/", null, null)
+
+        assertThat(result.filesIngested).isEqualTo(0)
+        assertThat(result.error).isNotNull()
+        assertThat(result.error).contains("Connection refused")
+    }
+
+    @Test
+    fun `ingest file path still works after URL detection was added`(@TempDir tempDir: Path) {
+        val sampleFile = tempDir.resolve("sample.txt")
+        sampleFile.toFile().writeText("Hello world for file regression test after URL support added.")
+        val storeDir = tempDir.resolve("store")
+        storeDir.toFile().mkdirs()
+
+        val tool = McpIngestTool(fakeEmbeddingModel, storeDir)
+        val result = tool.ingest(sampleFile.toString(), null, null)
+
+        assertThat(result.filesIngested).isEqualTo(1)
+        assertThat(result.error).isNull()
+    }
+
+    @Test
+    fun `ingest URL path is passed as UrlSource to IngestService`(@TempDir tempDir: Path) {
+        val capturedSources = mutableListOf<List<IngestSource>>()
+        val tool = makeTool(tempDir, capturedSources = capturedSources)
+
+        tool.ingest("https://example.com/page.html", null, null)
+
+        assertThat(capturedSources[0][0]).isEqualTo(UrlSource("https://example.com/page.html"))
+    }
+
+    @Test
+    fun `ingest file path is passed as FileSource to IngestService`(@TempDir tempDir: Path) {
+        val capturedSources = mutableListOf<List<IngestSource>>()
+        val tool = makeTool(tempDir, capturedSources = capturedSources)
+
+        val targetPath = tempDir.resolve("doc.txt").toString()
+        tool.ingest(targetPath, null, null)
+
+        assertThat(capturedSources[0][0]).isEqualTo(FileSource(java.io.File(targetPath)))
     }
 }

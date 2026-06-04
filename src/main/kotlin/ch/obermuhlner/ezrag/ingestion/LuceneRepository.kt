@@ -67,6 +67,7 @@ class LuceneRepository private constructor(
         private const val FIELD_HEADING_TITLE = "heading_title"
         private const val FIELD_HEADING_LEVEL = "heading_level"
         private const val FIELD_HEADING_PATH = "heading_path"
+        private const val FIELD_CONTENT_HASH = "content_hash"
 
         /**
          * Opens (or creates) the unified Lucene index at storeDir/lucene/.
@@ -178,6 +179,8 @@ class LuceneRepository private constructor(
 
             val vector = embeddingModel.embed(text)
 
+            val contentHash = doc.metadata["content_hash"] as? String
+
             val luceneDoc = org.apache.lucene.document.Document().apply {
                 add(KnnFloatVectorField(FIELD_VECTOR, vector, VectorSimilarityFunction.COSINE))
                 add(TextField(FIELD_CONTENT, text, Field.Store.YES))
@@ -190,6 +193,7 @@ class LuceneRepository private constructor(
                 if (headingPath != null) {
                     add(StoredField(FIELD_HEADING_PATH, objectMapper.writeValueAsString(headingPath)))
                 }
+                if (contentHash != null) add(StoredField(FIELD_CONTENT_HASH, contentHash))
             }
             writer.addDocument(luceneDoc)
             sourceMtimeCache[source] = mtime
@@ -244,6 +248,23 @@ class LuceneRepository private constructor(
      */
     fun isAlreadyIngested(source: String, mtime: Long): Boolean {
         return sourceMtimeCache[source] == mtime
+    }
+
+    /**
+     * Two-step staleness check using mtime (fast path) and SHA-256 content hash (slow path).
+     * Returns true when the stored content is identical to the incoming [contentHash], meaning
+     * the source should be skipped. Returns false when the content has changed and re-ingestion
+     * is needed.
+     *
+     * Step 1 (fast path, no I/O): if the cached mtime matches [mtime], return true immediately.
+     * Step 2 (slow path): read the stored content_hash from the index and compare. Returns true
+     * only when the hashes match; returns false when no hash is stored or the hash differs.
+     */
+    fun isContentUnchanged(source: String, mtime: Long, contentHash: String): Boolean {
+        // Fast path only when mtime != 0; mtime=0 (no Last-Modified) must always do hash comparison
+        if (mtime != 0L && sourceMtimeCache[source] == mtime) return true
+        val storedHash = getContentHashFromIndex(source) ?: return false
+        return storedHash == contentHash
     }
 
     /**
@@ -319,6 +340,7 @@ class LuceneRepository private constructor(
     ): StoreMetadata {
         val chunkCountBySource = mutableMapOf<String, Int>()
         val maxMtimeBySource = mutableMapOf<String, Long>()
+        val contentHashBySource = mutableMapOf<String, String>()
 
         withSearcher(Unit) { searcher ->
             val reader = searcher.indexReader
@@ -329,6 +351,10 @@ class LuceneRepository private constructor(
                 val mtime = doc.getField(FIELD_MTIME)?.numericValue()?.toLong() ?: 0L
                 chunkCountBySource[src] = (chunkCountBySource[src] ?: 0) + 1
                 maxMtimeBySource[src] = maxOf(maxMtimeBySource[src] ?: 0L, mtime)
+                if (!contentHashBySource.containsKey(src)) {
+                    val hash = doc.get(FIELD_CONTENT_HASH)
+                    if (hash != null) contentHashBySource[src] = hash
+                }
             }
         }
 
@@ -340,7 +366,13 @@ class LuceneRepository private constructor(
                 val storedMtime = maxMtimeBySource[src] ?: 0L
                 val currentMtime = filesystemProbe(src)
                 val stale = currentMtime == null || currentMtime != storedMtime
-                StoreDocumentInfo(path = src, chunkCount = count, mtime = storedMtime, stale = stale)
+                StoreDocumentInfo(
+                    path = src,
+                    chunkCount = count,
+                    mtime = storedMtime,
+                    stale = stale,
+                    contentHash = contentHashBySource[src]
+                )
             }
         val staleDocumentCount = documents.count { it.stale }
 
@@ -430,6 +462,14 @@ class LuceneRepository private constructor(
             .metadata(metadata)
             .score(score)
             .build()
+    }
+
+    private fun getContentHashFromIndex(source: String): String? {
+        return withSearcher(null) { searcher ->
+            val hits = searcher.search(TermQuery(Term(FIELD_SOURCE, source)), 1)
+            if (hits.totalHits.value == 0L) null
+            else searcher.storedFields().document(hits.scoreDocs[0].doc).get(FIELD_CONTENT_HASH)
+        }
     }
 
     private fun toLong(value: Any?): Long? = when (value) {

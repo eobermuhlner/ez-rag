@@ -194,7 +194,7 @@ class IngestIntegrationTest {
     }
 
     @Test
-    fun `after advancing mtime file is re-ingested and not skipped`(@TempDir tempDir: Path) {
+    fun `after advancing mtime with unchanged content file is skipped`(@TempDir tempDir: Path) {
         val sampleFile = tempDir.resolve("sample.txt")
         sampleFile.toFile().writeText("Hello world. This is a test document for mtime check.")
 
@@ -204,11 +204,36 @@ class IngestIntegrationTest {
         ingestCommand1.call(listOf(sampleFile.toFile()))
         assertThat(out1.toString()).contains("1 files ingested")
 
-        // Advance the mtime by setting it to a future value
+        // Advance the mtime but do NOT change the content
         val futureTime = FileTime.from(Instant.now().plusSeconds(3600))
         Files.setLastModifiedTime(sampleFile, futureTime)
 
-        // Second ingest — should NOT be skipped because mtime changed
+        // Second ingest — content hash unchanged, so the file is skipped despite mtime change
+        val out2 = StringWriter()
+        val ingestCommand2 = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out2))
+        val exitCode2 = ingestCommand2.call(listOf(sampleFile.toFile()))
+        assertThat(exitCode2).isEqualTo(0)
+        assertThat(out2.toString()).contains("0 files ingested")
+        assertThat(out2.toString()).contains("1 skipped")
+    }
+
+    @Test
+    fun `after advancing mtime with changed content file is re-ingested`(@TempDir tempDir: Path) {
+        val sampleFile = tempDir.resolve("sample.txt")
+        sampleFile.toFile().writeText("Hello world. This is a test document for mtime check.")
+
+        // First ingest
+        val out1 = StringWriter()
+        val ingestCommand1 = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out1))
+        ingestCommand1.call(listOf(sampleFile.toFile()))
+        assertThat(out1.toString()).contains("1 files ingested")
+
+        // Change the content AND advance the mtime
+        sampleFile.toFile().writeText("Completely different content for re-ingest test.")
+        val futureTime = FileTime.from(Instant.now().plusSeconds(3600))
+        Files.setLastModifiedTime(sampleFile, futureTime)
+
+        // Second ingest — content changed, so re-ingestion happens
         val out2 = StringWriter()
         val ingestCommand2 = IngestCommand(fakeEmbeddingModel, tempDir, PrintWriter(out2))
         val exitCode2 = ingestCommand2.call(listOf(sampleFile.toFile()))

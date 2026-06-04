@@ -2,6 +2,8 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagConfig
+import ch.obermuhlner.ezrag.ingestion.FetchResult
+import ch.obermuhlner.ezrag.ingestion.UrlFetcher
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -368,5 +370,32 @@ class IngestCommandTest {
         // No .ez-rag/ should be created in subDir
         val subLuceneDir = subDir.resolve(".ez-rag").resolve("lucene")
         assertThat(subLuceneDir.toFile()).doesNotExist()
+    }
+
+    @Test
+    fun `http-prefixed argument is routed as URL source not file path`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page.html"
+        val html = "<html><head><title>Test</title></head><body><p>Content.</p></body></html>"
+        val fakeUrlFetcher = object : UrlFetcher {
+            override fun fetch(fetchUrl: String) =
+                FetchResult(html.toByteArray(), "text/html", 0L, 200)
+        }
+
+        val out = StringWriter()
+        val warnings = StringWriter()
+        val cmd = IngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+            warningWriter = PrintWriter(warnings, true),
+            urlFetcher = fakeUrlFetcher,
+        )
+        cmd.paths = listOf(url)
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        // File-path handling would produce "Path does not exist" for an http:// string
+        assertThat(warnings.toString()).doesNotContain("Path does not exist")
+        assertThat(out.toString()).contains("1 files ingested")
     }
 }

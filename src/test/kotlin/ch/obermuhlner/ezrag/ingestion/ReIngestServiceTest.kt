@@ -254,4 +254,106 @@ class ReIngestServiceTest {
             assertThat(chunks).isNotEmpty()
         }
     }
+
+    private fun makeFakeFetcher(responseRef: () -> ByteArray, contentType: String = "text/html"): UrlFetcher =
+        object : UrlFetcher {
+            override fun fetch(url: String) = FetchResult(
+                bytes = responseRef(),
+                contentType = contentType,
+                lastModifiedEpochMs = 0L,
+                statusCode = 200
+            )
+        }
+
+    private fun ingestUrl(storeDir: Path, url: String, fetcher: UrlFetcher) {
+        val service = IngestService(fakeEmbeddingModel, storeDir, urlFetcher = fetcher)
+        service.ingest(listOf(UrlSource(url)))
+    }
+
+    @Test
+    fun `re-ingest re-fetches URL source and reports filesReIngested=1 when content changed`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val fakeUrl = "https://example.com/page"
+
+        var fetchBytes = "<html><head><title>Page</title></head><body><p>original content</p></body></html>".toByteArray()
+        val fetcher = makeFakeFetcher({ fetchBytes })
+
+        ingestUrl(storeDir, fakeUrl, fetcher)
+
+        fetchBytes = "<html><head><title>Page</title></head><body><p>updated content</p></body></html>".toByteArray()
+
+        val service = ReIngestService(fakeEmbeddingModel, storeDir, urlFetcher = fetcher)
+        val result = service.reIngest(forceAll = false)
+
+        assertThat(result.filesReIngested).isEqualTo(1)
+        assertThat(result.filesSkipped).isEqualTo(0)
+    }
+
+    @Test
+    fun `re-ingest skips URL source when content unchanged`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val fakeUrl = "https://example.com/page"
+
+        val fetchBytes = "<html><head><title>Page</title></head><body><p>some content</p></body></html>".toByteArray()
+        val fetcher = makeFakeFetcher({ fetchBytes })
+
+        ingestUrl(storeDir, fakeUrl, fetcher)
+
+        val service = ReIngestService(fakeEmbeddingModel, storeDir, urlFetcher = fetcher)
+        val result = service.reIngest(forceAll = false)
+
+        assertThat(result.filesReIngested).isEqualTo(0)
+        assertThat(result.filesSkipped).isEqualTo(1)
+    }
+
+    @Test
+    fun `re-ingest warns and skips URL source when fetch fails leaving old chunks intact`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val fakeUrl = "https://example.com/page"
+
+        val goodFetcher = makeFakeFetcher({
+            "<html><head><title>Page</title></head><body><p>some content</p></body></html>".toByteArray()
+        })
+        ingestUrl(storeDir, fakeUrl, goodFetcher)
+
+        val failingFetcher = object : UrlFetcher {
+            override fun fetch(url: String): FetchResult = throw RuntimeException("Network error")
+        }
+
+        val warnOut = StringWriter()
+        val service = ReIngestService(
+            fakeEmbeddingModel, storeDir,
+            warningWriter = PrintWriter(warnOut, true),
+            urlFetcher = failingFetcher
+        )
+        val result = service.reIngest(forceAll = false)
+
+        assertThat(result.filesReIngested).isEqualTo(0)
+        assertThat(result.filesSkipped).isEqualTo(1)
+        assertThat(warnOut.toString()).contains("WARN:")
+
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val chunks = repo.getChunksForFile(fakeUrl)
+            assertThat(chunks).isNotEmpty()
+        }
+    }
+
+    @Test
+    fun `re-ingest file sources still work correctly alongside URL sources`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val sourceFile = tempDir.resolve("doc.txt")
+        sourceFile.toFile().writeText("original file content")
+
+        ingestFile(storeDir, sourceFile)
+
+        val futureTime = FileTime.from(Instant.now().plusSeconds(3600))
+        Files.setLastModifiedTime(sourceFile, futureTime)
+        sourceFile.toFile().writeText("updated file content")
+
+        val service = createReIngestService(storeDir)
+        val result = service.reIngest(forceAll = false)
+
+        assertThat(result.filesReIngested).isEqualTo(1)
+        assertThat(result.filesSkipped).isEqualTo(0)
+    }
 }

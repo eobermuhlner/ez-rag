@@ -1,6 +1,11 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.ingestion.FileSource
 import ch.obermuhlner.ezrag.ingestion.IngestService
+import ch.obermuhlner.ezrag.ingestion.IngestSource
+import ch.obermuhlner.ezrag.ingestion.JsoupUrlFetcher
+import ch.obermuhlner.ezrag.ingestion.UrlFetcher
+import ch.obermuhlner.ezrag.ingestion.UrlSource
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
@@ -13,8 +18,9 @@ import java.nio.file.Path
 class McpIngestTool(
     private val embeddingModel: EmbeddingModel,
     private val storeDir: Path,
-    private val ingestServiceFactory: (Int, Int) -> IngestService = { chunkSize, chunkOverlap ->
-        IngestService(embeddingModel, storeDir, chunkSize, chunkOverlap)
+    private val urlFetcher: UrlFetcher = JsoupUrlFetcher(),
+    private val ingestServiceFactory: (Int, Int, UrlFetcher) -> IngestService = { chunkSize, chunkOverlap, fetcher ->
+        IngestService(embeddingModel, storeDir, chunkSize, chunkOverlap, urlFetcher = fetcher)
     }
 ) {
 
@@ -25,17 +31,22 @@ class McpIngestTool(
         val error: String? = null
     )
 
-    @Tool(description = "Ingest documents from a file or directory path into the vector store. Persists the updated store to disk after each call.")
+    @Tool(description = "Ingest documents from a file, directory path, or HTTP/HTTPS URL into the vector store. Persists the updated store to disk after each call.")
     fun ingest(
-        @ToolParam(description = "Path to a file or directory to ingest.") path: String,
+        @ToolParam(description = "Path to a file or directory to ingest, or an HTTP/HTTPS URL to fetch and ingest.") path: String,
         @ToolParam(required = false, description = "Chunk size in characters (default: 1000).") chunkSize: Int?,
         @ToolParam(required = false, description = "Chunk overlap in characters (default: 200).") chunkOverlap: Int?
     ): IngestToolResult {
         val cs = chunkSize ?: 1000
         val co = chunkOverlap ?: 200
         return try {
-            val service = ingestServiceFactory(cs, co)
-            val result = service.ingest(listOf(File(path)))
+            val service = ingestServiceFactory(cs, co, urlFetcher)
+            val source: IngestSource = if (path.startsWith("http://") || path.startsWith("https://")) {
+                UrlSource(path)
+            } else {
+                FileSource(File(path))
+            }
+            val result = service.ingest(listOf(source))
             IngestToolResult(
                 filesIngested = result.filesIngested,
                 chunksCreated = result.chunksCreated,

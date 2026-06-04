@@ -58,7 +58,11 @@ class ShowCommand(
             ?: (configServiceOverride ?: springConfigService)?.resolveExplicitStoreDir()?.let { Paths.get(it) }
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
 
-        val absolutePath = Paths.get(filePath).toAbsolutePath().normalize().toString()
+        val absolutePath = if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+            filePath
+        } else {
+            Paths.get(filePath).toAbsolutePath().normalize().toString()
+        }
 
         LuceneRepository.open(model, resolvedStoreDir, "standard").use { repository ->
             val chunks = repository.getChunksForFile(absolutePath)

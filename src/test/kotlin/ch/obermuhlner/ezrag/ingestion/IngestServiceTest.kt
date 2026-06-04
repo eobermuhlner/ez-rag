@@ -10,11 +10,22 @@ import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.FileTime
+import java.time.Instant
 
 
 
 class IngestServiceTest {
+
+    private val simpleHtml = """
+        <html><head><title>Fake Page</title></head>
+        <body>
+          <h2>Installation</h2>
+          <p>Install by running the command below.</p>
+        </body></html>
+    """.trimIndent()
 
     private val fakeEmbeddingModel: EmbeddingModel = object : EmbeddingModel {
         override fun call(request: EmbeddingRequest): EmbeddingResponse {
@@ -169,6 +180,228 @@ class IngestServiceTest {
             // Ensure no relative paths are stored
             assertThat(metadata.documents).allMatch { java.nio.file.Paths.get(it.path).isAbsolute }
         }
+    }
+
+    @Test
+    fun `ingest skips file when mtime changed but content is unchanged`(@TempDir tempDir: Path) {
+        val sampleFile = tempDir.resolve("sample.txt")
+        sampleFile.toFile().writeText("unchanged content for content-hash test")
+
+        val service1 = IngestService(fakeEmbeddingModel, tempDir)
+        val result1 = service1.ingest(listOf(sampleFile.toFile()))
+        assertThat(result1.filesIngested).isEqualTo(1)
+
+        // Change only mtime, not content
+        Files.setLastModifiedTime(sampleFile, FileTime.from(Instant.now().plusSeconds(3600)))
+
+        val service2 = IngestService(fakeEmbeddingModel, tempDir)
+        val result2 = service2.ingest(listOf(sampleFile.toFile()))
+        assertThat(result2.filesIngested).isEqualTo(0)
+        assertThat(result2.skipped).isEqualTo(1)
+    }
+
+    @Test
+    fun `ingest re-ingests file when mtime and content both changed`(@TempDir tempDir: Path) {
+        val sampleFile = tempDir.resolve("sample.txt")
+        sampleFile.toFile().writeText("original content for change detection")
+
+        val service1 = IngestService(fakeEmbeddingModel, tempDir)
+        val result1 = service1.ingest(listOf(sampleFile.toFile()))
+        assertThat(result1.filesIngested).isEqualTo(1)
+
+        // Change content, then set mtime to a future time to ensure it differs
+        sampleFile.toFile().writeText("completely different content that has changed")
+        Files.setLastModifiedTime(sampleFile, FileTime.from(Instant.now().plusSeconds(3600)))
+
+        val service2 = IngestService(fakeEmbeddingModel, tempDir)
+        val result2 = service2.ingest(listOf(sampleFile.toFile()))
+        assertThat(result2.filesIngested).isEqualTo(1)
+        assertThat(result2.skipped).isEqualTo(0)
+    }
+
+    private fun makeFakeUrlFetcher(
+        url: String,
+        html: String = simpleHtml,
+        contentType: String = "text/html",
+        lastModifiedEpochMs: Long = 0L,
+        statusCode: Int = 200,
+        bytes: ByteArray? = null,
+    ): UrlFetcher = object : UrlFetcher {
+        override fun fetch(fetchUrl: String): FetchResult {
+            val responseBytes = bytes ?: html.toByteArray()
+            if (fetchUrl == url) return FetchResult(responseBytes, contentType, lastModifiedEpochMs, statusCode)
+            throw IllegalArgumentException("Unexpected URL: $fetchUrl")
+        }
+    }
+
+    @Test
+    fun `URL source ingested produces chunk with heading_title matching HTML h2`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page.html"
+        val fakeUrlFetcher = makeFakeUrlFetcher(url)
+        val service = IngestService(fakeEmbeddingModel, tempDir, urlFetcher = fakeUrlFetcher)
+
+        val result = service.ingest(listOf(UrlSource(url)))
+
+        assertThat(result.filesIngested).isEqualTo(1)
+        assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+        assertThat(result.skipped).isEqualTo(0)
+
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val chunks = repo.getChunksForFile(url)
+            assertThat(chunks).anyMatch { it.headingTitle == "Installation" }
+        }
+    }
+
+    @Test
+    fun `URL source chunks all carry page_title metadata`() {
+        // Verify at the HtmlDocumentReader level (used internally by IngestService for URLs)
+        val docs = HtmlDocumentReader(simpleHtml).read()
+        assertThat(docs).isNotEmpty()
+        docs.forEach { doc ->
+            assertThat(doc.metadata["page_title"]).isEqualTo("Fake Page")
+        }
+    }
+
+    @Test
+    fun `URL source skipped when raw bytes are unchanged on second ingest`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page.html"
+        val fakeUrlFetcher = makeFakeUrlFetcher(url)
+
+        val service1 = IngestService(fakeEmbeddingModel, tempDir, urlFetcher = fakeUrlFetcher)
+        val result1 = service1.ingest(listOf(UrlSource(url)))
+        assertThat(result1.filesIngested).isEqualTo(1)
+
+        val service2 = IngestService(fakeEmbeddingModel, tempDir, urlFetcher = fakeUrlFetcher)
+        val result2 = service2.ingest(listOf(UrlSource(url)))
+        assertThat(result2.filesIngested).isEqualTo(0)
+        assertThat(result2.skipped).isEqualTo(1)
+    }
+
+    @Test
+    fun `URL source re-ingested when raw bytes change`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page.html"
+        val firstFetcher = makeFakeUrlFetcher(url, html = simpleHtml)
+        val service1 = IngestService(fakeEmbeddingModel, tempDir, urlFetcher = firstFetcher)
+        val result1 = service1.ingest(listOf(UrlSource(url)))
+        assertThat(result1.filesIngested).isEqualTo(1)
+
+        val changedHtml = simpleHtml.replace("Installation", "Getting Started")
+        val secondFetcher = makeFakeUrlFetcher(url, html = changedHtml)
+        val service2 = IngestService(fakeEmbeddingModel, tempDir, urlFetcher = secondFetcher)
+        val result2 = service2.ingest(listOf(UrlSource(url)))
+        assertThat(result2.filesIngested).isEqualTo(1)
+        assertThat(result2.skipped).isEqualTo(0)
+    }
+
+    @Test
+    fun `mixed FileSource and UrlSource reports filesIngested = 2`(@TempDir tempDir: Path) {
+        val sampleFile = tempDir.resolve("sample.txt")
+        sampleFile.toFile().writeText("Hello world. File content for mixed ingest test.")
+
+        val url = "https://example.com/page.html"
+        val fakeUrlFetcher = makeFakeUrlFetcher(url)
+        val service = IngestService(fakeEmbeddingModel, tempDir, urlFetcher = fakeUrlFetcher)
+
+        val result = service.ingest(listOf(FileSource(sampleFile.toFile()), UrlSource(url)))
+
+        assertThat(result.filesIngested).isEqualTo(2)
+    }
+
+    @Test
+    fun `URL returning HTTP 404 emits warning and increments skipped`(@TempDir tempDir: Path) {
+        val url = "https://example.com/missing.html"
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, statusCode = 404)
+
+        val warnings = StringWriter()
+        val service = IngestService(
+            fakeEmbeddingModel, tempDir,
+            warningWriter = PrintWriter(warnings, true),
+            urlFetcher = fakeUrlFetcher,
+        )
+
+        val result = service.ingest(listOf(UrlSource(url)))
+
+        assertThat(result.filesIngested).isEqualTo(0)
+        assertThat(result.skipped).isEqualTo(1)
+        assertThat(warnings.toString()).contains("404")
+    }
+
+    @Test
+    fun `URL fetch failure emits warning and increments skipped`(@TempDir tempDir: Path) {
+        val url = "https://unreachable.example.com/"
+        val throwingFetcher = object : UrlFetcher {
+            override fun fetch(url: String) = throw java.io.IOException("Connection refused")
+        }
+
+        val warnings = StringWriter()
+        val service = IngestService(
+            fakeEmbeddingModel, tempDir,
+            warningWriter = PrintWriter(warnings, true),
+            urlFetcher = throwingFetcher,
+        )
+
+        val result = service.ingest(listOf(UrlSource(url)))
+
+        assertThat(result.filesIngested).isEqualTo(0)
+        assertThat(result.skipped).isEqualTo(1)
+        assertThat(warnings.toString()).contains("Connection refused")
+    }
+
+    @Test
+    fun `unsupported content type emits warning and increments skipped`(@TempDir tempDir: Path) {
+        val url = "https://example.com/image.png"
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, html = "PNG_DATA", contentType = "image/png")
+
+        val warnings = StringWriter()
+        val service = IngestService(
+            fakeEmbeddingModel, tempDir,
+            warningWriter = PrintWriter(warnings, true),
+            urlFetcher = fakeUrlFetcher,
+        )
+
+        val result = service.ingest(listOf(UrlSource(url)))
+
+        assertThat(result.filesIngested).isEqualTo(0)
+        assertThat(result.skipped).isEqualTo(1)
+        assertThat(warnings.toString()).contains("image/png")
+    }
+
+    @Test
+    fun `URL with application_pdf content type produces chunks and filesIngested = 1`(@TempDir tempDir: Path, @TempDir pdfTempDir: Path) {
+        val url = "https://example.com/doc.pdf"
+        val pdfBytes = javaClass.getResourceAsStream("/documents/sample.pdf")!!.readBytes()
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, contentType = "application/pdf", bytes = pdfBytes)
+        val service = IngestService(fakeEmbeddingModel, tempDir, urlFetcher = fakeUrlFetcher, tempDirProvider = { pdfTempDir })
+
+        val result = service.ingest(listOf(UrlSource(url)))
+
+        assertThat(result.filesIngested).isEqualTo(1)
+        assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+    }
+
+    @Test
+    fun `URL with text_plain content type produces chunks and filesIngested = 1`(@TempDir tempDir: Path) {
+        val url = "https://example.com/doc.txt"
+        val plainBytes = "This is plain text content for ingestion testing. It has enough words to form a chunk.".toByteArray()
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, contentType = "text/plain", bytes = plainBytes)
+        val service = IngestService(fakeEmbeddingModel, tempDir, urlFetcher = fakeUrlFetcher)
+
+        val result = service.ingest(listOf(UrlSource(url)))
+
+        assertThat(result.filesIngested).isEqualTo(1)
+        assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+    }
+
+    @Test
+    fun `PDF URL leaves no temp files in injected temp dir after ingest`(@TempDir tempDir: Path, @TempDir pdfTempDir: Path) {
+        val url = "https://example.com/doc.pdf"
+        val pdfBytes = javaClass.getResourceAsStream("/documents/sample.pdf")!!.readBytes()
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, contentType = "application/pdf", bytes = pdfBytes)
+        val service = IngestService(fakeEmbeddingModel, tempDir, urlFetcher = fakeUrlFetcher, tempDirProvider = { pdfTempDir })
+
+        service.ingest(listOf(UrlSource(url)))
+
+        assertThat(pdfTempDir.toFile().listFiles()).isEmpty()
     }
 
     @Test

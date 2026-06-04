@@ -437,6 +437,71 @@ class LuceneRepositoryTest {
         }
     }
 
+    // --- isContentUnchanged ---
+
+    @Test
+    fun `isContentUnchanged returns true on fast path when mtime matches`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("Some content")
+                .metadata(mutableMapOf<String, Any>("source" to "/abs/file.txt", "mtime" to 1000L, "chunk_index" to 0, "content_hash" to "abc123"))
+                .build()
+            repo.add(listOf(doc))
+
+            // Same mtime → fast path returns true regardless of provided hash
+            assertThat(repo.isContentUnchanged("/abs/file.txt", 1000L, "completely-different-hash")).isTrue()
+        }
+    }
+
+    @Test
+    fun `isContentUnchanged returns true when hash matches even if mtime differs`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("Some content")
+                .metadata(mutableMapOf<String, Any>("source" to "/abs/file.txt", "mtime" to 1000L, "chunk_index" to 0, "content_hash" to "abc123"))
+                .build()
+            repo.add(listOf(doc))
+
+            // Different mtime but same hash → skip
+            assertThat(repo.isContentUnchanged("/abs/file.txt", 9999L, "abc123")).isTrue()
+        }
+    }
+
+    @Test
+    fun `isContentUnchanged returns false when hash differs`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("Some content")
+                .metadata(mutableMapOf<String, Any>("source" to "/abs/file.txt", "mtime" to 1000L, "chunk_index" to 0, "content_hash" to "abc123"))
+                .build()
+            repo.add(listOf(doc))
+
+            // Different mtime and different hash → re-ingest
+            assertThat(repo.isContentUnchanged("/abs/file.txt", 9999L, "xyz789")).isFalse()
+        }
+    }
+
+    // --- content_hash in StoreDocumentInfo ---
+
+    @Test
+    fun `getMetadata returns StoreDocumentInfo with non-null contentHash`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("Some content")
+                .metadata(mutableMapOf<String, Any>("source" to "/abs/file.txt", "mtime" to 1000L, "chunk_index" to 0, "content_hash" to "sha256hex"))
+                .build()
+            repo.add(listOf(doc))
+
+            val metadata = repo.getMetadata { _ -> 1000L }
+            assertThat(metadata.documents).hasSize(1)
+            assertThat(metadata.documents[0].contentHash).isEqualTo("sha256hex")
+        }
+    }
+
     // --- heading_path round-trip ---
 
     @Test

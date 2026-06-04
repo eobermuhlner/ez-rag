@@ -48,6 +48,7 @@ dependencies {
     implementation("org.apache.lucene:lucene-core:9.12.1")
     implementation("org.apache.lucene:lucene-analysis-common:9.12.1")
     implementation("org.apache.lucene:lucene-queryparser:9.12.1")
+    implementation("org.jsoup:jsoup:1.18.3")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 

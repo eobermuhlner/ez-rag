@@ -20,7 +20,8 @@ data class StoreDocumentInfo(
     val path: String,
     val chunkCount: Int,
     val mtime: Long = 0L,
-    val stale: Boolean = false
+    val stale: Boolean = false,
+    val contentHash: String? = null
 )
 
 /**
