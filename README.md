@@ -76,6 +76,7 @@ echo "What is X?" | ez-rag search
 | `delete <file> [<file>...]`    | Remove one or more ingested documents from the vector store without touching other content.        |
 | `list`                         | List all ingested documents with chunk counts and staleness flags. Use `--output-format json` for machine-readable output with absolute paths. |
 | `show <file>`                  | Show per-chunk metadata (and optionally raw text) for an ingested file. Useful for debugging retrieval. |
+| `chunk <file> <index>`         | Retrieve a specific chunk by file path and chunk index. Use `--window N` to also fetch the N surrounding chunks. |
 | `query [<word>...]`            | Retrieve relevant chunks and answer using an LLM. Reads question from positional args or stdin.    |
 | `status`                       | Show store health, aggregate counts, active configuration, and credential status.                  |
 | `search [<word>...]`           | Search returning raw chunks without LLM involvement. Defaults to hybrid (BM25 + embedding) mode; override with `--mode`. Reads question from positional args or stdin. |
@@ -224,6 +225,52 @@ If the file was never ingested, `show` exits with a non-zero code and prints an 
 |-----------------|-----------------------------------------------------------|
 | `--chunks`      | Include raw chunk text in output.                         |
 | `--output`      | Output format: `text` (default) or `json`.                |
+
+### chunk
+
+Retrieve a specific chunk by its file path and chunk index. Chunk indices are the `chunkIndex` values returned by `search` and `show`.
+
+```sh
+ez-rag chunk docs/getting-started.md 2
+```
+
+Output:
+```
+Chunk 2
+  This is the text of the third chunk in the file.
+```
+
+Use `--window N` to also fetch the N chunks before and after the target. The window silently clamps at file boundaries, so `--window 1` on chunk 0 returns only chunks 0 and 1.
+
+```sh
+ez-rag chunk docs/getting-started.md 2 --window 1
+```
+
+Pass `--output json` for machine-readable output:
+
+```sh
+ez-rag chunk docs/getting-started.md 2 --output json
+```
+
+JSON output:
+```json
+{
+  "file": "/absolute/path/to/docs/getting-started.md",
+  "chunks": [
+    { "chunkIndex": 2, "text": "This is the text of the third chunk in the file." }
+  ]
+}
+```
+
+When the chunk carries heading metadata (e.g. from a Markdown file), the JSON output includes `headingTitle`, `headingLevel`, and `headingPath` fields. These fields are omitted entirely when no heading metadata is present.
+
+If the file was never ingested, or if the exact chunk index is not found in the store, the command exits with code 1 and prints an error to stderr.
+
+| Flag            | Description                                                             |
+|-----------------|-------------------------------------------------------------------------|
+| `--window N`    | Also retrieve the N chunks before and after the target (default `0`).   |
+| `--output`      | Output format: `text` (default) or `json`.                              |
+| `--store-dir`   | Path to the store directory (same precedence as `search` and `show`).   |
 
 ### list
 
@@ -855,6 +902,22 @@ Returns per-chunk metadata for an ingested file. Optionally includes raw chunk t
 | `file`       | String          | Absolute path that was matched against                                      |
 | `chunks`     | List of objects | Each entry has `chunkIndex`, `charCount`, `mtime`, and optionally `text`    |
 | `error`      | String or null  | Set when an error occurred or the file was not found                        |
+
+#### `chunk`
+
+Retrieves one or more chunks by file path and chunk index. Use `chunkIndex` values from prior `search`, `embedding-search`, or `bm25-search` results. Pass `window` to also fetch surrounding chunks for context.
+
+| Parameter    | Type   | Required | Default | Description                                                                       |
+|--------------|--------|----------|---------|-----------------------------------------------------------------------------------|
+| `filePath`   | String | yes      | —       | Path to the file containing the chunk                                             |
+| `chunkIndex` | Int    | yes      | —       | Index of the chunk to retrieve, as returned by search tools                       |
+| `window`     | Int    | no       | `0`     | Number of chunks before and after the target to include; clamped at file boundaries |
+
+| Return field | Type            | Description                                                                                          |
+|--------------|-----------------|------------------------------------------------------------------------------------------------------|
+| `file`       | String          | Absolute path that was matched against                                                               |
+| `chunks`     | List of objects | Each entry has `chunkIndex`, `text`, and optionally `headingTitle`, `headingLevel`, `headingPath`    |
+| `error`      | String or null  | Set when the file was not found or an error occurred; `chunks` is empty in error cases               |
 
 #### `reingest`
 
