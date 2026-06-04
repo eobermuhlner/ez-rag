@@ -1,5 +1,6 @@
 package ch.obermuhlner.ezrag
 
+import ch.obermuhlner.ezrag.command.ChunkCommand
 import ch.obermuhlner.ezrag.command.DeleteCommand
 import ch.obermuhlner.ezrag.command.EvalCommand
 import ch.obermuhlner.ezrag.command.DownloadEvalCorpusCommand
@@ -30,6 +31,7 @@ import java.util.concurrent.Callable
     subcommands = [
         InitCommand::class,
         IngestCommand::class,
+        ChunkCommand::class,
         ReIngestCommand::class,
         DeleteCommand::class,
         ListCommand::class,

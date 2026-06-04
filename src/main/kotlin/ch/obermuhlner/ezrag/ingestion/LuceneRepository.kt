@@ -293,6 +293,15 @@ class LuceneRepository private constructor(
     }
 
     /**
+     * Returns chunks for the given source whose chunkIndex falls in [fromIndex, toIndex], sorted ascending.
+     * Returns an empty list when no matching document exists or when fromIndex > toIndex.
+     */
+    fun getChunkRange(source: String, fromIndex: Int, toIndex: Int): List<DocumentChunkInfo> {
+        if (fromIndex > toIndex) return emptyList()
+        return getChunksForFile(source).filter { it.chunkIndex in fromIndex..toIndex }
+    }
+
+    /**
      * Aggregates metadata across all documents in the index.
      * filesystemProbe is called with each source path to get current mtime for staleness check.
      */

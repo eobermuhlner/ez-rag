@@ -93,4 +93,11 @@ class McpServerCommandTest {
         val toolNames = toolCallbacks.map { it.toolDefinition.name() }
         assertThat(toolNames).contains("reingest")
     }
+
+    @Test
+    fun `ToolCallbackProvider exposes a tool named chunk`() {
+        val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
+        val toolNames = toolCallbacks.map { it.toolDefinition.name() }
+        assertThat(toolNames).contains("chunk")
+    }
 }

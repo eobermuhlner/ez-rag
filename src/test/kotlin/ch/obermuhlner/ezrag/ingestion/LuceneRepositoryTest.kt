@@ -326,6 +326,76 @@ class LuceneRepositoryTest {
         }
     }
 
+    // --- getChunkRange ---
+
+    @Test
+    fun `getChunkRange returns exact single chunk when fromIndex equals toIndex`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val source = "/abs/file.txt"
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            repo.add((0..4).map { i -> makeDoc("Chunk $i text", source, chunkIndex = i, mtime = 1000L) })
+            val result = repo.getChunkRange(source, 2, 2)
+            assertThat(result).hasSize(1)
+            assertThat(result[0].chunkIndex).isEqualTo(2)
+            assertThat(result[0].text).isEqualTo("Chunk 2 text")
+        }
+    }
+
+    @Test
+    fun `getChunkRange returns window of chunks sorted by chunkIndex`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val source = "/abs/file.txt"
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            repo.add((0..4).map { i -> makeDoc("Chunk $i text", source, chunkIndex = i, mtime = 1000L) })
+            val result = repo.getChunkRange(source, 1, 3)
+            assertThat(result).hasSize(3)
+            assertThat(result.map { it.chunkIndex }).containsExactly(1, 2, 3)
+        }
+    }
+
+    @Test
+    fun `getChunkRange clamps at lower boundary when fromIndex is negative`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val source = "/abs/file.txt"
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            repo.add((0..2).map { i -> makeDoc("Chunk $i text", source, chunkIndex = i, mtime = 1000L) })
+            val result = repo.getChunkRange(source, -5, 1)
+            assertThat(result.map { it.chunkIndex }).containsExactly(0, 1)
+        }
+    }
+
+    @Test
+    fun `getChunkRange clamps at upper boundary returning only available chunks`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val source = "/abs/file.txt"
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            repo.add((0..2).map { i -> makeDoc("Chunk $i text", source, chunkIndex = i, mtime = 1000L) })
+            val result = repo.getChunkRange(source, 1, 100)
+            assertThat(result.map { it.chunkIndex }).containsExactly(1, 2)
+        }
+    }
+
+    @Test
+    fun `getChunkRange returns empty list for unknown source`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            repo.add(listOf(makeDoc("Some text", "/abs/known.txt", mtime = 1000L)))
+            val result = repo.getChunkRange("/abs/unknown.txt", 0, 5)
+            assertThat(result).isEmpty()
+        }
+    }
+
+    @Test
+    fun `getChunkRange returns empty list when fromIndex is greater than toIndex`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val source = "/abs/file.txt"
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            repo.add((0..4).map { i -> makeDoc("Chunk $i text", source, chunkIndex = i, mtime = 1000L) })
+            val result = repo.getChunkRange(source, 3, 1)
+            assertThat(result).isEmpty()
+        }
+    }
+
     // --- heading_path round-trip ---
 
     @Test
