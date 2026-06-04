@@ -521,4 +521,36 @@ class SearchCommandTest {
         assertThat(hybridCalled).isTrue()
         assertThat(embeddingCalled).isFalse()
     }
+
+    @Test
+    fun `--min-score is forwarded to bm25 pipeline in bm25 mode`(@TempDir tempDir: Path) {
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        val capturedQueries = mutableListOf<SearchQuery>()
+        val bm25Pipeline = object : BM25SearchPipeline(repo) {
+            override fun search(query: SearchQuery): SearchResult {
+                capturedQueries.add(query)
+                return SearchResult(emptyList(), mode = "bm25")
+            }
+        }
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = SearchCommand(
+            storeDirOverride = tempDir,
+            bm25Pipeline = bm25Pipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        cmd.questionArgs = listOf("test query")
+        cmd.modeOption = "bm25"
+        cmd.minScore = 0.5
+
+        cmd.call()
+        repo.close()
+
+        assertThat(capturedQueries).hasSize(1)
+        assertThat(capturedQueries[0].minScore).isEqualTo(0.5)
+    }
 }

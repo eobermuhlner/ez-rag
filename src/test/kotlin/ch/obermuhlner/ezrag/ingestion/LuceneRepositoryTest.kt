@@ -116,6 +116,47 @@ class LuceneRepositoryTest {
         repo.close()
     }
 
+    @Test
+    fun `bm25Search scores are normalized to 0_0 to 1_0`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val repo = LuceneRepository.open(model, tempDir, "standard")
+
+        repo.add(listOf(
+            makeDoc("The quick brown fox jumps over the lazy dog", "doc1.txt"),
+            makeDoc("Pack my box with five dozen liquor jugs", "doc2.txt"),
+            makeDoc("How vexingly quick daft zebras jump", "doc3.txt"),
+        ))
+
+        val results = repo.bm25Search("fox", topK = 5)
+
+        assertThat(results).isNotEmpty()
+        for (doc in results) {
+            val score = doc.metadata["score"] as Double
+            assertThat(score).isBetween(0.0, 1.0)
+        }
+
+        repo.close()
+    }
+
+    @Test
+    fun `bm25Search top result has score 1_0`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val repo = LuceneRepository.open(model, tempDir, "standard")
+
+        repo.add(listOf(
+            makeDoc("The quick brown fox jumps over the lazy dog", "doc1.txt"),
+            makeDoc("Pack my box with five dozen liquor jugs", "doc2.txt"),
+        ))
+
+        val results = repo.bm25Search("fox", topK = 5)
+
+        assertThat(results).isNotEmpty()
+        val topScore = results[0].metadata["score"] as Double
+        assertThat(topScore).isEqualTo(1.0)
+
+        repo.close()
+    }
+
     // --- isAlreadyIngested ---
 
     @Test

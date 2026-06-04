@@ -229,9 +229,12 @@ class LuceneRepository private constructor(
                 return@withSearcher emptyList()
             }
             val hits = searcher.search(parsedQuery, topK)
+            if (hits.scoreDocs.isEmpty()) return@withSearcher emptyList()
+            val maxScore = hits.scoreDocs[0].score  // sorted descending; position 0 is max
             hits.scoreDocs.map { scoreDoc ->
                 val luceneDoc = searcher.storedFields().document(scoreDoc.doc)
-                luceneDocToSpringDoc(luceneDoc, scoreDoc.score.toDouble())
+                val normalizedScore = if (maxScore > 0f) scoreDoc.score / maxScore else 0.0
+                luceneDocToSpringDoc(luceneDoc, normalizedScore.toDouble())
             }
         }
     }

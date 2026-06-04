@@ -112,7 +112,7 @@ class SearchCommand(
             stdin
         }
 
-        val effectiveMinScore = if (resolvedMode == "bm25") 0.0 else minScore
+        val effectiveMinScore = minScore
 
         val searchQuery = SearchQuery(
             question = resolvedQuestion,

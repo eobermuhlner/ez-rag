@@ -14,6 +14,6 @@ open class BM25SearchPipeline(
             val content = doc.text ?: ""
             ChunkMatch(filePath = filePath, chunkIndex = chunkIndex, score = score, content = content)
         }
-        return SearchResult(chunks = chunks, mode = "bm25")
+        return SearchResult(chunks = chunks.filter { it.score >= query.minScore }, mode = "bm25")
     }
 }
