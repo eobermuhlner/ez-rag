@@ -48,7 +48,9 @@ dependencies {
     implementation("org.springframework.ai:spring-ai-ollama")
     implementation("org.springframework.ai:spring-ai-transformers")
     implementation("org.springframework.ai:spring-ai-vector-store")
-    implementation("org.apache.pdfbox:pdfbox:3.0.3")
+    implementation("org.apache.pdfbox:pdfbox:3.0.3") {
+        exclude(group = "commons-logging", module = "commons-logging")
+    }
     implementation("org.springframework.ai:spring-ai-starter-mcp-server")
     implementation("com.microsoft.onnxruntime:onnxruntime:1.19.2")
     implementation("ai.djl.huggingface:tokenizers:0.32.0")
