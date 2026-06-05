@@ -33,4 +33,19 @@ class PdfDocumentReaderTest {
             assertThat(doc.metadata).doesNotContainKey("source")
         }
     }
+
+    @Test
+    fun `a structured pdf produces at least one chunk with heading_title metadata`() {
+        val path = Paths.get(javaClass.getResource("/eval/complex-pdf/machine_learning.pdf")!!.toURI())
+        val file = path.toFile()
+
+        val reader = PdfDocumentReader(file, chunkSize = 1000, chunkOverlap = 200)
+        val documents = reader.read()
+
+        assertThat(documents).isNotEmpty()
+        assertThat(documents.any { doc ->
+            val title = doc.metadata["heading_title"]
+            title is String && title.isNotBlank()
+        }).isTrue()
+    }
 }

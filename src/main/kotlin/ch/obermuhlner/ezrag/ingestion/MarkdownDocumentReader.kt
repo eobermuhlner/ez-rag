@@ -4,18 +4,28 @@ import org.springframework.ai.document.Document
 import org.springframework.ai.transformer.splitter.TokenTextSplitter
 import java.io.File
 
-class MarkdownDocumentReader(
-    private val file: File,
-    private val chunkSize: Int = 1000,
-    private val chunkOverlap: Int = 200,
-) {
+class MarkdownDocumentReader {
+
+    private val content: String
+    private val chunkSize: Int
+    private val chunkOverlap: Int
+
+    constructor(file: File, chunkSize: Int = 1000, chunkOverlap: Int = 200) {
+        this.content = stripYamlFrontMatter(file.readText())
+        this.chunkSize = chunkSize
+        this.chunkOverlap = chunkOverlap
+    }
+
+    constructor(markdown: String, chunkSize: Int = 1000, chunkOverlap: Int = 200) {
+        this.content = stripYamlFrontMatter(markdown)
+        this.chunkSize = chunkSize
+        this.chunkOverlap = chunkOverlap
+    }
 
     private val headingRegex = Regex("""^(#{1,6})\s+(.+)$""")
-    private val sectionSplitter = SectionSplitter(chunkSize, chunkOverlap, TokenCounter::countTokens)
+    private val sectionSplitter by lazy { SectionSplitter(chunkSize, chunkOverlap, TokenCounter::countTokens) }
 
     fun read(): List<Document> {
-        val raw = file.readText()
-        val content = stripYamlFrontMatter(raw)
         val chunks = splitByHeadings(content)
         if (chunks.isEmpty()) {
             return fallbackTokenSplit(content)
@@ -26,7 +36,6 @@ class MarkdownDocumentReader(
     private fun splitByHeadings(content: String): List<Document> {
         val lines = content.lines()
 
-        // heading stack: list of Pair(level, title)
         val headingStack = mutableListOf<Pair<Int, String>>()
         val buffer = StringBuilder()
         val result = mutableListOf<Document>()
@@ -73,10 +82,8 @@ class MarkdownDocumentReader(
                 val level = match.groupValues[1].length
                 val title = match.groupValues[2].trim()
 
-                // Flush accumulated content with current stack
                 flushBuffer(headingStack.toList())
 
-                // Update heading stack: remove entries at same or deeper level
                 while (headingStack.isNotEmpty() && headingStack.last().first >= level) {
                     headingStack.removeLast()
                 }
@@ -86,12 +93,10 @@ class MarkdownDocumentReader(
             }
         }
 
-        // Flush remaining buffer
         if (hasHeadings) {
             flushBuffer(headingStack.toList())
         }
 
-        // If no headings were found, return empty list to trigger fallback
         if (!hasHeadings) {
             return emptyList()
         }
@@ -121,16 +126,18 @@ class MarkdownDocumentReader(
         }
     }
 
-    private fun stripYamlFrontMatter(content: String): String {
-        val trimmed = content.trimStart()
-        if (!trimmed.startsWith("---")) {
-            return content
+    companion object {
+        private fun stripYamlFrontMatter(content: String): String {
+            val trimmed = content.trimStart()
+            if (!trimmed.startsWith("---")) {
+                return content
+            }
+            val afterFirst = trimmed.removePrefix("---")
+            val closingIndex = afterFirst.indexOf("\n---")
+            if (closingIndex == -1) {
+                return content
+            }
+            return afterFirst.substring(closingIndex + 4).trimStart()
         }
-        val afterFirst = trimmed.removePrefix("---")
-        val closingIndex = afterFirst.indexOf("\n---")
-        if (closingIndex == -1) {
-            return content
-        }
-        return afterFirst.substring(closingIndex + 4).trimStart()
     }
 }

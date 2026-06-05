@@ -336,6 +336,60 @@ class MarkdownDocumentReaderTest {
         assertThat(sectionDocs[1].text).contains("After the rule.")
     }
 
+    // ── String-based constructor ──────────────────────────────────────────────
+
+    @Test
+    fun `string constructor with no headings produces at least one chunk without heading_title`() {
+        val markdown = "This is plain text with no headings. It has some content."
+
+        val reader = MarkdownDocumentReader(markdown, chunkSize = 1000, chunkOverlap = 200)
+        val documents = reader.read()
+
+        assertThat(documents).isNotEmpty()
+        documents.forEach { doc ->
+            assertThat(doc.metadata).doesNotContainKey("heading_title")
+        }
+    }
+
+    @Test
+    fun `string constructor with a heading produces a chunk with correct heading metadata`() {
+        val markdown = """
+            # My Section
+            This is the body of the section.
+        """.trimIndent()
+
+        val reader = MarkdownDocumentReader(markdown, chunkSize = 1000, chunkOverlap = 200)
+        val documents = reader.read()
+
+        val headingChunks = documents.filter { it.metadata.containsKey("heading_title") }
+        assertThat(headingChunks).hasSize(1)
+        assertThat(headingChunks[0].metadata["heading_title"]).isEqualTo("My Section")
+        assertThat(headingChunks[0].metadata["heading_level"]).isEqualTo(1)
+        @Suppress("UNCHECKED_CAST")
+        assertThat(headingChunks[0].metadata["heading_path"] as List<String>).containsExactly("My Section")
+        assertThat(headingChunks[0].text).startsWith("# My Section\n")
+    }
+
+    @Test
+    fun `string constructor with nested headings produces correct heading_path`() {
+        val markdown = """
+            # Parent
+            Parent content.
+
+            ## Child
+            Child content.
+        """.trimIndent()
+
+        val reader = MarkdownDocumentReader(markdown, chunkSize = 1000, chunkOverlap = 200)
+        val documents = reader.read()
+
+        val childChunk = documents.find { it.metadata["heading_title"] == "Child" }
+        assertThat(childChunk).isNotNull()
+        @Suppress("UNCHECKED_CAST")
+        val path = childChunk!!.metadata["heading_path"] as List<String>
+        assertThat(path).containsExactly("Parent", "Child")
+    }
+
     private fun makeFakeEmbeddingModel(): EmbeddingModel = object : EmbeddingModel {
         override fun call(request: EmbeddingRequest): EmbeddingResponse {
             val embeddings = request.instructions.mapIndexed { idx, _ ->
