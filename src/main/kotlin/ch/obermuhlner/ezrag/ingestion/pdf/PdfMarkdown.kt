@@ -14,6 +14,25 @@ object PdfMarkdown {
         return DeterministicMarkdownConverter.convertDocument(pageElements, modeFontSize, options)
             .joinToString("\n\n")
     }
+
+    fun toXml(file: File, maxPages: Int = Int.MAX_VALUE): String {
+        val (pageElements, _) = extractFilteredPageElements(file, maxPages)
+        val sb = StringBuilder()
+        sb.appendLine("<document>")
+        pageElements.forEachIndexed { index, elements ->
+            sb.appendLine("  <page number=\"${index + 1}\">")
+            for (el in elements) {
+                val text = el.text
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                sb.appendLine("    <element x=\"${el.x}\" y=\"${el.y}\" endX=\"${el.endX}\" fontSize=\"${el.fontSize}\" font=\"${el.font}\">$text</element>")
+            }
+            sb.appendLine("  </page>")
+        }
+        sb.append("</document>")
+        return sb.toString()
+    }
 }
 
 internal fun extractFilteredPageElements(

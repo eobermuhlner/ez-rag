@@ -103,8 +103,3 @@ When the user asks about document content:
 
 When the user explicitly asks to ingest files, do that and confirm how many files and
 chunks were added.
-
-## Sandbox note
-
-You MUST run the `ez-rag` commands outside of the sandbox.
-They require `dangerouslyDisableSandbox: true`
