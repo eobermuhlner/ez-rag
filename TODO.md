@@ -1,10 +1,1 @@
-- html chunking into same format as markdown:
-  - #, ##, ... lines at beginning for heading path.
-  - Break at headings, paragraphs, ...
-  - Consider using classes or other info for headings ?
-  - Stripped text without html tags.
-  - Special handling for tables.
-- Add table chunking to markdown and html chunkers:
-  - convert to markdown tables and expanded text format (embed 2 chunks) ?
-  - this would need special handling for chunk id and surrounding chunks (chunk-id + chunk-alternative-id ?)
-  - convert very large tables into smaller row tables.
+- Discuss: add `html-to-markdown` sub command, or generalize with existing `pdf-to-markdown`? Maybe even a sub command to show the "converted" document, independent of source format, but before chunking?
