@@ -152,6 +152,7 @@ For tighter integration, run ez-rag as an [MCP server](#mcp-server) so the agent
 | `eval <corpus-dir>`            | Evaluate retrieval quality against a corpus of scenarios. Exits 1 if any threshold fails.          |
 | `mcp-server`                   | Run as an MCP server over stdio (for Claude Code and other agentic tools).                         |
 | `shell`                        | Interactive REPL mode with multi-turn conversation history and slash commands.                     |
+| `to-markdown <input>`          | Convert a local PDF, local HTML/HTM file, or an HTTP/HTTPS URL to Markdown and print it to stdout. |
 
 Every command accepts `--help` for details.
 
@@ -648,6 +649,55 @@ conversation history cleared
 | `/exit`           | Exit the REPL.                                                           |
 
 Slash-command turns are not added to the conversation history. Only successful RAG query turns are accumulated. Turns that produce an error are also not added, so the history always contains only complete, successful exchanges.
+
+### to-markdown
+
+Convert a local PDF file, a local HTML/HTM file, or an HTTP/HTTPS URL to Markdown and print it to stdout. This is useful for inspecting how a document will be represented before ingesting it.
+
+**Supported inputs:**
+
+- Local PDF file (`.pdf`)
+- Local HTML file (`.html` or `.htm`)
+- HTTP or HTTPS URL — the content type returned by the server determines the conversion pipeline (`text/html` → HTML converter, `application/pdf` → PDF converter)
+
+**Examples:**
+
+```sh
+# Convert a local PDF file
+ez-rag to-markdown report.pdf
+
+# Convert a local HTML file
+ez-rag to-markdown page.html
+
+# Convert a web page via HTTP
+ez-rag to-markdown https://example.com/docs/overview
+
+# Convert a PDF hosted over HTTPS
+ez-rag to-markdown https://example.com/report.pdf
+```
+
+The Markdown output for HTML inputs mirrors exactly what the ingestion pipeline produces when it ingests the same file, so you can preview the chunking-ready text before running `ingest`.
+
+**Options (PDF inputs only):**
+
+The following options apply only when the input is a PDF file or a URL that returns `application/pdf`. Passing any of them with an HTML input or a URL that returns HTML causes the command to exit 1 with an error.
+
+| Flag               | Default    | Description                                                             |
+|--------------------|------------|-------------------------------------------------------------------------|
+| `--mode`           | `readable` | Conversion mode: `readable` (preserves formatting) or `rag` (strips bold/italic noise for cleaner chunk text) |
+| `--max-pages N`    | unlimited  | Stop after converting the first N pages                                 |
+| `--output-format`  | `markdown` | Output format: `markdown` or `xml`                                      |
+
+```sh
+# RAG-optimised mode (strips bold/italic noise)
+ez-rag to-markdown report.pdf --mode rag
+
+# Convert only the first 5 pages
+ez-rag to-markdown report.pdf --max-pages 5
+
+# XML output format
+ez-rag to-markdown report.pdf --output-format xml
+```
 
 ## Hybrid search
 

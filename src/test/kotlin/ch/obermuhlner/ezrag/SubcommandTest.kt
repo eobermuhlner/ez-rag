@@ -27,12 +27,13 @@ class SubcommandTest {
         assertThat(output).contains("shell")
         assertThat(output).contains("eval")
         assertThat(output).contains("help")
-        assertThat(output).contains("pdf-to-markdown")
+        assertThat(output).contains("to-markdown")
+        assertThat(output).doesNotContain("pdf-to-markdown")
     }
 
     @Test
-    fun `pdf-to-markdown help exits 0`() {
-        val exitCode = commandLine.execute("pdf-to-markdown", "--help")
+    fun `to-markdown help exits 0`() {
+        val exitCode = commandLine.execute("to-markdown", "--help")
         assertThat(exitCode).isEqualTo(0)
     }
 

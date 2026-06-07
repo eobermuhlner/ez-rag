@@ -1,7 +1,7 @@
 package ch.obermuhlner.ezrag
 
 import ch.obermuhlner.ezrag.command.ChunkCommand
-import ch.obermuhlner.ezrag.command.PdfToMarkdownCommand
+import ch.obermuhlner.ezrag.command.ToMarkdownCommand
 import ch.obermuhlner.ezrag.command.DeleteCommand
 import ch.obermuhlner.ezrag.command.EvalCommand
 import ch.obermuhlner.ezrag.command.DownloadEvalCorpusCommand
@@ -47,7 +47,7 @@ import java.util.concurrent.Callable
         ShellCommand::class,
         EvalCommand::class,
         DownloadEvalCorpusCommand::class,
-        PdfToMarkdownCommand::class,
+        ToMarkdownCommand::class,
         HelpCommand::class,
     ]
 )
