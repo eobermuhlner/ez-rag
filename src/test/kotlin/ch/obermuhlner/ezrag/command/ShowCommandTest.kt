@@ -10,6 +10,7 @@ import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
+import picocli.CommandLine
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.nio.file.Path
@@ -74,6 +75,46 @@ class ShowCommandTest {
                 .build()
             repo.add(listOf(doc))
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Picocli-level flag tests: --output-format accepted, --output rejected
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--output-format json is accepted by picocli parser for ShowCommand`(@TempDir tempDir: Path) {
+        val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
+        ingestChunks(tempDir, filePath, listOf("Hello world"))
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = ShowCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--output-format", "json", filePath)
+        assertThat(exitCode).isNotEqualTo(CommandLine.ExitCode.USAGE)
+    }
+
+    @Test
+    fun `--output json is rejected by picocli parser for ShowCommand`(@TempDir tempDir: Path) {
+        val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
+        ingestChunks(tempDir, filePath, listOf("Hello world"))
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = ShowCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--output", "json", filePath)
+        assertThat(exitCode).isEqualTo(CommandLine.ExitCode.USAGE)
     }
 
     @Test

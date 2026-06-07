@@ -65,7 +65,7 @@ class SearchCommand(
     @Option(names = ["--store-dir"], description = ["Path to the store directory."])
     var storeDirOption: String? = null
 
-    @Option(names = ["--output"], description = ["Output format: text (default), json, or xml."])
+    @Option(names = ["--output-format"], description = ["Output format: text (default), json, or xml."])
     var outputFormat: String = "text"
 
     @Option(names = ["--mode"], description = ["Search mode: embedding, bm25, or hybrid (default from config)."])

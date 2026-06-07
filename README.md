@@ -1,6 +1,35 @@
 # ez-rag
 
-A command-line tool for RAG (retrieval-augmented generation). Ingest documents into a local vector store, then query them using any supported LLM provider.
+ez-rag is a command-line tool optimized for agentic coding workflows that lets you ingest local documents into a searchable knowledge base and query them using any supported LLM provider. RAG (retrieval-augmented generation) means the tool first retrieves the most relevant text chunks from your documents, then optionally passes those chunks to an LLM to generate a grounded answer.
+
+## Table of contents
+
+- [Introduction](#introduction)
+  - [Requirements](#requirements)
+  - [Build and install](#build-and-install)
+  - [Quick start](#quick-start)
+  - [Keeping the store up to date](#keeping-the-store-up-to-date)
+- [Basic](#basic)
+  - [Commands](#commands)
+  - [Hybrid search](#hybrid-search)
+  - [Search-specific flags](#search-specific-flags)
+  - [Global flags](#global-flags)
+- [Configuration](#configuration)
+  - [Providers](#providers)
+  - [API keys](#api-keys)
+  - [Configuration file](#configuration-file)
+  - [Store](#store)
+  - [RAG settings](#rag-settings)
+- [Agentic Coding Tools](#agentic-coding-tools)
+  - [Using ez-rag with agentic coding tools](#using-ez-rag-with-agentic-coding-tools)
+- [Advanced](#advanced)
+  - [Reranking](#reranking)
+  - [Output format](#output-format)
+  - [MCP Server](#mcp-server)
+  - [eval](#eval)
+- [Contributing](#contributing)
+
+## Introduction
 
 ## Requirements
 
@@ -41,14 +70,21 @@ This creates `build/install/ez-rag/lib/ez-rag.jsa` which the start scripts use a
 No configuration needed — works out of the box:
 
 ```sh
-# Ingest a directory of documents (downloads embedding model on first run)
-ez-rag ingest ./docs
+# Ingest a single file (downloads embedding model on first run)
+# Supported file types: .txt, .pdf, .md, .html / .htm
+ez-rag ingest README.md
 
-# Retrieve relevant chunks (passthrough mode: no LLM required)
-ez-rag query "What is the project's license?"
+# Ingest a webpage
+ez-rag ingest https://en.wikipedia.org/wiki/Retrieval-augmented_generation
+
+# search returns raw chunks (no LLM required)
+ez-rag search "What is retrieval-augmented generation?"
+
+# query passes those chunks to an LLM and returns a generated answer
+ez-rag query "What is retrieval-augmented generation?"
 
 # Multi-word questions can be passed without quotes
-ez-rag query What is the project license?
+ez-rag query What is retrieval-augmented generation?
 ```
 
 To get LLM-generated answers, specify a provider:
@@ -77,62 +113,24 @@ ez-rag query --provider onnx "What are the main features?"
 echo "What is X?" | ez-rag search
 ```
 
-## Using ez-rag with agentic coding tools
+## Keeping the store up to date
 
-One of the primary use cases for ez-rag is giving agentic coding tools a local document knowledge base. Index your docs once; the agent answers questions from them without you having to paste file contents into the chat.
-
-Any agent that can run shell commands can use ez-rag directly. For agents with a skill/instruction system — such as Claude Code — drop the skill file from this repository into the agent's skill directory and it will follow the full retrieve-and-synthesize workflow automatically.
-
-### Installing the skill
-
-Run `install-skill` from your project directory after `init`:
+After editing or adding documents, use `list` to see which files are stale and `reingest` to refresh them:
 
 ```sh
-ez-rag install-skill
+# Show all ingested documents; files modified since ingest are flagged [STALE]
+ez-rag list
+
+# Re-ingest only the stale documents
+ez-rag reingest
+
+# Or force re-ingest of every document in the store
+ez-rag reingest --all
 ```
 
-The command auto-detects which agentic coding tools are present (Claude Code, OpenCode, or a generic fallback) and installs the skill to the correct location for each. You can also do it in one step:
+A document is marked `[STALE]` when its filesystem mtime has changed since the last ingest. `reingest` updates only the stale entries by default, so unchanged documents are never re-processed unnecessarily.
 
-```sh
-ez-rag init --install-skill
-```
-
-Or force a specific tool:
-
-```sh
-ez-rag install-skill --tool claude-code
-```
-
-Install globally (available in every project):
-
-```sh
-ez-rag install-skill --global
-```
-
-Once installed, trigger it with natural-language requests:
-
-- "Ingest the `docs/` folder"
-- "What does the architecture doc say about connection pooling?"
-- "Search the knowledge base for retry configuration"
-- "What do the docs say about authentication?"
-
-### How the workflow works
-
-When asked a document question, the agent runs:
-
-1. **Check the store** — `ez-rag list` shows which files are indexed and flags any that have changed on disk since ingest (`[STALE]`).
-2. **Ingest or refresh** — `ez-rag ingest <path>` for new files; `ez-rag reingest` to refresh stale ones.
-3. **Search with multiple phrasings** — `ez-rag search <question>` returns the most relevant chunks using hybrid BM25 + embedding search. Running 2–3 different phrasings often surfaces different chunks, especially when scores are flat.
-4. **Load surrounding context** — `ez-rag chunk <file> <chunkIndex> --window 1` retrieves adjacent chunks when a result is too short or references content that continues in a neighbouring chunk.
-5. **Synthesize** — the agent reads the chunks and answers in its own words, citing which file each piece of information came from.
-
-No API key is required: search uses a local embedding model by default and involves no LLM call.
-
-### Alternative: MCP server
-
-For tighter integration, run ez-rag as an [MCP server](#mcp-server) so the agent calls it as a structured tool rather than shell commands — useful when you want to expose the knowledge base to multiple agents or control it from a custom host.
-
----
+## Basic
 
 ## Commands
 
@@ -140,17 +138,15 @@ For tighter integration, run ez-rag as an [MCP server](#mcp-server) so the agent
 |--------------------------------|----------------------------------------------------------------------------------------------------|
 | `init`                         | Initialize a `.ez-rag/` workspace in the current directory and add the store to `.gitignore`.      |
 | `install-skill`                | Install the ez-rag skill for your AI coding tool. Auto-detects Claude Code, OpenCode, or falls back to generic. |
-| `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`. Prints each file as it is ingested. |
+| `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`, `.html`/`.htm`. Prints each file as it is ingested. |
 | `delete <file> [<file>...]`    | Remove one or more ingested documents from the vector store without touching other content.        |
 | `list`                         | List all ingested documents with chunk counts and staleness flags. Use `--output-format json` for machine-readable output with absolute paths. |
+| `reingest`                     | Re-ingest all stale documents (mtime changed since last ingest). Use `--all` to force re-ingest of every document. |
 | `show <file>`                  | Show per-chunk metadata (and optionally raw text) for an ingested file. Useful for debugging retrieval. |
 | `chunk <file> <index>`         | Retrieve a specific chunk by file path and chunk index. Use `--window N` to also fetch the N surrounding chunks. |
-| `query [<word>...]`            | Retrieve relevant chunks and answer using an LLM. Reads question from positional args or stdin.    |
 | `status`                       | Show store health, aggregate counts, active configuration, and credential status.                  |
 | `search [<word>...]`           | Search returning raw chunks without LLM involvement. Defaults to hybrid (BM25 + embedding) mode; override with `--mode`. Reads question from positional args or stdin. |
-| `reingest`                     | Re-ingest all stale documents (mtime changed since last ingest). Use `--all` to force re-ingest of every document. |
-| `eval <corpus-dir>`            | Evaluate retrieval quality against a corpus of scenarios. Exits 1 if any threshold fails.          |
-| `mcp-server`                   | Run as an MCP server over stdio (for Claude Code and other agentic tools).                         |
+| `query [<word>...]`            | Retrieve relevant chunks and answer using an LLM. Reads question from positional args or stdin.    |
 | `shell`                        | Interactive REPL mode with multi-turn conversation history and slash commands.                     |
 | `to-markdown <input>`          | Convert a local PDF, local HTML/HTM file, or an HTTP/HTTPS URL to Markdown and print it to stdout. |
 
@@ -220,6 +216,14 @@ ez-rag install-skill --global --tool claude-code
 ez-rag install-skill --tool claude-code --tool opencode
 ```
 
+### ingest
+
+Ingest files or directories into the vector store. Supported file types: `.txt`, `.pdf`, `.md`, `.html`/`.htm`.
+
+```sh
+ez-rag ingest ./docs
+```
+
 ## Ingest-specific flags
 
 | Flag             | Description                                                                                   |
@@ -287,103 +291,6 @@ Warning: not found in store: /absolute/path/to/docs/old-guide.md
 | `--quiet` / `-q` | Suppress output on success; warnings are still printed. |
 
 After deletion, running `ez-rag ingest` on the same file re-ingests it normally.
-
-### show
-
-Inspect how an ingested file was chunked, including per-chunk metadata:
-
-```sh
-ez-rag show docs/getting-started.md
-```
-
-Output:
-```
-File: /absolute/path/to/docs/getting-started.md
-Chunks: 3
-
-Chunk 1 — 842 chars, mtime: 1716000000000
-Chunk 2 — 1021 chars, mtime: 1716000000000
-Chunk 3 — 634 chars, mtime: 1716000000000
-```
-
-Pass `--chunks` to also print the raw text of each chunk beneath its metadata line:
-
-```sh
-ez-rag show --chunks docs/getting-started.md
-```
-
-Pass `--output json` for machine-readable output suitable for scripting with `jq`:
-
-```sh
-ez-rag show --output json docs/getting-started.md
-```
-
-JSON output:
-```json
-{
-  "file": "/absolute/path/to/docs/getting-started.md",
-  "chunks": [
-    { "chunkIndex": 0, "charCount": 842, "mtime": 1716000000000 },
-    { "chunkIndex": 1, "charCount": 1021, "mtime": 1716000000000 },
-    { "chunkIndex": 2, "charCount": 634, "mtime": 1716000000000 }
-  ]
-}
-```
-
-Combine `--output json --chunks` to include the raw `text` field in each chunk object.
-
-If the file was never ingested, `show` exits with a non-zero code and prints an error to stderr.
-
-| Flag            | Description                                               |
-|-----------------|-----------------------------------------------------------|
-| `--chunks`      | Include raw chunk text in output.                         |
-| `--output`      | Output format: `text` (default) or `json`.                |
-
-### chunk
-
-Retrieve a specific chunk by its file path and chunk index. Chunk indices are the `chunkIndex` values returned by `search` and `show`.
-
-```sh
-ez-rag chunk docs/getting-started.md 2
-```
-
-Output:
-```
-Chunk 2
-  This is the text of the third chunk in the file.
-```
-
-Use `--window N` to also fetch the N chunks before and after the target. The window silently clamps at file boundaries, so `--window 1` on chunk 0 returns only chunks 0 and 1.
-
-```sh
-ez-rag chunk docs/getting-started.md 2 --window 1
-```
-
-Pass `--output json` for machine-readable output:
-
-```sh
-ez-rag chunk docs/getting-started.md 2 --output json
-```
-
-JSON output:
-```json
-{
-  "file": "/absolute/path/to/docs/getting-started.md",
-  "chunks": [
-    { "chunkIndex": 2, "text": "This is the text of the third chunk in the file." }
-  ]
-}
-```
-
-When the chunk carries heading metadata (e.g. from a Markdown file), the JSON output includes `headingTitle`, `headingLevel`, and `headingPath` fields. These fields are omitted entirely when no heading metadata is present.
-
-If the file was never ingested, or if the exact chunk index is not found in the store, the command exits with code 1 and prints an error to stderr.
-
-| Flag            | Description                                                             |
-|-----------------|-------------------------------------------------------------------------|
-| `--window N`    | Also retrieve the N chunks before and after the target (default `0`).   |
-| `--output`      | Output format: `text` (default) or `json`.                              |
-| `--store-dir`   | Path to the store directory (same precedence as `search` and `show`).   |
 
 ### list
 
@@ -472,6 +379,103 @@ ez-rag reingest --quiet
 | `--chunk-overlap N`  | `200`   | Overlap between consecutive chunks                             |
 | `--store-dir <path>` | auto    | Target a specific store directory instead of the auto-resolved one |
 
+### show
+
+Inspect how an ingested file was chunked, including per-chunk metadata:
+
+```sh
+ez-rag show docs/getting-started.md
+```
+
+Output:
+```
+File: /absolute/path/to/docs/getting-started.md
+Chunks: 3
+
+Chunk 1 — 842 chars, mtime: 1716000000000
+Chunk 2 — 1021 chars, mtime: 1716000000000
+Chunk 3 — 634 chars, mtime: 1716000000000
+```
+
+Pass `--chunks` to also print the raw text of each chunk beneath its metadata line:
+
+```sh
+ez-rag show --chunks docs/getting-started.md
+```
+
+Pass `--output-format json` for machine-readable output suitable for scripting with `jq`:
+
+```sh
+ez-rag show --output-format json docs/getting-started.md
+```
+
+JSON output:
+```json
+{
+  "file": "/absolute/path/to/docs/getting-started.md",
+  "chunks": [
+    { "chunkIndex": 0, "charCount": 842, "mtime": 1716000000000 },
+    { "chunkIndex": 1, "charCount": 1021, "mtime": 1716000000000 },
+    { "chunkIndex": 2, "charCount": 634, "mtime": 1716000000000 }
+  ]
+}
+```
+
+Combine `--output-format json --chunks` to include the raw `text` field in each chunk object.
+
+If the file was never ingested, `show` exits with a non-zero code and prints an error to stderr.
+
+| Flag              | Description                                               |
+|-------------------|-----------------------------------------------------------|
+| `--chunks`        | Include raw chunk text in output.                         |
+| `--output-format` | Output format: `text` (default) or `json`.                |
+
+### chunk
+
+Retrieve a specific chunk by its file path and chunk index. Chunk indices are the `chunkIndex` values returned by `search` and `show`.
+
+```sh
+ez-rag chunk docs/getting-started.md 2
+```
+
+Output:
+```
+Chunk 2
+  This is the text of the third chunk in the file.
+```
+
+Use `--window N` to also fetch the N chunks before and after the target. The window silently clamps at file boundaries, so `--window 1` on chunk 0 returns only chunks 0 and 1.
+
+```sh
+ez-rag chunk docs/getting-started.md 2 --window 1
+```
+
+Pass `--output-format json` for machine-readable output:
+
+```sh
+ez-rag chunk docs/getting-started.md 2 --output-format json
+```
+
+JSON output:
+```json
+{
+  "file": "/absolute/path/to/docs/getting-started.md",
+  "chunks": [
+    { "chunkIndex": 2, "text": "This is the text of the third chunk in the file." }
+  ]
+}
+```
+
+When the chunk carries heading metadata (e.g. from a Markdown file), the JSON output includes `headingTitle`, `headingLevel`, and `headingPath` fields. These fields are omitted entirely when no heading metadata is present.
+
+If the file was never ingested, or if the exact chunk index is not found in the store, the command exits with code 1 and prints an error to stderr.
+
+| Flag              | Description                                                             |
+|-------------------|-------------------------------------------------------------------------|
+| `--window N`      | Also retrieve the N chunks before and after the target (default `0`).   |
+| `--output-format` | Output format: `text` (default) or `json`.                              |
+| `--store-dir`     | Path to the store directory (same precedence as `search` and `show`).   |
+
 ### status
 
 Show store health, aggregate counts, and active configuration:
@@ -513,105 +517,21 @@ ez-rag status --output-format json
 |---------------------|---------------------------------------------------------|
 | `--output-format`   | Output format: `text` (default) or `json`.              |
 
-### eval
+### search
 
-Evaluate retrieval quality against a corpus of scenarios:
-
-```sh
-ez-rag eval ./my-corpus
-```
-
-Output:
-```
-Scenario          Questions  Recall@3  MRR     Hit@3   Status
-─────────────────────────────────────────────────────────────
-factual           16         0.94      0.63    0.94    PASS
-hard-negatives    12         1.00      0.88    1.00    PASS
-  hard-negative              1.00      0.75    1.00
-multi-chunk       14         0.93      0.63    0.93    PASS
-─────────────────────────────────────────────────────────────
-Overall           42         0.96      0.71    0.96
-```
-
-How to read the numbers:
-
-- **Recall@3** ranges from 0.0 to 1.0. `0.94` means 94 % of questions had their expected chunk somewhere in the top 3 results; `1.00` means every question's answer was found. A value below 1.0 means some questions missed entirely — no amount of re-ranking can fix that.
-- **MRR** also ranges from 0.0 to 1.0, but penalises answers that appear at rank 2 or 3. `1.00` would mean every answer appeared at rank 1. `0.63` means relevant chunks are typically found at rank 1–2 but not always first. The gap between Recall@3 and MRR is the key signal: `hard-negatives` has Recall@3 `1.00` but MRR `0.88`, meaning all answers are found but some land at rank 2 or 3 rather than rank 1.
-- **Hit@3** equals Recall@3 in these examples because each question has a single expected source. It would diverge only if a question listed multiple expected sources (Hit@3 is binary; Recall@3 gives partial credit).
-
-How to read the rows:
-
-- Each scenario row covers **all questions** in that scenario directory, regardless of document role.
-- The indented `hard-negative` sub-row covers only the **subset of questions whose expected source is a hard-negative document**. It has no Questions count (it is a subset, not an independent scenario) and no Status (thresholds apply to the scenario as a whole, not the subset).
-- `Overall` averages the per-scenario metrics weighted equally across scenarios, not questions.
-- `Status` is `PASS` when all configured thresholds are met, `FAIL (<metric> < <threshold>)` for the first failing metric, or blank when no thresholds are defined.
-
-Exit code is `0` when all thresholds pass (or no thresholds are defined), `1` when any threshold fails. This makes `eval` suitable for use in CI pipelines.
-
-Pass `--format json` for machine-readable output:
+Search returning raw chunks without LLM involvement. `search` returns the most relevant raw chunks from your documents — no LLM is called, no answer is generated.
 
 ```sh
-ez-rag eval --format json ./my-corpus
+ez-rag search "What is the chunk size?"
 ```
 
-| Flag       | Description                               |
-|------------|-------------------------------------------|
-| `--format` | Output format: `text` (default) or `json`.|
+### query
 
-#### Corpus format
+Retrieve relevant chunks and pass them to an LLM to generate an answer. Unlike `search`, which returns raw chunks, `query` synthesizes a natural-language answer from the retrieved context.
 
-A corpus is a directory containing one or more scenario subdirectories. Each subdirectory must contain a `questions.yaml` file and the document files it references.
-
+```sh
+ez-rag query "What is the chunk size?"
 ```
-my-corpus/
-  factual/
-    questions.yaml
-    planets.txt
-    capitals.txt
-    elements.txt
-    cooking_distractor.txt
-```
-
-`questions.yaml` format:
-
-```yaml
-documents:
-  - file: planets.txt
-    role: relevant          # relevant | distractor | hard-negative
-  - file: capitals.txt
-    role: relevant
-  - file: cooking_distractor.txt
-    role: distractor        # included in the store but not an expected source
-
-questions:
-  - id: q1
-    question: "What is the capital of France?"
-    expected_sources: ["capitals.txt"]
-  - id: q2
-    question: "What is the largest planet in the solar system?"
-    expected_sources: ["planets.txt"]
-
-thresholds:               # optional; eval exits 1 if any threshold is missed
-  recall_at_k: 0.9
-  mrr: 0.8
-  hit_rate_at_k: 0.9
-```
-
-**Document roles:**
-
-| Role            | Description                                                                                         |
-|-----------------|-----------------------------------------------------------------------------------------------------|
-| `relevant`      | Contains answer content; retrieved chunks from these files count as hits.                           |
-| `distractor`    | Ingested into the store but not expected as a source; tests that irrelevant content is not returned. |
-| `hard-negative` | Similar to the query topics but does not contain the answer; the hardest kind of distractor. Hard-negative metrics are reported separately as an indented sub-row. |
-
-**Metrics:**
-
-| Metric       | Description                                                                                                           |
-|--------------|-----------------------------------------------------------------------------------------------------------------------|
-| `Recall@3`   | Fraction of questions for which the expected chunk appears anywhere in the top 3 results. The primary pass/fail metric. |
-| `MRR`        | Mean Reciprocal Rank. For each question, the score is 1/rank of the first relevant result (1.0 if rank 1, 0.5 if rank 2, 0.33 if rank 3, 0 if not found). Averaged across all questions. Sensitive to ordering — a high MRR means relevant chunks tend to appear first. |
-| `Hit@3`      | Same as Recall@3 when each question has a single expected source. Differs when a question has multiple expected sources: Recall@3 counts partial credit, Hit@3 is binary (1 if any expected source is found, 0 otherwise). |
 
 ### shell
 
@@ -741,12 +661,12 @@ analyzer: english
 
 ## Search-specific flags
 
-| Flag            | Default    | Description                                                          |
-|-----------------|------------|----------------------------------------------------------------------|
-| `--mode`        | `hybrid`   | Search mode: `hybrid` (BM25 + embedding), `bm25`, or `embedding`    |
-| `--top-k N`     | `5`        | Maximum number of chunks to return                                   |
-| `--min-score T` | `0.0`      | Minimum similarity score; lower-scoring chunks are filtered out      |
-| `--output`      | `text`     | Output format: `text`, `json`, or `xml`                              |
+| Flag              | Default    | Description                                                          |
+|-------------------|------------|----------------------------------------------------------------------|
+| `--mode`          | `hybrid`   | Search mode: `hybrid` (BM25 + embedding), `bm25`, or `embedding`    |
+| `--top-k N`       | `5`        | Maximum number of chunks to return                                   |
+| `--min-score T`   | `0.0`      | Minimum similarity score; lower-scoring chunks are filtered out      |
+| `--output-format` | `text`     | Output format: `text`, `json`, or `xml`                              |
 
 ## Global flags
 
@@ -765,6 +685,8 @@ These flags apply to all subcommands:
 | `--analyzer`              | `standard`               | Lucene analyzer for BM25: `standard` or `english` (enables stemming) |
 | `--verbose` / `-v`        | off                      | Enable debug logging; for `query`, also prints each source file path, similarity score, and chunk index to stderr. When reranking is active also prints reranker name and candidate pool size. |
 | `--stack-trace`           | off                      | Print the full Java stack trace when an error occurs. Useful for diagnosing unexpected failures. |
+
+## Configuration
 
 ## Providers
 
@@ -857,7 +779,7 @@ Persistent defaults can be set in `~/.ez-rag/config.yml` so you do not have to r
 #system-prompt: ""
 #output-format: text
 #verbose: false
-rerank-model: cross-encoder/ms-marco-MiniLM-L-6-v2   # default: cross-encoder/ms-marco-MiniLM-L-6-v2 (reranking enabled by default)
+#rerank-model: cross-encoder/ms-marco-MiniLM-L-6-v2   # default: cross-encoder/ms-marco-MiniLM-L-6-v2 (reranking enabled by default)
 #rerank-candidates: 15   # default: topK * 3 when rerank-model is set
 #search-mode: hybrid      # default: hybrid (options: hybrid, bm25, embedding)
 #analyzer: standard       # default: standard (options: standard, english, …)
@@ -886,7 +808,62 @@ The store is populated automatically by `ingest` and kept in sync by `delete`. T
 | `top-k`         | 5                     | Number of chunks retrieved per query |
 | `system-prompt` | built-in RAG template | Override the LLM system prompt       |
 
-## Reranking
+## Agentic Coding Tools
+
+## Using ez-rag with agentic coding tools
+
+One of the primary use cases for ez-rag is giving agentic coding tools a local document knowledge base. Index your docs once; the agent answers questions from them without you having to paste file contents into the chat.
+
+Any agent that can run shell commands can use ez-rag directly. For agents with a skill/instruction system — such as Claude Code — drop the skill file from this repository into the agent's skill directory and it will follow the full retrieve-and-synthesize workflow automatically.
+
+### Installing the skill
+
+Run `install-skill` from your project directory after `init`:
+
+```sh
+ez-rag install-skill
+```
+
+The command auto-detects which agentic coding tools are present (Claude Code, OpenCode, or a generic fallback) and installs the skill to the correct location for each. You can also do it in one step:
+
+```sh
+ez-rag init --install-skill
+```
+
+Or force a specific tool:
+
+```sh
+ez-rag install-skill --tool claude-code
+```
+
+Install globally (available in every project):
+
+```sh
+ez-rag install-skill --global
+```
+
+Once installed, trigger it with natural-language requests:
+
+- "Ingest the `docs/` folder"
+- "What does the architecture doc say about connection pooling?"
+- "Search the knowledge base for retry configuration"
+- "What do the docs say about authentication?"
+
+### How the workflow works
+
+When asked a document question, the agent runs:
+
+1. **Check the store** — `ez-rag list` shows which files are indexed and flags any that have changed on disk since ingest (`[STALE]`).
+2. **Ingest or refresh** — `ez-rag ingest <path>` for new files; `ez-rag reingest` to refresh stale ones.
+3. **Search with multiple phrasings** — `ez-rag search <question>` returns the most relevant chunks using hybrid BM25 + embedding search. Running 2–3 different phrasings often surfaces different chunks, especially when scores are flat.
+4. **Load surrounding context** — `ez-rag chunk <file> <chunkIndex> --window 1` retrieves adjacent chunks when a result is too short or references content that continues in a neighbouring chunk.
+5. **Synthesize** — the agent reads the chunks and answers in its own words, citing which file each piece of information came from.
+
+No API key is required: search uses a local embedding model by default and involves no LLM call.
+
+## Advanced
+
+### Reranking
 
 Reranking is an optional second-pass stage that improves result quality. After the initial vector similarity search retrieves a larger pool of candidate chunks, a cross-encoder model re-scores each candidate by jointly encoding the query and chunk text together. The final result set is the top `topK` chunks ordered by the cross-encoder's relevance score.
 
@@ -912,7 +889,7 @@ To use a different model, override the default:
 ez-rag search --rerank-model my-custom/cross-encoder "What is X?"
 ```
 
-### How it works
+#### How it works
 
 When reranking is active, the pipeline fetches `rerankCandidates` chunks from the vector store (default: `topK * 3`) instead of just `topK`. The reranker then scores all candidates and the top `topK` are returned. The `score` field in results reflects the cross-encoder relevance score, not the original embedding similarity score.
 
@@ -924,7 +901,7 @@ ez-rag search "What is X?"
 ez-rag search --rerank-candidates 20 "What is X?"
 ```
 
-### Reranking flags and config keys
+#### Reranking flags and config keys
 
 | Source          | Key / Flag               | Description                                                             |
 |-----------------|--------------------------|-------------------------------------------------------------------------|
@@ -935,11 +912,11 @@ ez-rag search --rerank-candidates 20 "What is X?"
 | Config file     | `rerank-model`           | Same as `--rerank-model`                                                |
 | Config file     | `rerank-candidates`      | Same as `--rerank-candidates`                                           |
 
-### Recommended model
+#### Recommended model
 
 `cross-encoder/ms-marco-MiniLM-L-6-v2` is a 6-layer MiniLM model fine-tuned on MS MARCO passage ranking. It runs entirely on CPU (no GPU required), is fast enough for interactive use (sub-second for up to 25 candidates), and requires no API key.
 
-### Verbose output
+#### Verbose output
 
 Pass `--verbose` to see reranking diagnostics on stderr:
 
@@ -948,11 +925,11 @@ Reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
 Reranking: 15 candidates → top 5
 ```
 
-## Output format
+### Output format
 
-### search output formats
+#### search output formats
 
-`search` supports three output formats via `--output`:
+`search` supports three output formats via `--output-format`:
 
 **`text` (default)** — human-readable, one block per chunk:
 
@@ -995,19 +972,19 @@ The `source` attribute (and the `source` key in JSON) holds the file path or URL
 
 ```sh
 # Pipe XML output into another tool
-ez-rag search --output xml "connection timeout configuration"
+ez-rag search --output-format xml "connection timeout configuration"
 
 # JSON output for scripting with jq
-ez-rag search --output json "retry policy" | jq '.chunks[].source'
+ez-rag search --output-format json "retry policy" | jq '.chunks[].source'
 ```
 
-## MCP Server
+### MCP Server
 
 `ez-rag mcp-server` starts a long-running MCP server that communicates over stdio using the MCP protocol. Claude Code and any other MCP-compatible agentic tool can call `ingest`, `query`, `search`, and `status` as structured tools without parsing CLI text output.
 
 > **Note:** You must ingest documents with the `ingest` tool (or the `ez-rag ingest` CLI command) before calling `status`, `search`, or `query`. The server loads the vector store from disk at startup.
 
-### Registering ez-rag in Claude Code
+#### Registering ez-rag in Claude Code
 
 Add the following to `.claude/mcp.json` in your project (create the file if it does not exist):
 
@@ -1029,13 +1006,13 @@ To use an LLM provider or a non-default store location:
   "mcpServers": {
     "ez-rag": {
       "command": "ez-rag",
-      "args": ["mcp-server", "--provider", "openai", "--store", ".ez-rag/vector-store.json"]
+      "args": ["mcp-server", "--provider", "openai", "--store-dir", ".ez-rag"]
     }
   }
 }
 ```
 
-### MCP server flags
+#### MCP server flags
 
 | Flag                   | Default                          | Description                                            |
 |------------------------|----------------------------------|--------------------------------------------------------|
@@ -1044,9 +1021,9 @@ To use an LLM provider or a non-default store location:
 | `--store-dir`          | `.ez-rag`                        | Path to the store directory                            |
 | `--verbose` / `-v`     | off                              | Enable debug logging to stderr (does not affect stdout)|
 
-### Available MCP tools
+#### Available MCP tools
 
-#### `status`
+##### `status`
 
 Returns metadata about the vector store.
 
@@ -1059,7 +1036,7 @@ No input parameters.
 | `documents`     | List of objects  | Each entry has `path` (String) and `chunkCount` (Int) |
 | `error`         | String or null   | Set when an error occurred                     |
 
-#### `search`
+##### `search`
 
 Hybrid search (BM25 + embedding, RRF fusion). No LLM is involved. Equivalent to `--mode hybrid`.
 
@@ -1075,7 +1052,7 @@ Hybrid search (BM25 + embedding, RRF fusion). No LLM is involved. Equivalent to 
 | `mode`       | String          | Always `"hybrid"`                           |
 | `error`      | String or null  | Set when an error occurred                  |
 
-#### `search_bm25`
+##### `search_bm25`
 
 Keyword-only BM25 search using the Lucene index. No embedding model involved. Equivalent to `--mode bm25`.
 
@@ -1090,7 +1067,7 @@ Keyword-only BM25 search using the Lucene index. No embedding model involved. Eq
 | `mode`       | String          | Always `"bm25"`                             |
 | `error`      | String or null  | Set when an error occurred                  |
 
-#### `search_embedding`
+##### `search_embedding`
 
 Embedding-only vector similarity search. No BM25 index involved. Equivalent to `--mode embedding`.
 
@@ -1106,7 +1083,7 @@ Embedding-only vector similarity search. No BM25 index involved. Equivalent to `
 | `mode`       | String          | Always `"embedding"`                        |
 | `error`      | String or null  | Set when an error occurred                  |
 
-#### `query`
+##### `query`
 
 Retrieves relevant chunks and returns an answer. With the default `passthrough` provider the context chunks are returned directly; with a real provider an LLM generates the answer.
 
@@ -1123,7 +1100,7 @@ Retrieves relevant chunks and returns an answer. With the default `passthrough` 
 | `sources`    | List of objects | Each entry has `filePath`, `chunkIndex`, `similarityScore`, `excerpt`    |
 | `error`      | String or null  | Set when an error occurred                                               |
 
-#### `delete`
+##### `delete`
 
 Removes an ingested document from the vector store by file path. The store is saved to disk after each successful call.
 
@@ -1137,7 +1114,7 @@ Removes an ingested document from the vector store by file path. The store is sa
 | `chunksRemoved` | Int            | Number of chunks removed (0 if not found)      |
 | `error`         | String or null | Set when an error occurred                     |
 
-#### `show`
+##### `show`
 
 Returns per-chunk metadata for an ingested file. Optionally includes raw chunk text.
 
@@ -1152,7 +1129,7 @@ Returns per-chunk metadata for an ingested file. Optionally includes raw chunk t
 | `chunks`     | List of objects | Each entry has `chunkIndex`, `charCount`, `mtime`, and optionally `text`    |
 | `error`      | String or null  | Set when an error occurred or the file was not found                        |
 
-#### `chunk`
+##### `chunk`
 
 Retrieves one or more chunks by file path and chunk index. Use `chunkIndex` values from prior `search`, `embedding-search`, or `bm25-search` results. Pass `window` to also fetch surrounding chunks for context.
 
@@ -1168,7 +1145,7 @@ Retrieves one or more chunks by file path and chunk index. Use `chunkIndex` valu
 | `chunks`     | List of objects | Each entry has `chunkIndex`, `text`, and optionally `headingTitle`, `headingLevel`, `headingPath`    |
 | `error`      | String or null  | Set when the file was not found or an error occurred; `chunks` is empty in error cases               |
 
-#### `reingest`
+##### `reingest`
 
 Re-ingests stale documents (those whose filesystem mtime changed since the last ingest). Pass `forceAll: true` to re-ingest every document regardless of staleness. The store is saved to disk after each successful call.
 
@@ -1186,7 +1163,7 @@ Re-ingests stale documents (those whose filesystem mtime changed since the last 
 | `filesSkipped`    | Int            | Source files not found on disk (warned and skipped)                       |
 | `error`           | String or null | Set when an error occurred                                                |
 
-#### `ingest`
+##### `ingest`
 
 Ingests documents from a file or directory into the vector store. The store is saved to disk after each successful call.
 
@@ -1203,40 +1180,106 @@ Ingests documents from a file or directory into the vector store. The store is s
 | `skipped`       | Int            | Files skipped because already up to date |
 | `error`         | String or null | Set when an error occurred               |
 
-## Developer guide
+### eval
 
-### Technology stack
-
-- Kotlin 2.0, JDK 21
-- Spring Boot 3.4 (no web server; `web-application-type: none`)
-- Spring AI 1.0 (OpenAI, Anthropic, Ollama, Transformers starters)
-- picocli 4.7 for argument parsing
-- Gradle with Kotlin DSL
-
-### Build
+Evaluate retrieval quality against a corpus of scenarios:
 
 ```sh
-./gradlew build          # compile, test, assemble fat JAR
-./gradlew test           # run tests only
-./gradlew installDist    # produce runnable distribution under build/install/
+ez-rag eval ./my-corpus
 ```
 
-The Kotlin compiler is configured with `-Werror`, so warnings are treated as build failures.
+Output:
+```
+Scenario          Questions  Recall@3  MRR     Hit@3   Status
+─────────────────────────────────────────────────────────────
+factual           16         0.94      0.63    0.94    PASS
+hard-negatives    12         1.00      0.88    1.00    PASS
+  hard-negative              1.00      0.75    1.00
+multi-chunk       14         0.93      0.63    0.93    PASS
+─────────────────────────────────────────────────────────────
+Overall           42         0.96      0.71    0.96
+```
 
-### Testing
+How to read the numbers:
 
-The project uses test-driven development. Unit tests live in `src/test/kotlin/` alongside the source tree. Run them with:
+- **Recall@3** ranges from 0.0 to 1.0. `0.94` means 94 % of questions had their expected chunk somewhere in the top 3 results; `1.00` means every question's answer was found. A value below 1.0 means some questions missed entirely — no amount of re-ranking can fix that.
+- **MRR** also ranges from 0.0 to 1.0, but penalises answers that appear at rank 2 or 3. `1.00` would mean every answer appeared at rank 1. `0.63` means relevant chunks are typically found at rank 1–2 but not always first. The gap between Recall@3 and MRR is the key signal: `hard-negatives` has Recall@3 `1.00` but MRR `0.88`, meaning all answers are found but some land at rank 2 or 3 rather than rank 1.
+- **Hit@3** equals Recall@3 in these examples because each question has a single expected source. It would diverge only if a question listed multiple expected sources (Hit@3 is binary; Recall@3 gives partial credit).
+
+How to read the rows:
+
+- Each scenario row covers **all questions** in that scenario directory, regardless of document role.
+- The indented `hard-negative` sub-row covers only the **subset of questions whose expected source is a hard-negative document**. It has no Questions count (it is a subset, not an independent scenario) and no Status (thresholds apply to the scenario as a whole, not the subset).
+- `Overall` averages the per-scenario metrics weighted equally across scenarios, not questions.
+- `Status` is `PASS` when all configured thresholds are met, `FAIL (<metric> < <threshold>)` for the first failing metric, or blank when no thresholds are defined.
+
+Exit code is `0` when all thresholds pass (or no thresholds are defined), `1` when any threshold fails. This makes `eval` suitable for use in CI pipelines.
+
+Pass `--output-format json` for machine-readable output:
 
 ```sh
-./gradlew test
+ez-rag eval --output-format json ./my-corpus
 ```
 
-### Provider selection design
+| Flag              | Description                               |
+|-------------------|-------------------------------------------|
+| `--output-format` | Output format: `text` (default) or `json`.|
 
-Spring AI's auto-configuration is fully disabled in `application.yml`. Provider beans are constructed manually in `ProviderConfiguration` based on the resolved config at startup. This avoids the need for Spring profiles and allows runtime provider selection from CLI flags without recompilation. To add a new provider, add a branch to `ProviderConfiguration.chatModel()` or `ProviderConfiguration.embeddingModel()`.
+#### Corpus format
 
-### Adding a new subcommand
+A corpus is a directory containing one or more scenario subdirectories. Each subdirectory must contain a `questions.yaml` file and the document files it references.
 
-1. Create a class in `command/` annotated with `@Command` and `@Component` that implements `Callable<Int>`.
-2. Register it in the `subcommands` list of `@Command` on `EzRagCommand`.
-3. Inject `ChatModel`, `EmbeddingModel`, or `ConfigService` as constructor parameters.
+```
+my-corpus/
+  factual/
+    questions.yaml
+    planets.txt
+    capitals.txt
+    elements.txt
+    cooking_distractor.txt
+```
+
+`questions.yaml` format:
+
+```yaml
+documents:
+  - file: planets.txt
+    role: relevant          # relevant | distractor | hard-negative
+  - file: capitals.txt
+    role: relevant
+  - file: cooking_distractor.txt
+    role: distractor        # included in the store but not an expected source
+
+questions:
+  - id: q1
+    question: "What is the capital of France?"
+    expected_sources: ["capitals.txt"]
+  - id: q2
+    question: "What is the largest planet in the solar system?"
+    expected_sources: ["planets.txt"]
+
+thresholds:               # optional; eval exits 1 if any threshold is missed
+  recall_at_k: 0.9
+  mrr: 0.8
+  hit_rate_at_k: 0.9
+```
+
+**Document roles:**
+
+| Role            | Description                                                                                         |
+|-----------------|-----------------------------------------------------------------------------------------------------|
+| `relevant`      | Contains answer content; retrieved chunks from these files count as hits.                           |
+| `distractor`    | Ingested into the store but not expected as a source; tests that irrelevant content is not returned. |
+| `hard-negative` | Similar to the query topics but does not contain the answer; the hardest kind of distractor. Hard-negative metrics are reported separately as an indented sub-row. |
+
+**Metrics:**
+
+| Metric       | Description                                                                                                           |
+|--------------|-----------------------------------------------------------------------------------------------------------------------|
+| `Recall@3`   | Fraction of questions for which the expected chunk appears anywhere in the top 3 results. The primary pass/fail metric. |
+| `MRR`        | Mean Reciprocal Rank. For each question, the score is 1/rank of the first relevant result (1.0 if rank 1, 0.5 if rank 2, 0.33 if rank 3, 0 if not found). Averaged across all questions. Sensitive to ordering — a high MRR means relevant chunks tend to appear first. |
+| `Hit@3`      | Same as Recall@3 when each question has a single expected source. Differs when a question has multiple expected sources: Recall@3 counts partial credit, Hit@3 is binary (1 if any expected source is found, 0 otherwise). |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the technology stack, build instructions, testing guide, provider selection design, and notes on adding a new subcommand.

@@ -46,7 +46,7 @@ class ShowCommand(
     @Option(names = ["--chunks"], description = ["Include raw chunk text in output."])
     var chunksOption: Boolean = false
 
-    @Option(names = ["--output"], description = ["Output format: text (default) or json."])
+    @Option(names = ["--output-format"], description = ["Output format: text (default) or json."])
     var outputFormat: String = "text"
 
     override fun call(): Int {

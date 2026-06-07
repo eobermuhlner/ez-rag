@@ -10,6 +10,7 @@ import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
+import picocli.CommandLine
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.nio.file.Path
@@ -278,6 +279,52 @@ class EvalCommandTest {
 
         assertThat(exitCode).isNotEqualTo(0)
         assertThat(err.toString()).containsIgnoringCase("No eval scenarios found")
+    }
+
+    // -----------------------------------------------------------------------
+    // Picocli-level flag tests: --output-format accepted, --format rejected
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--output-format json is accepted by picocli parser for EvalCommand`(@TempDir tempDir: Path) {
+        // Create a minimal valid corpus so the command can parse and run
+        val scenarioDir = tempDir.resolve("picocli-scenario")
+        scenarioDir.toFile().mkdirs()
+        scenarioDir.resolve("doc.txt").toFile().writeText("Some content.")
+        scenarioDir.resolve("questions.yaml").toFile().writeText("""
+            documents:
+              - file: doc.txt
+                role: relevant
+            questions:
+              - id: q1
+                question: "What is this?"
+                expected_sources: ["doc.txt"]
+        """.trimIndent())
+
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = EvalCommand(
+            embeddingModel = fakeEmbeddingModel,
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true)
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--output-format", "json", tempDir.toString())
+        assertThat(exitCode).isNotEqualTo(CommandLine.ExitCode.USAGE)
+    }
+
+    @Test
+    fun `--format json is rejected by picocli parser for EvalCommand`(@TempDir tempDir: Path) {
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = EvalCommand(
+            embeddingModel = fakeEmbeddingModel,
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true)
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--format", "json", tempDir.toString())
+        assertThat(exitCode).isEqualTo(CommandLine.ExitCode.USAGE)
     }
 
     // --- Task 03: --format json ---

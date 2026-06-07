@@ -22,6 +22,7 @@ import java.io.ByteArrayInputStream
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.nio.file.Path
+import java.nio.file.Paths
 
 class SearchCommandTest {
 
@@ -81,6 +82,53 @@ class SearchCommandTest {
             errorWriter = PrintWriter(err, true),
             inputStream = inputStream,
         )
+    }
+
+    // -----------------------------------------------------------------------
+    // Picocli-level flag tests: --output-format accepted, --output rejected
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--output-format json is accepted by picocli parser for SearchCommand`(@TempDir tempDir: Path) {
+        populateRepository(tempDir)
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        val pipeline = EmbeddingSearchPipeline(repo)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = SearchCommand(
+            storeDirOverride = tempDir,
+            searchPipeline = pipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--output-format", "json", "test query")
+        repo.close()
+        // Exit code 2 means picocli USAGE error (unknown option). Any other code means parsing succeeded.
+        assertThat(exitCode).isNotEqualTo(CommandLine.ExitCode.USAGE)
+    }
+
+    @Test
+    fun `--output json is rejected by picocli parser for SearchCommand`(@TempDir tempDir: Path) {
+        populateRepository(tempDir)
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        val pipeline = EmbeddingSearchPipeline(repo)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = SearchCommand(
+            storeDirOverride = tempDir,
+            searchPipeline = pipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--output", "json", "test query")
+        repo.close()
+        assertThat(exitCode).isEqualTo(CommandLine.ExitCode.USAGE)
     }
 
     // -----------------------------------------------------------------------

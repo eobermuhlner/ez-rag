@@ -45,7 +45,7 @@ class ChunkCommand(
     @Option(names = ["--window"], description = ["Number of chunks before and after the target to include."])
     var window: Int = 0
 
-    @Option(names = ["--output"], description = ["Output format: text (default) or json."])
+    @Option(names = ["--output-format"], description = ["Output format: text (default) or json."])
     var outputFormat: String = "text"
 
     @Option(names = ["--store-dir"], description = ["Path to the store directory."])

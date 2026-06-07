@@ -35,7 +35,7 @@ class EvalCommand(
     var corpusDir: File = File(".")
 
     @Option(
-        names = ["--format"],
+        names = ["--output-format"],
         description = ["Output format: text (default) or json."],
         defaultValue = "text"
     )
