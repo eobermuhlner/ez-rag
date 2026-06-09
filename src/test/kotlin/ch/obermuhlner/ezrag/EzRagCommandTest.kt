@@ -40,6 +40,97 @@ class EzRagCommandTest {
         assertThat(result["ez.rag.rerankCandidates"]).isEqualTo("20")
     }
 
+    @Test
+    fun `preParseProviderFlags mcp-server --transport http sets servlet and stdio false`() {
+        val result = preParseProviderFlags(arrayOf("mcp-server", "--transport", "http"))
+        assertThat(result["spring.ai.mcp.server.stdio"]).isEqualTo("false")
+        assertThat(result["spring.main.web-application-type"]).isEqualTo("servlet")
+        assertThat(result["server.port"]).isEqualTo("8080")
+        assertThat(result["spring.main.lazy-initialization"]).isEqualTo("false")
+    }
+
+    @Test
+    fun `preParseProviderFlags mcp-server --transport http --port 9090 sets port`() {
+        val result = preParseProviderFlags(arrayOf("mcp-server", "--transport", "http", "--port", "9090"))
+        assertThat(result["server.port"]).isEqualTo("9090")
+    }
+
+    @Test
+    fun `preParseProviderFlags captures --store-dir`() {
+        val result = preParseProviderFlags(arrayOf("mcp-server", "--transport", "http", "--store-dir", "/tmp/test-store"))
+        assertThat(result["ez.rag.storeDir"]).isEqualTo("/tmp/test-store")
+    }
+
+    @Test
+    fun `preParseProviderFlags captures --store-dir with equals syntax`() {
+        val result = preParseProviderFlags(arrayOf("mcp-server", "--transport", "http", "--store-dir=/tmp/test-store"))
+        assertThat(result["ez.rag.storeDir"]).isEqualTo("/tmp/test-store")
+    }
+
+    @Test
+    fun `preParseProviderFlags mcp-server --transport http --port=9090 sets port`() {
+        val result = preParseProviderFlags(arrayOf("mcp-server", "--transport", "http", "--port=9090"))
+        assertThat(result["server.port"]).isEqualTo("9090")
+    }
+
+    @Test
+    fun `preParseProviderFlags mcp-server --transport stdio sets stdio true and no servlet`() {
+        val result = preParseProviderFlags(arrayOf("mcp-server", "--transport", "stdio"))
+        assertThat(result["spring.ai.mcp.server.stdio"]).isEqualTo("true")
+        assertThat(result["spring.main.web-application-type"]).isEqualTo("none")
+        assertThat(result["spring.main.lazy-initialization"]).isEqualTo("true")
+    }
+
+    @Test
+    fun `preParseProviderFlags mcp-server no transport defaults to stdio`() {
+        val result = preParseProviderFlags(arrayOf("mcp-server"))
+        assertThat(result["spring.ai.mcp.server.stdio"]).isEqualTo("true")
+        assertThat(result["spring.main.web-application-type"]).isEqualTo("none")
+        assertThat(result["spring.main.lazy-initialization"]).isEqualTo("true")
+    }
+
+    @Test
+    fun `preParseProviderFlags ingest sets web-application-type none and no mcp stdio`() {
+        val result = preParseProviderFlags(arrayOf("ingest", "somefile.txt"))
+        assertThat(result["spring.main.web-application-type"]).isEqualTo("none")
+        assertThat(result.containsKey("spring.ai.mcp.server.stdio")).isFalse()
+        assertThat(result["spring.main.lazy-initialization"]).isEqualTo("true")
+    }
+
+    // -----------------------------------------------------------------------
+    // logging suppression
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `preParseProviderFlags mcp-server --transport http suppresses logging by default`() {
+        val result = preParseProviderFlags(arrayOf("mcp-server", "--transport", "http"))
+        assertThat(result["logging.level.root"]).isEqualTo("off")
+    }
+
+    @Test
+    fun `preParseProviderFlags mcp-server --transport http --verbose does not suppress logging`() {
+        val result = preParseProviderFlags(arrayOf("mcp-server", "--transport", "http", "--verbose"))
+        assertThat(result.containsKey("logging.level.root")).isFalse()
+    }
+
+    @Test
+    fun `preParseProviderFlags mcp-server --transport http -v does not suppress logging`() {
+        val result = preParseProviderFlags(arrayOf("mcp-server", "--transport", "http", "-v"))
+        assertThat(result.containsKey("logging.level.root")).isFalse()
+    }
+
+    @Test
+    fun `preParseProviderFlags mcp-server --transport stdio suppresses logging`() {
+        val result = preParseProviderFlags(arrayOf("mcp-server", "--transport", "stdio"))
+        assertThat(result["logging.level.root"]).isEqualTo("off")
+    }
+
+    @Test
+    fun `preParseProviderFlags ingest suppresses logging`() {
+        val result = preParseProviderFlags(arrayOf("ingest", "somefile.txt"))
+        assertThat(result["logging.level.root"]).isEqualTo("off")
+    }
+
     // -----------------------------------------------------------------------
     // verbose propagation via @ParentCommand
     // -----------------------------------------------------------------------

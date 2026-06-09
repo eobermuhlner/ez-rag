@@ -986,7 +986,7 @@ ez-rag search --output-format json "retry policy" | jq '.chunks[].source'
 
 #### Registering ez-rag in Claude Code
 
-Add the following to `.claude/mcp.json` in your project (create the file if it does not exist):
+Add the following to `.mcp.json` in your project root (create the file if it does not exist):
 
 ```json
 {
@@ -1016,10 +1016,45 @@ To use an LLM provider or a non-default store location:
 
 | Flag                   | Default                          | Description                                            |
 |------------------------|----------------------------------|--------------------------------------------------------|
+| `--transport`          | `stdio`                          | Transport mode: `stdio` (default) or `http`            |
+| `--port`               | `8080`                           | HTTP listening port (HTTP transport only)              |
 | `--provider`           | `passthrough`                    | Chat provider used by the `query` tool                 |
 | `--embedding-provider` | `onnx`                           | Embedding provider used by all tools                   |
 | `--store-dir`          | `.ez-rag`                        | Path to the store directory                            |
 | `--verbose` / `-v`     | off                              | Enable debug logging to stderr (does not affect stdout)|
+
+#### HTTP transport mode
+
+Use `--transport http` to start a persistent, network-accessible MCP server instead of the default stdio mode. On startup, the server prints the SSE endpoint URL and keeps running until killed:
+
+```sh
+ez-rag mcp-server --transport http
+# MCP server listening on http://localhost:8080/sse
+```
+
+Use `--port` to change the listening port:
+
+```sh
+ez-rag mcp-server --transport http --port 9090
+# MCP server listening on http://localhost:9090/sse
+```
+
+To stop the server, send it a signal (e.g. `Ctrl-C` or `kill <pid>`).
+
+Register it in Claude Code by adding the following to `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "ez-rag": {
+      "type": "http",
+      "url": "http://localhost:8080/sse"
+    }
+  }
+}
+```
+
+Multiple MCP clients can connect to the same running HTTP server instance simultaneously.
 
 #### Available MCP tools
 

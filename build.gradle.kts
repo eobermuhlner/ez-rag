@@ -39,6 +39,7 @@ dependencyManagement {
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("info.picocli:picocli:4.7.6")
     // Use core model libs directly (no autoconfigure) — avoids ~10 autoconfigure JARs being
     // evaluated at startup. The mcp-server starter is kept because mcp-server relies on

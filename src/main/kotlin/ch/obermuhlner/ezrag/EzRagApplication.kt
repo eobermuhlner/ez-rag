@@ -38,21 +38,30 @@ fun preParseProviderFlags(args: Array<String>): Map<String, String> {
         "--embedding-model" to "ez.rag.embeddingModel",
         "--ollama-url" to "ez.rag.ollamaUrl",
         "--rerank-model" to "ez.rag.rerankModel",
-        "--rerank-candidates" to "ez.rag.rerankCandidates"
+        "--rerank-candidates" to "ez.rag.rerankCandidates",
+        "--store-dir" to "ez.rag.storeDir"
     )
     val result = mutableMapOf<String, String>()
     var isMcpServer = false
+    var transport = "stdio"
+    var port = "8080"
+    var verbose = false
     var i = 0
     while (i < args.size) {
         val arg = args[i]
         if (arg == "mcp-server") {
             isMcpServer = true
         }
+        if (arg == "--verbose" || arg == "-v") {
+            verbose = true
+        }
         val eqIdx = arg.indexOf('=')
         if (eqIdx > 0) {
             val name = arg.substring(0, eqIdx)
             val value = arg.substring(eqIdx + 1)
             flags[name]?.let { result[it] = value }
+            if (name == "--transport") transport = value
+            if (name == "--port") port = value
         } else {
             flags[arg]?.let { propKey ->
                 if (i + 1 < args.size) {
@@ -60,22 +69,47 @@ fun preParseProviderFlags(args: Array<String>): Map<String, String> {
                     i++
                 }
             }
+            if (arg == "--transport" && i + 1 < args.size) {
+                transport = args[i + 1]
+                i++
+            }
+            if (arg == "--port" && i + 1 < args.size) {
+                port = args[i + 1]
+                i++
+            }
         }
         i++
     }
 
     if (isMcpServer) {
-        // Enable stdio transport and suppress console logging so that stdout is
-        // reserved exclusively for MCP protocol messages.
-        result["spring.ai.mcp.server.stdio"] = "true"
         result["spring.ai.mcp.server.name"] = "ez-rag"
         result["spring.ai.mcp.server.version"] = "1.0.0"
-        // Route all log output to stderr; an empty pattern disables the stdout appender.
-        result["logging.pattern.console"] = ""
+        if (transport == "http") {
+            // HTTP transport: start embedded servlet container.
+            // Disable lazy init so McpSyncServer is created at startup and calls
+            // setSessionFactory() on the transport provider before the first request.
+            result["spring.ai.mcp.server.stdio"] = "false"
+            result["spring.main.web-application-type"] = "servlet"
+            result["server.port"] = port
+            result["spring.main.lazy-initialization"] = "false"
+            if (!verbose) {
+                result["logging.level.root"] = "off"
+            }
+        } else {
+            // stdio transport: suppress console logging so stdout is reserved for MCP protocol messages
+            result["spring.ai.mcp.server.stdio"] = "true"
+            result["spring.main.web-application-type"] = "none"
+            result["spring.main.lazy-initialization"] = "true"
+            result["logging.pattern.console"] = ""
+            result["logging.level.root"] = "off"
+        }
     } else {
         // Disable the MCP server entirely when not running as mcp-server to avoid
         // the auto-configuration overhead and unintended side effects.
         result["spring.ai.mcp.server.enabled"] = "false"
+        result["spring.main.web-application-type"] = "none"
+        result["spring.main.lazy-initialization"] = "true"
+        result["logging.level.root"] = "off"
     }
 
     return result

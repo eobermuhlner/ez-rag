@@ -23,10 +23,12 @@ import java.nio.file.Paths
 import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
 
+enum class Transport { stdio, http }
+
 @Command(
     name = "mcp-server",
     mixinStandardHelpOptions = true,
-    description = ["Start the MCP server over stdio."]
+    description = ["Start the MCP server (stdio or HTTP transport)."]
 )
 @Component
 class McpServerCommand : Callable<Int> {
@@ -42,6 +44,12 @@ class McpServerCommand : Callable<Int> {
 
     @Option(names = ["--store-dir"], description = ["Path to the store directory."])
     var storeDirOption: String? = null
+
+    @Option(names = ["--transport"], description = ["Transport mode: stdio (default) or http."], defaultValue = "stdio")
+    var transport: Transport = Transport.stdio
+
+    @Option(names = ["--port"], description = ["HTTP port (used with --transport http, default: 8080)."], defaultValue = "8080")
+    var port: Int = 8080
 
     /**
      * Provides the MCP tool callbacks. Registers the status tool and additional tools
@@ -93,10 +101,12 @@ class McpServerCommand : Callable<Int> {
     }
 
     override fun call(): Int {
-        // The MCP server (with stdio transport) is started automatically by Spring
-        // auto-configuration when spring.ai.mcp.server.stdio=true is set.
+        // The MCP server transport is started automatically by Spring auto-configuration.
         // Block this thread until the process receives a termination signal (SIGTERM)
         // so that exitProcess() is not called prematurely.
+        if (transport == Transport.http) {
+            println("MCP server listening on http://localhost:$port/sse")
+        }
         val done = CountDownLatch(1)
         Runtime.getRuntime().addShutdownHook(Thread { done.countDown() })
         try {

@@ -80,6 +80,36 @@ class SubcommandTest {
     }
 
     @Test
+    fun `mcp-server --transport http --help exits 0`() {
+        val exitCode = commandLine.execute("mcp-server", "--transport", "http", "--help")
+        assertThat(exitCode).isEqualTo(0)
+    }
+
+    @Test
+    fun `mcp-server --transport stdio --help exits 0`() {
+        val exitCode = commandLine.execute("mcp-server", "--transport", "stdio", "--help")
+        assertThat(exitCode).isEqualTo(0)
+    }
+
+    @Test
+    fun `mcp-server --transport http --port 9090 --help exits 0`() {
+        val exitCode = commandLine.execute("mcp-server", "--transport", "http", "--port", "9090", "--help")
+        assertThat(exitCode).isEqualTo(0)
+    }
+
+    @Test
+    fun `mcp-server --transport unknown exits USAGE`() {
+        val exitCode = commandLine.execute("mcp-server", "--transport", "unknown")
+        assertThat(exitCode).isEqualTo(CommandLine.ExitCode.USAGE)
+    }
+
+    @Test
+    fun `mcp-server --transport http --verbose --help exits 0`() {
+        val exitCode = commandLine.execute("mcp-server", "--transport", "http", "--verbose", "--help")
+        assertThat(exitCode).isEqualTo(0)
+    }
+
+    @Test
     fun `shell help exits 0`() {
         val exitCode = commandLine.execute("shell", "--help")
         assertThat(exitCode).isEqualTo(0)

@@ -1,9 +1,3 @@
 spring:
   main:
     banner-mode: off
-    web-application-type: none
-    lazy-initialization: true
-
-logging:
-  level:
-    root: off
