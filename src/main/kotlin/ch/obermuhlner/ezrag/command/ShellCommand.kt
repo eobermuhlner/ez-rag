@@ -126,7 +126,7 @@ class ShellCommand(
 
                 if (verbose) {
                     result.sources.forEach { source ->
-                        errorWriter.println("  Source: ${source.filePath}  score=${source.similarityScore}  chunk=${source.chunkIndex}")
+                        errorWriter.println("  Source: ${source.path}  score=${source.score}  chunk=${source.chunkIndex}")
                     }
                 }
 

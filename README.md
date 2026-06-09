@@ -947,8 +947,8 @@ raw chunk content here
 {
   "mode": "hybrid",
   "chunks": [
-    {"source": "/abs/path/to/file.md", "chunkIndex": 10, "score": 0.9799999, "content": "raw chunk content here"},
-    {"source": "https://example.com/page", "chunkIndex": 3, "score": 0.74, "content": "raw chunk content here"}
+    {"path": "/abs/path/to/file.md", "chunkIndex": 10, "score": 0.9799999, "content": "raw chunk content here"},
+    {"path": "https://example.com/page", "chunkIndex": 3, "score": 0.74, "content": "raw chunk content here"}
   ]
 }
 ```
@@ -968,14 +968,14 @@ raw chunk content here
 
 When no chunks are found, the XML output is `<results mode="..."></results>`.
 
-The `source` attribute (and the `source` key in JSON) holds the file path or URL exactly as it was passed to `ez-rag ingest`.
+The `source` attribute in XML (and the `path` key in JSON) holds the file path or URL exactly as it was passed to `ez-rag ingest`.
 
 ```sh
 # Pipe XML output into another tool
 ez-rag search --output-format xml "connection timeout configuration"
 
 # JSON output for scripting with jq
-ez-rag search --output-format json "retry policy" | jq '.chunks[].source'
+ez-rag search --output-format json "retry policy" | jq '.chunks[].path'
 ```
 
 ### MCP Server
@@ -1083,7 +1083,7 @@ Hybrid search (BM25 + embedding, RRF fusion). No LLM is involved. Equivalent to 
 
 | Return field | Type            | Description                                 |
 |--------------|-----------------|---------------------------------------------|
-| `chunks`     | List of objects | Each entry has `filePath`, `chunkIndex`, `score`, `content` |
+| `chunks`     | List of objects | Each entry has `path`, `chunkIndex`, `score`, `content` |
 | `mode`       | String          | Always `"hybrid"`                           |
 | `error`      | String or null  | Set when an error occurred                  |
 
@@ -1098,7 +1098,7 @@ Keyword-only BM25 search using the Lucene index. No embedding model involved. Eq
 
 | Return field | Type            | Description                                 |
 |--------------|-----------------|---------------------------------------------|
-| `chunks`     | List of objects | Each entry has `filePath`, `chunkIndex`, `score`, `content` |
+| `chunks`     | List of objects | Each entry has `path`, `chunkIndex`, `score`, `content` |
 | `mode`       | String          | Always `"bm25"`                             |
 | `error`      | String or null  | Set when an error occurred                  |
 
@@ -1114,7 +1114,7 @@ Embedding-only vector similarity search. No BM25 index involved. Equivalent to `
 
 | Return field | Type            | Description                                 |
 |--------------|-----------------|---------------------------------------------|
-| `chunks`     | List of objects | Each entry has `filePath`, `chunkIndex`, `score`, `content` |
+| `chunks`     | List of objects | Each entry has `path`, `chunkIndex`, `score`, `content` |
 | `mode`       | String          | Always `"embedding"`                        |
 | `error`      | String or null  | Set when an error occurred                  |
 
@@ -1132,7 +1132,7 @@ Retrieves relevant chunks and returns an answer. With the default `passthrough` 
 | Return field | Type            | Description                                                              |
 |--------------|-----------------|--------------------------------------------------------------------------|
 | `answer`     | String          | Generated answer, or context chunks if using the `passthrough` provider  |
-| `sources`    | List of objects | Each entry has `filePath`, `chunkIndex`, `similarityScore`, `excerpt`    |
+| `sources`    | List of objects | Each entry has `path`, `chunkIndex`, `score`, `excerpt`                  |
 | `error`      | String or null  | Set when an error occurred                                               |
 
 ##### `delete`
@@ -1145,7 +1145,7 @@ Removes an ingested document from the vector store by file path. The store is sa
 
 | Return field    | Type           | Description                                    |
 |-----------------|----------------|------------------------------------------------|
-| `filePath`      | String         | Absolute path that was matched against         |
+| `path`          | String         | Absolute path that was matched against         |
 | `chunksRemoved` | Int            | Number of chunks removed (0 if not found)      |
 | `error`         | String or null | Set when an error occurred                     |
 

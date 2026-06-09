@@ -66,7 +66,7 @@ class McpEmbeddingSearchToolTest {
     @Test
     fun `search_embedding invocation with a query returns embedding stub results`(@TempDir tempDir: Path) {
         val capturedQueries = mutableListOf<SearchQuery>()
-        val chunk = ChunkMatch(filePath = "embed.txt", chunkIndex = 0, score = 0.9, content = "Embedding content")
+        val chunk = ChunkMatch(path = "embed.txt", chunkIndex = 0, score = 0.9, content = "Embedding content")
         val pipeline = stubPipeline(tempDir, capturedQueries, SearchResult(listOf(chunk)))
 
         val tool = McpEmbeddingSearchTool(pipeline)
@@ -75,7 +75,7 @@ class McpEmbeddingSearchToolTest {
         assertThat(capturedQueries).hasSize(1)
         assertThat(capturedQueries[0].question).isEqualTo("embedding query")
         assertThat(result.chunks).hasSize(1)
-        assertThat(result.chunks[0].filePath).isEqualTo("embed.txt")
+        assertThat(result.chunks[0].path).isEqualTo("embed.txt")
         assertThat(result.error).isNull()
     }
 
@@ -101,5 +101,30 @@ class McpEmbeddingSearchToolTest {
         assertThat(result.error).isNotNull()
         assertThat(result.error).contains("Embedding exploded")
         assertThat(result.chunks).isEmpty()
+    }
+
+    @Test
+    fun `search_embedding headingPath is populated when stub returns chunk with headingPath`(@TempDir tempDir: Path) {
+        val headings = listOf("API Reference", "Methods")
+        val chunk = ChunkMatch(path = "api.md", chunkIndex = 0, score = 0.95, content = "content", headingPath = headings)
+        val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk)))
+
+        val tool = McpEmbeddingSearchTool(pipeline)
+        val result = tool.searchEmbedding("query", null, null)
+
+        assertThat(result.chunks).hasSize(1)
+        assertThat(result.chunks[0].headingPath).isEqualTo(headings)
+    }
+
+    @Test
+    fun `search_embedding headingPath is null when stub returns chunk without headingPath`(@TempDir tempDir: Path) {
+        val chunk = ChunkMatch(path = "plain.txt", chunkIndex = 0, score = 0.95, content = "content", headingPath = null)
+        val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk)))
+
+        val tool = McpEmbeddingSearchTool(pipeline)
+        val result = tool.searchEmbedding("query", null, null)
+
+        assertThat(result.chunks).hasSize(1)
+        assertThat(result.chunks[0].headingPath).isNull()
     }
 }

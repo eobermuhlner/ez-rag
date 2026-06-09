@@ -7,16 +7,16 @@ class OutputFormatter {
             return ""
         }
         return result.chunks.mapIndexed { idx, chunk ->
-            val header = "[${idx + 1}] score=${"%.2f".format(chunk.score)}  source=${chunk.filePath}  chunk=${chunk.chunkIndex}"
+            val header = "[${idx + 1}] score=${"%.2f".format(chunk.score)}  source=${chunk.path}  chunk=${chunk.chunkIndex}"
             "$header\n${chunk.content}"
         }.joinToString("\n\n")
     }
 
     fun formatJson(result: SearchResult): String {
         val chunksJson = result.chunks.joinToString(",\n    ") { chunk ->
-            val escapedFile = escapeJsonString(chunk.filePath)
+            val escapedPath = escapeJsonString(chunk.path)
             val escapedContent = escapeJsonString(chunk.content)
-            """{"source": "$escapedFile", "chunkIndex": ${chunk.chunkIndex}, "score": ${chunk.score}, "content": "$escapedContent"}"""
+            """{"path": "$escapedPath", "chunkIndex": ${chunk.chunkIndex}, "score": ${chunk.score}, "content": "$escapedContent"}"""
         }
         val chunksArray = if (result.chunks.isEmpty()) "[]" else "[\n    $chunksJson\n  ]"
         return """{
@@ -29,7 +29,7 @@ class OutputFormatter {
         val sb = StringBuilder()
         sb.append("<results mode=\"${result.mode}\">")
         result.chunks.forEachIndexed { idx, chunk ->
-            sb.append("\n<result index=\"${idx + 1}\" score=\"${"%.2f".format(chunk.score)}\" source=\"${chunk.filePath}\" chunk=\"${chunk.chunkIndex}\">")
+            sb.append("\n<result index=\"${idx + 1}\" score=\"${"%.2f".format(chunk.score)}\" source=\"${chunk.path}\" chunk=\"${chunk.chunkIndex}\">")
             sb.append("\n${chunk.content}")
             sb.append("\n</result>")
         }
@@ -46,7 +46,7 @@ class OutputFormatter {
         if (result.sources.isNotEmpty()) {
             sb.append("\n\n--- Sources ---\n")
             result.sources.forEach { source ->
-                sb.append("${source.filePath} (score: ${source.similarityScore})\n")
+                sb.append("${source.path} (score: ${source.score})\n")
             }
         }
         return sb.toString()
@@ -54,9 +54,9 @@ class OutputFormatter {
 
     fun formatJson(result: RagResult): String {
         val sourcesJson = result.sources.joinToString(",\n    ") { source ->
-            val escapedFile = escapeJsonString(source.filePath)
+            val escapedPath = escapeJsonString(source.path)
             val escapedExcerpt = escapeJsonString(source.excerpt)
-            """{"file": "$escapedFile", "score": ${source.similarityScore}, "excerpt": "$escapedExcerpt"}"""
+            """{"path": "$escapedPath", "score": ${source.score}, "excerpt": "$escapedExcerpt"}"""
         }
         val sourcesArray = if (result.sources.isEmpty()) "[]" else "[\n    $sourcesJson\n  ]"
         val escapedAnswer = escapeJsonString(result.answer)

@@ -70,6 +70,7 @@ class McpServerCommand : Callable<Int> {
 
         val chatModel = springChatModel
         val statusTool = McpStatusTool(luceneRepository)
+        val listTool = McpListTool(luceneRepository)
         val embeddingSearchPipeline = EmbeddingSearchPipeline(luceneRepository)
         val bm25SearchPipeline = BM25SearchPipeline(luceneRepository)
         val hybridSearchPipeline = HybridSearchPipeline(luceneRepository)
@@ -86,6 +87,7 @@ class McpServerCommand : Callable<Int> {
 
         val tools = buildList {
             add(statusTool)
+            add(listTool)
             add(searchTool)
             add(bm25SearchTool)
             add(embeddingSearchTool)

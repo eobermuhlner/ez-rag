@@ -6,6 +6,7 @@ import ch.obermuhlner.ezrag.ingestion.IngestSource
 import ch.obermuhlner.ezrag.ingestion.JsoupUrlFetcher
 import ch.obermuhlner.ezrag.ingestion.UrlFetcher
 import ch.obermuhlner.ezrag.ingestion.UrlSource
+import com.fasterxml.jackson.annotation.JsonInclude
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
@@ -24,6 +25,7 @@ class McpIngestTool(
     }
 ) {
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class IngestToolResult(
         val filesIngested: Int,
         val chunksCreated: Int,

@@ -1,6 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.ReIngestService
+import com.fasterxml.jackson.annotation.JsonInclude
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
@@ -17,6 +18,7 @@ class McpReIngestTool(
     }
 ) {
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class ReIngestToolResult(
         val staleFound: Int?,
         val filesReIngested: Int,

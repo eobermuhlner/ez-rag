@@ -13,10 +13,7 @@ open class RagPipeline(
 ) {
 
     companion object {
-        const val DEFAULT_RAG_SYSTEM_PROMPT = """You are a helpful assistant. Answer the user's question using ONLY the context documents provided below.
-If the answer is not found in the context, say "I don't know based on the provided documents."
-Always cite which document(s) your answer is based on.
-The conversation history shows earlier exchanges; you may refer to them when answering follow-up questions."""
+        const val DEFAULT_RAG_SYSTEM_PROMPT = "You are a helpful assistant. Answer the user's question using ONLY content from the knowledge base provided below. For each claim, cite the source path. If the answer is not in the knowledge base, say so. The conversation history shows earlier exchanges; you may refer to them when answering follow-up questions."
         private const val EXCERPT_MAX_LENGTH = 200
     }
 
@@ -41,9 +38,9 @@ The conversation history shows earlier exchanges; you may refer to them when ans
                 chunk.content
             }
             SourceReference(
-                filePath = chunk.filePath,
+                path = chunk.path,
                 chunkIndex = chunk.chunkIndex,
-                similarityScore = chunk.score,
+                score = chunk.score,
                 excerpt = excerpt
             )
         }
@@ -55,7 +52,7 @@ The conversation history shows earlier exchanges; you may refer to them when ans
         }
 
         val contextText = searchResult.chunks.joinToString("\n\n") { chunk ->
-            "<document source=\"${chunk.filePath}\">\n${chunk.content}\n</document>"
+            "<document source=\"${chunk.path}\">\n${chunk.content}\n</document>"
         }
 
         if (chatModel is PassthroughChatModel) {

@@ -56,7 +56,7 @@ class HybridSearchPipelineTest {
         repo.close()
 
         assertThat(result.chunks).isNotEmpty()
-        assertThat(result.chunks.first().filePath).isEqualTo("alpha.txt")
+        assertThat(result.chunks.first().path).isEqualTo("alpha.txt")
     }
 
     // -----------------------------------------------------------------------
@@ -109,7 +109,7 @@ class HybridSearchPipelineTest {
         // minScore = 0.99 keeps alpha.txt but filters beta.txt.
         val filtered = pipeline.search(SearchQuery(question = "alpha content", topK = 5, minScore = 0.99, mode = "hybrid"))
         assertThat(filtered.chunks).hasSize(1)
-        assertThat(filtered.chunks[0].filePath).isEqualTo("alpha.txt")
+        assertThat(filtered.chunks[0].path).isEqualTo("alpha.txt")
 
         repo.close()
     }

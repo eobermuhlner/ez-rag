@@ -97,7 +97,7 @@ class EmbeddingSearchPipelineTest {
         val scores = result.chunks.map { it.score }
         assertThat(scores).isSortedAccordingTo(compareByDescending { it })
         // High score document should come first
-        assertThat(result.chunks.first().filePath).isEqualTo("high.txt")
+        assertThat(result.chunks.first().path).isEqualTo("high.txt")
 
         repository.close()
     }
@@ -211,7 +211,7 @@ class EmbeddingSearchPipelineTest {
         // StubReranker assigns highest score to the last candidate from the store.
         // The store returns [high.txt, low.txt] by embedding score; stub reverses → low.txt first.
         assertThat(result.chunks).hasSize(2)
-        assertThat(result.chunks.first().filePath).isEqualTo("low.txt")
+        assertThat(result.chunks.first().path).isEqualTo("low.txt")
         repository.close()
     }
 
@@ -287,7 +287,7 @@ class EmbeddingSearchPipelineTest {
 
         // Original embedding ordering: high.txt first
         assertThat(result.chunks).isNotEmpty()
-        assertThat(result.chunks.first().filePath).isEqualTo("high.txt")
+        assertThat(result.chunks.first().path).isEqualTo("high.txt")
         repository.close()
     }
 

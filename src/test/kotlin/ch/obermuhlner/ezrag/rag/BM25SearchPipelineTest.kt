@@ -37,7 +37,7 @@ class BM25SearchPipelineTest {
         repo.close()
 
         assertThat(result.chunks).isNotEmpty()
-        assertThat(result.chunks[0].filePath).isEqualTo("fox.txt")
+        assertThat(result.chunks[0].path).isEqualTo("fox.txt")
         assertThat(result.mode).isEqualTo("bm25")
     }
 
@@ -57,7 +57,7 @@ class BM25SearchPipelineTest {
         repo.close()
 
         assertThat(result.chunks).hasSize(1)
-        assertThat(result.chunks[0].filePath).isEqualTo("best.txt")
+        assertThat(result.chunks[0].path).isEqualTo("best.txt")
         assertThat(result.chunks[0].score).isEqualTo(1.0)
     }
 

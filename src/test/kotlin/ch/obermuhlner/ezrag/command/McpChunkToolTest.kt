@@ -140,6 +140,20 @@ class McpChunkToolTest {
     }
 
     @Test
+    fun `chunk tool with window null returns single target chunk`(@TempDir tempDir: Path) {
+        val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
+        ingestChunks(tempDir, filePath, listOf("X", "Y", "Z"))
+
+        val tool = McpChunkTool(fakeEmbeddingModel, tempDir)
+        val result = tool.chunk(filePath, 1, null)
+
+        assertThat(result.error).isNull()
+        assertThat(result.chunks).hasSize(1)
+        assertThat(result.chunks[0].chunkIndex).isEqualTo(1)
+        assertThat(result.chunks[0].text).isEqualTo("Y")
+    }
+
+    @Test
     fun `chunk tool returns error and empty chunks for unknown file`(@TempDir tempDir: Path) {
         LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
 

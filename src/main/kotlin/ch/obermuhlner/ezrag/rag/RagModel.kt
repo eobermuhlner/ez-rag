@@ -16,9 +16,9 @@ data class RagQuery(
 )
 
 data class SourceReference(
-    val filePath: String,
+    val path: String,
     val chunkIndex: Int,
-    val similarityScore: Double,
+    val score: Double,
     val excerpt: String
 )
 

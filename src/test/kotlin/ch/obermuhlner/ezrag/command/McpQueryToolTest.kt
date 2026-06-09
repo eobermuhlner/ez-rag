@@ -95,7 +95,7 @@ class McpQueryToolTest {
     @Test
     fun `query returns answer and sources from RagResult`(@TempDir tempDir: Path) {
         val sources = listOf(
-            SourceReference(filePath = "doc.txt", chunkIndex = 0, similarityScore = 0.9, excerpt = "Some excerpt")
+            SourceReference(path = "doc.txt", chunkIndex = 0, score = 0.9, excerpt = "Some excerpt")
         )
         val pipeline = stubPipeline(tempDir, resultToReturn = RagResult("The answer", sources))
 
@@ -104,9 +104,9 @@ class McpQueryToolTest {
 
         assertThat(result.answer).isEqualTo("The answer")
         assertThat(result.sources).hasSize(1)
-        assertThat(result.sources[0].filePath).isEqualTo("doc.txt")
+        assertThat(result.sources[0].path).isEqualTo("doc.txt")
         assertThat(result.sources[0].chunkIndex).isEqualTo(0)
-        assertThat(result.sources[0].similarityScore).isEqualTo(0.9)
+        assertThat(result.sources[0].score).isEqualTo(0.9)
         assertThat(result.sources[0].excerpt).isEqualTo("Some excerpt")
         assertThat(result.error).isNull()
     }

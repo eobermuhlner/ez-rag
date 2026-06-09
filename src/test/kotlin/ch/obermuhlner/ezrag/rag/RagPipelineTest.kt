@@ -225,7 +225,10 @@ class RagPipelineTest {
             .filterIsInstance<SystemMessage>()
             .firstOrNull()
         assertThat(systemMessage).isNotNull()
-        assertThat(systemMessage!!.text).contains(RagPipeline.DEFAULT_RAG_SYSTEM_PROMPT)
+        assertThat(systemMessage!!.text).isEqualTo(RagPipeline.DEFAULT_RAG_SYSTEM_PROMPT)
+        assertThat(systemMessage.text).contains("knowledge base")
+        assertThat(systemMessage.text).contains("cite the source path")
+        assertThat(systemMessage.text).doesNotContain("context documents provided")
     }
 
     @Test
@@ -246,7 +249,7 @@ class RagPipelineTest {
         val expectedContextText = "<document source=\"geography.txt\">\nThe capital of France is Paris.\n</document>"
         assertThat(result.answer).isEqualTo(expectedContextText)
         assertThat(result.sources).hasSize(1)
-        assertThat(result.sources.first().filePath).isEqualTo("geography.txt")
+        assertThat(result.sources.first().path).isEqualTo("geography.txt")
         assertThat(result.sources.first().chunkIndex).isEqualTo(0)
         assertThat(result.sources.first().excerpt).contains("The capital of France is Paris.")
     }

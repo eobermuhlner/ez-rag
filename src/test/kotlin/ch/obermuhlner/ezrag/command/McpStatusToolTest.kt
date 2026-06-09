@@ -48,11 +48,6 @@ class McpStatusToolTest {
 
             assertThat(result.storeDirPath).isNotBlank()
             assertThat(result.chunkCount).isEqualTo(3)
-            assertThat(result.documents).hasSize(2)
-            val doc1 = result.documents.first { it.path == "doc1.txt" }
-            assertThat(doc1.chunkCount).isEqualTo(2)
-            val doc2 = result.documents.first { it.path == "doc2.txt" }
-            assertThat(doc2.chunkCount).isEqualTo(1)
             assertThat(result.error).isNull()
         }
     }

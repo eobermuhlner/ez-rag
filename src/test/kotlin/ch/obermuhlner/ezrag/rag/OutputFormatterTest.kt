@@ -9,9 +9,9 @@ class OutputFormatterTest {
 
     private fun singleSourceResult(): RagResult {
         val source = SourceReference(
-            filePath = "docs/overview.txt",
+            path = "docs/overview.txt",
             chunkIndex = 2,
-            similarityScore = 0.87,
+            score = 0.87,
             excerpt = "This document describes the system architecture."
         )
         return RagResult(answer = "The system uses a layered architecture.", sources = listOf(source))
@@ -62,7 +62,7 @@ class OutputFormatterTest {
         // sources array
         assertThat(json).contains("\"sources\"")
         assertThat(json).contains("[")
-        assertThat(json).contains("\"file\"")
+        assertThat(json).contains("\"path\"")
         assertThat(json).contains("docs/overview.txt")
         assertThat(json).contains("\"score\"")
         assertThat(json).contains("0.87")
@@ -83,13 +83,13 @@ class OutputFormatterTest {
 
     private fun twoChunkSearchResult(): SearchResult {
         val chunk1 = ChunkMatch(
-            filePath = "docs/arch.md",
+            path = "docs/arch.md",
             chunkIndex = 3,
             score = 0.87,
             content = "The architecture consists of three layers..."
         )
         val chunk2 = ChunkMatch(
-            filePath = "docs/overview.md",
+            path = "docs/overview.md",
             chunkIndex = 1,
             score = 0.74,
             content = "An overview of the system..."
@@ -125,7 +125,7 @@ class OutputFormatterTest {
     @Test
     fun `formatText SearchResult with single chunk has no trailing blank line`() {
         val chunk = ChunkMatch(
-            filePath = "docs/single.md",
+            path = "docs/single.md",
             chunkIndex = 0,
             score = 0.90,
             content = "Single chunk content."
@@ -147,11 +147,12 @@ class OutputFormatterTest {
     // ---- SearchResult JSON format tests ----
 
     @Test
-    fun `formatJson SearchResult uses source key not file for file path field`() {
+    fun `formatJson SearchResult uses path key for file path field`() {
         val result = twoChunkSearchResult()
         val json = formatter.formatJson(result)
 
-        assertThat(json).contains("\"source\"")
+        assertThat(json).contains("\"path\"")
+        assertThat(json).doesNotContain("\"source\"")
         assertThat(json).doesNotContain("\"file\"")
     }
 
@@ -166,11 +167,11 @@ class OutputFormatterTest {
     }
 
     @Test
-    fun `formatJson SearchResult entries include source chunkIndex score and content keys`() {
+    fun `formatJson SearchResult entries include path chunkIndex score and content keys`() {
         val result = twoChunkSearchResult()
         val json = formatter.formatJson(result)
 
-        assertThat(json).contains("\"source\"")
+        assertThat(json).contains("\"path\"")
         assertThat(json).contains("\"chunkIndex\"")
         assertThat(json).contains("\"score\"")
         assertThat(json).contains("\"content\"")
@@ -189,8 +190,8 @@ class OutputFormatterTest {
 
     @Test
     fun `formatXml SearchResult has results root element with mode attribute`() {
-        val chunk1 = ChunkMatch(filePath = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
-        val chunk2 = ChunkMatch(filePath = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
+        val chunk1 = ChunkMatch(path = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
+        val chunk2 = ChunkMatch(path = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
         val result = SearchResult(chunks = listOf(chunk1, chunk2), mode = "hybrid")
         val xml = formatter.formatXml(result)
 
@@ -200,8 +201,8 @@ class OutputFormatterTest {
 
     @Test
     fun `formatXml SearchResult result elements have correct index score source chunk attributes`() {
-        val chunk1 = ChunkMatch(filePath = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
-        val chunk2 = ChunkMatch(filePath = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
+        val chunk1 = ChunkMatch(path = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
+        val chunk2 = ChunkMatch(path = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
         val result = SearchResult(chunks = listOf(chunk1, chunk2), mode = "hybrid")
         val xml = formatter.formatXml(result)
 
@@ -211,8 +212,8 @@ class OutputFormatterTest {
 
     @Test
     fun `formatXml SearchResult chunk content appears between result tags`() {
-        val chunk1 = ChunkMatch(filePath = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
-        val chunk2 = ChunkMatch(filePath = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
+        val chunk1 = ChunkMatch(path = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
+        val chunk2 = ChunkMatch(path = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
         val result = SearchResult(chunks = listOf(chunk1, chunk2), mode = "hybrid")
         val xml = formatter.formatXml(result)
 
@@ -232,7 +233,7 @@ class OutputFormatterTest {
 
     @Test
     fun `formatXml SearchResult score 0_9799999 is rendered as 0_98`() {
-        val chunk = ChunkMatch(filePath = "test.md", chunkIndex = 1, score = 0.9799999, content = "some content")
+        val chunk = ChunkMatch(path = "test.md", chunkIndex = 1, score = 0.9799999, content = "some content")
         val result = SearchResult(chunks = listOf(chunk), mode = "embedding")
         val xml = formatter.formatXml(result)
 
@@ -242,7 +243,7 @@ class OutputFormatterTest {
     @Test
     fun `formatJson SearchResult backslash double-quote and newline in content are escaped`() {
         val chunk = ChunkMatch(
-            filePath = "test.txt",
+            path = "test.txt",
             chunkIndex = 0,
             score = 0.5,
             content = "Line1\nLine2 with \"quotes\" and \\backslash"

@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test
 class RrfFusionTest {
 
     private fun chunk(id: String, index: Int = 0, score: Double = 1.0) =
-        ChunkMatch(filePath = id, chunkIndex = index, score = score, content = "content-$id")
+        ChunkMatch(path = id, chunkIndex = index, score = score, content = "content-$id")
 
     // -----------------------------------------------------------------------
     // Test 1: chunk ranked 1st in both lists gets highest score
@@ -19,9 +19,9 @@ class RrfFusionTest {
         // A is rank 1 in both; B is rank 2 in bm25 only; C is rank 2 in emb only
         val result = RrfFusion.fuse(bm25Results = bm25, embeddingResults = emb, topK = 3)
 
-        val scoreA = result.first { it.filePath == "A" }.score
-        val scoreB = result.first { it.filePath == "B" }.score
-        val scoreC = result.first { it.filePath == "C" }.score
+        val scoreA = result.first { it.path == "A" }.score
+        val scoreB = result.first { it.path == "B" }.score
+        val scoreC = result.first { it.path == "C" }.score
 
         assertThat(scoreA).isGreaterThan(scoreB)
         assertThat(scoreA).isGreaterThan(scoreC)
@@ -37,7 +37,7 @@ class RrfFusionTest {
         val emb  = listOf(chunk("A"), chunk("C"))
         val result = RrfFusion.fuse(bm25Results = bm25, embeddingResults = emb, topK = 10)
 
-        val aCount = result.count { it.filePath == "A" }
+        val aCount = result.count { it.path == "A" }
         assertThat(aCount).isEqualTo(1)
     }
 
@@ -50,7 +50,7 @@ class RrfFusionTest {
         val emb = listOf(chunk("E1"), chunk("E2"), chunk("E3"))
         val result = RrfFusion.fuse(bm25Results = emptyList(), embeddingResults = emb, topK = 5)
 
-        assertThat(result.map { it.filePath }).containsExactlyInAnyOrder("E1", "E2", "E3")
+        assertThat(result.map { it.path }).containsExactlyInAnyOrder("E1", "E2", "E3")
     }
 
     @Test
@@ -65,7 +65,7 @@ class RrfFusionTest {
         // E1 is rank 1 in embedding, worst rank in bm25; scores are normalized by 2/(k+1)
         val maxPossibleScore = 2.0 / (k + 1)
         val expectedE1 = (1.0 / (k + 1) + 1.0 / (k + worstRank)) / maxPossibleScore
-        val actualE1 = result.first { it.filePath == "E1" }.score
+        val actualE1 = result.first { it.path == "E1" }.score
         assertThat(actualE1).isEqualTo(expectedE1)
     }
 
@@ -78,7 +78,7 @@ class RrfFusionTest {
         val bm25 = listOf(chunk("B1"), chunk("B2"))
         val result = RrfFusion.fuse(bm25Results = bm25, embeddingResults = emptyList(), topK = 5)
 
-        assertThat(result.map { it.filePath }).containsExactlyInAnyOrder("B1", "B2")
+        assertThat(result.map { it.path }).containsExactlyInAnyOrder("B1", "B2")
     }
 
     @Test
@@ -92,7 +92,7 @@ class RrfFusionTest {
         // Scores are normalized by 2/(k+1)
         val maxPossibleScore = 2.0 / (k + 1)
         val expectedB1 = (1.0 / (k + 1) + 1.0 / (k + worstRank)) / maxPossibleScore
-        val actualB1 = result.first { it.filePath == "B1" }.score
+        val actualB1 = result.first { it.path == "B1" }.score
         assertThat(actualB1).isEqualTo(expectedB1)
     }
 
@@ -124,7 +124,7 @@ class RrfFusionTest {
     }
 
     // -----------------------------------------------------------------------
-    // Test 7: deduplication by (filePath, chunkIndex)
+    // Test 7: deduplication by (path, chunkIndex)
     // -----------------------------------------------------------------------
 
     // -----------------------------------------------------------------------
@@ -152,7 +152,7 @@ class RrfFusionTest {
     }
 
     @Test
-    fun `deduplication is based on filePath and chunkIndex pair`() {
+    fun `deduplication is based on path and chunkIndex pair`() {
         // Same file, two different chunk indices — should both appear
         val bm25 = listOf(ChunkMatch("file.txt", 0, 1.0, "chunk 0"), ChunkMatch("file.txt", 1, 0.9, "chunk 1"))
         val emb  = listOf(ChunkMatch("file.txt", 0, 1.0, "chunk 0"), ChunkMatch("file.txt", 2, 0.8, "chunk 2"))
@@ -160,7 +160,7 @@ class RrfFusionTest {
         val result = RrfFusion.fuse(bm25Results = bm25, embeddingResults = emb, topK = 10)
 
         // chunk 0 should appear once; chunk 1 and chunk 2 should each appear once
-        val keys = result.map { Pair(it.filePath, it.chunkIndex) }
+        val keys = result.map { Pair(it.path, it.chunkIndex) }
         assertThat(keys).doesNotHaveDuplicates()
         assertThat(keys).contains(Pair("file.txt", 0))
         assertThat(keys).contains(Pair("file.txt", 1))

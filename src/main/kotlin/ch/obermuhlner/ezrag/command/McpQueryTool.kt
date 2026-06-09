@@ -3,6 +3,7 @@ package ch.obermuhlner.ezrag.command
 import ch.obermuhlner.ezrag.rag.RagPipeline
 import ch.obermuhlner.ezrag.rag.RagQuery
 import ch.obermuhlner.ezrag.rag.SourceReference
+import com.fasterxml.jackson.annotation.JsonInclude
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
 
@@ -11,6 +12,7 @@ import org.springframework.ai.tool.annotation.ToolParam
  */
 class McpQueryTool(private val pipeline: RagPipeline) {
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class QueryToolResult(
         val answer: String,
         val sources: List<SourceReference>,

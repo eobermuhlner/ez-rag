@@ -1,6 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.LuceneRepository
+import com.fasterxml.jackson.annotation.JsonInclude
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
@@ -15,8 +16,9 @@ class McpDeleteTool(
     private val storeDir: Path,
 ) {
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class DeleteToolResult(
-        val filePath: String,
+        val path: String,
         val chunksRemoved: Int,
         val error: String? = null
     )
@@ -29,11 +31,11 @@ class McpDeleteTool(
         return try {
             LuceneRepository.open(embeddingModel, storeDir, "standard").use { repository ->
                 val removed = repository.delete(absolutePath)
-                DeleteToolResult(filePath = absolutePath, chunksRemoved = removed)
+                DeleteToolResult(path = absolutePath, chunksRemoved = removed)
             }
         } catch (e: Exception) {
             DeleteToolResult(
-                filePath = absolutePath,
+                path = absolutePath,
                 chunksRemoved = 0,
                 error = "Delete failed: ${e.message}"
             )

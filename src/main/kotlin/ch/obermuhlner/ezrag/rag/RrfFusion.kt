@@ -26,21 +26,21 @@ object RrfFusion {
         k: Int = 60,
         topK: Int
     ): List<ChunkMatch> {
-        // Build rank maps: key = (filePath, chunkIndex) → 1-based rank
+        // Build rank maps: key = (path, chunkIndex) → 1-based rank
         val bm25Ranks = bm25Results.mapIndexed { idx, chunk ->
-            Pair(chunk.filePath, chunk.chunkIndex) to (idx + 1)
+            Pair(chunk.path, chunk.chunkIndex) to (idx + 1)
         }.toMap()
         val embRanks = embeddingResults.mapIndexed { idx, chunk ->
-            Pair(chunk.filePath, chunk.chunkIndex) to (idx + 1)
+            Pair(chunk.path, chunk.chunkIndex) to (idx + 1)
         }.toMap()
 
         // Collect all unique chunk keys across both lists, keeping a representative ChunkMatch
         val allChunks: MutableMap<Pair<String, Int>, ChunkMatch> = mutableMapOf()
         for (chunk in bm25Results) {
-            allChunks.putIfAbsent(Pair(chunk.filePath, chunk.chunkIndex), chunk)
+            allChunks.putIfAbsent(Pair(chunk.path, chunk.chunkIndex), chunk)
         }
         for (chunk in embeddingResults) {
-            allChunks.putIfAbsent(Pair(chunk.filePath, chunk.chunkIndex), chunk)
+            allChunks.putIfAbsent(Pair(chunk.path, chunk.chunkIndex), chunk)
         }
 
         // worst rank for each list when a chunk is absent: total unique chunks + 1

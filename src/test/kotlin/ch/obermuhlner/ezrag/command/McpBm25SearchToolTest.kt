@@ -59,7 +59,7 @@ class McpBm25SearchToolTest {
     @Test
     fun `search_bm25 invocation with a query returns BM25 stub results`(@TempDir tempDir: Path) {
         val capturedQueries = mutableListOf<SearchQuery>()
-        val chunk = ChunkMatch(filePath = "keyword.txt", chunkIndex = 0, score = 1.5, content = "Keyword content")
+        val chunk = ChunkMatch(path = "keyword.txt", chunkIndex = 0, score = 1.5, content = "Keyword content")
         val pipeline = stubPipeline(tempDir, capturedQueries, SearchResult(listOf(chunk), mode = "bm25"))
 
         val tool = McpBm25SearchTool(pipeline)
@@ -68,7 +68,7 @@ class McpBm25SearchToolTest {
         assertThat(capturedQueries).hasSize(1)
         assertThat(capturedQueries[0].question).isEqualTo("keyword query")
         assertThat(result.chunks).hasSize(1)
-        assertThat(result.chunks[0].filePath).isEqualTo("keyword.txt")
+        assertThat(result.chunks[0].path).isEqualTo("keyword.txt")
         assertThat(result.error).isNull()
     }
 
@@ -93,5 +93,52 @@ class McpBm25SearchToolTest {
         assertThat(result.error).isNotNull()
         assertThat(result.error).contains("BM25 exploded")
         assertThat(result.chunks).isEmpty()
+    }
+
+    @Test
+    fun `search_bm25 headingPath is populated when stub returns chunk with heading_path metadata`(@TempDir tempDir: Path) {
+        val headings = listOf("Introduction", "Background")
+        val chunk = ChunkMatch(path = "doc.md", chunkIndex = 0, score = 1.0, content = "content", headingPath = headings)
+        val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk), mode = "bm25"))
+
+        val tool = McpBm25SearchTool(pipeline)
+        val result = tool.searchBm25("query", null)
+
+        assertThat(result.chunks).hasSize(1)
+        assertThat(result.chunks[0].headingPath).isEqualTo(headings)
+    }
+
+    @Test
+    fun `search_bm25 headingPath is null when stub omits heading_path metadata`(@TempDir tempDir: Path) {
+        val chunk = ChunkMatch(path = "doc.pdf", chunkIndex = 0, score = 1.0, content = "content", headingPath = null)
+        val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk), mode = "bm25"))
+
+        val tool = McpBm25SearchTool(pipeline)
+        val result = tool.searchBm25("query", null)
+
+        assertThat(result.chunks).hasSize(1)
+        assertThat(result.chunks[0].headingPath).isNull()
+    }
+
+    @Test
+    fun `search_bm25 with minScore 0_8 forwards 0_8 to SearchQuery minScore`(@TempDir tempDir: Path) {
+        val capturedQueries = mutableListOf<SearchQuery>()
+        val pipeline = stubPipeline(tempDir, capturedQueries)
+
+        val tool = McpBm25SearchTool(pipeline)
+        tool.searchBm25("query", null, minScore = 0.8)
+
+        assertThat(capturedQueries[0].minScore).isEqualTo(0.8)
+    }
+
+    @Test
+    fun `search_bm25 with null minScore defaults to 0_0`(@TempDir tempDir: Path) {
+        val capturedQueries = mutableListOf<SearchQuery>()
+        val pipeline = stubPipeline(tempDir, capturedQueries)
+
+        val tool = McpBm25SearchTool(pipeline)
+        tool.searchBm25("query", null, minScore = null)
+
+        assertThat(capturedQueries[0].minScore).isEqualTo(0.0)
     }
 }

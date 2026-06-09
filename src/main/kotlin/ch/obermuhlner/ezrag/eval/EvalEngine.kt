@@ -109,14 +109,14 @@ class EvalEngine(
 
     /**
      * Parses retrieved chunks from the SearchCommand JSON output.
-     * JSON format: {"chunks": [{"source": "<path>", "content": "<text>", ...}, ...]}
+     * JSON format: {"chunks": [{"path": "<path>", "content": "<text>", ...}, ...]}
      */
     private fun parseRetrievedChunks(json: String): List<EvalRetrievedChunk> {
         return try {
             val root = objectMapper.readTree(json)
             val chunks = root.get("chunks") ?: return emptyList()
             chunks.mapNotNull { chunk ->
-                val file = chunk.get("source")?.asText() ?: return@mapNotNull null
+                val file = chunk.get("path")?.asText() ?: return@mapNotNull null
                 val source = java.nio.file.Paths.get(file).fileName?.toString() ?: file
                 val content = chunk.get("content")?.asText() ?: ""
                 EvalRetrievedChunk(source = source, content = content)

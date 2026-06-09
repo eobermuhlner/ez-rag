@@ -47,6 +47,7 @@ class McpDeleteToolTest {
         val tool = McpDeleteTool(fakeEmbeddingModel, tempDir)
         val result = tool.delete(absolutePath)
 
+        assertThat(result.path).isEqualTo(absolutePath)
         assertThat(result.chunksRemoved).isEqualTo(3)
         assertThat(result.error).isNull()
 

@@ -75,6 +75,26 @@ class McpShowToolTest {
     }
 
     @Test
+    fun `calling show tool with includeChunks null defaults to false`(@TempDir tempDir: Path) {
+        val absolutePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("Some content")
+                .metadata(mapOf("source" to absolutePath, "mtime" to 1000L, "chunk_index" to 0))
+                .build()
+            repo.add(listOf(doc))
+        }
+
+        val tool = McpShowTool(fakeEmbeddingModel, tempDir)
+        val result = tool.show(absolutePath, null)
+
+        assertThat(result.error).isNull()
+        assertThat(result.chunks).hasSize(1)
+        // Text should be absent when includeChunks is null (treated as false)
+        assertThat(result.chunks[0].text).isNull()
+    }
+
+    @Test
     fun `calling show tool with unknown file path returns error`(@TempDir tempDir: Path) {
         // Create an empty store so LuceneRepository.open() succeeds
         LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }

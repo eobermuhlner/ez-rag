@@ -1,6 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.LuceneRepository
+import com.fasterxml.jackson.annotation.JsonInclude
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
@@ -20,6 +21,7 @@ class McpChunkTool(
         val headingPath: List<String>? = null
     )
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class ChunkToolResult(
         val file: String,
         val chunks: List<ChunkResult>,
@@ -32,7 +34,7 @@ class McpChunkTool(
     fun chunk(
         @ToolParam(description = "Absolute or relative path to the file containing the chunk.") filePath: String,
         @ToolParam(description = "Index of the chunk to retrieve, as returned by search, embedding-search, or bm25-search.") chunkIndex: Int,
-        @ToolParam(description = "Number of chunks before and after the target to include (default 0).") window: Int?
+        @ToolParam(required = false, description = "Number of chunks before and after the target to include (default 0 when omitted).") window: Int? = null
     ): ChunkToolResult {
         val absolutePath = Paths.get(filePath).toAbsolutePath().normalize().toString()
         val w = window ?: 0

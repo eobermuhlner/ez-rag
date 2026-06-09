@@ -173,7 +173,7 @@ class RagQueryIntegrationTest {
         assertThat(root.get("sources").size()).isGreaterThanOrEqualTo(1)
 
         val sourceFiles = (0 until root.get("sources").size()).map { i ->
-            root.get("sources").get(i).get("file").asText()
+            root.get("sources").get(i).get("path").asText()
         }
         assertThat(sourceFiles).anyMatch { it.contains("architecture.txt") }
     }

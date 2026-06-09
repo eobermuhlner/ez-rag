@@ -23,7 +23,9 @@ open class EmbeddingSearchPipeline(
             val chunkIndex = doc.metadata["chunk_index"]?.let { toInt(it) } ?: 0
             val score = (doc.metadata["score"] as? Double) ?: (doc.score ?: 0.0)
             val content = doc.text ?: ""
-            ChunkMatch(filePath = filePath, chunkIndex = chunkIndex, score = score, content = content)
+            @Suppress("UNCHECKED_CAST")
+            val headingPath = doc.metadata["heading_path"] as? List<String>
+            ChunkMatch(path = filePath, chunkIndex = chunkIndex, score = score, content = content, headingPath = headingPath)
         }.filter { it.score >= query.minScore }.sortedByDescending { it.score }
 
         if (reranker != null && query.rerankCandidates != null) {

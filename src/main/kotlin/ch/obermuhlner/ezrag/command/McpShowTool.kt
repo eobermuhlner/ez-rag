@@ -1,6 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.LuceneRepository
+import com.fasterxml.jackson.annotation.JsonInclude
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
@@ -22,6 +23,7 @@ class McpShowTool(
         val text: String? = null
     )
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class ShowToolResult(
         val file: String,
         val chunks: List<ChunkResult>,
@@ -31,7 +33,7 @@ class McpShowTool(
     @Tool(description = "Show per-chunk metadata for an ingested file. Optionally includes raw chunk text.")
     fun show(
         @ToolParam(description = "Absolute or relative path to the file to inspect.") filePath: String,
-        @ToolParam(description = "If true, include raw chunk text in results.") includeChunks: Boolean
+        @ToolParam(required = false, description = "If true, include raw chunk text in results. Defaults to false when omitted.") includeChunks: Boolean? = null
     ): ShowToolResult {
         val absolutePath = Paths.get(filePath).toAbsolutePath().normalize().toString()
         return try {
@@ -49,7 +51,7 @@ class McpShowTool(
                         chunkIndex = chunk.chunkIndex,
                         charCount = chunk.charCount,
                         mtime = chunk.mtime,
-                        text = if (includeChunks) chunk.text else null
+                        text = if (includeChunks == true) chunk.text else null
                     )
                 }
                 ShowToolResult(file = absolutePath, chunks = chunkResults)

@@ -3,6 +3,7 @@ package ch.obermuhlner.ezrag.command
 import ch.obermuhlner.ezrag.rag.ChunkMatch
 import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.SearchQuery
+import com.fasterxml.jackson.annotation.JsonInclude
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
 
@@ -11,6 +12,7 @@ import org.springframework.ai.tool.annotation.ToolParam
  */
 class McpEmbeddingSearchTool(private val pipeline: EmbeddingSearchPipeline) {
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class SearchToolResult(
         val chunks: List<ChunkMatch>,
         val error: String? = null
