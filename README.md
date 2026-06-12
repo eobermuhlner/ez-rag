@@ -980,9 +980,9 @@ ez-rag search --output-format json "retry policy" | jq '.chunks[].path'
 
 ### MCP Server
 
-`ez-rag mcp-server` starts a long-running MCP server that communicates over stdio using the MCP protocol. Claude Code and any other MCP-compatible agentic tool can call `ingest`, `query`, `search`, and `status` as structured tools without parsing CLI text output.
+`ez-rag mcp-server` starts a long-running MCP server that communicates over stdio using the MCP protocol. Claude Code and any other MCP-compatible agentic tool can call `search`, `chunk`, `ingest`, `reingest`, and `list` as structured tools without parsing CLI text output.
 
-> **Note:** You must ingest documents with the `ingest` tool (or the `ez-rag ingest` CLI command) before calling `status`, `search`, or `query`. The server loads the vector store from disk at startup.
+> **Note:** You must ingest documents with the `ingest` tool (or the `ez-rag ingest` CLI command) before calling `search`. The server loads the vector store from disk at startup.
 
 #### Registering ez-rag in Claude Code
 
@@ -1018,7 +1018,6 @@ To use an LLM provider or a non-default store location:
 |------------------------|----------------------------------|--------------------------------------------------------|
 | `--transport`          | `stdio`                          | Transport mode: `stdio` (default) or `http`            |
 | `--port`               | `8080`                           | HTTP listening port (HTTP transport only)              |
-| `--provider`           | `passthrough`                    | Chat provider used by the `query` tool                 |
 | `--embedding-provider` | `onnx`                           | Embedding provider used by all tools                   |
 | `--store-dir`          | `.ez-rag`                        | Path to the store directory                            |
 | `--verbose` / `-v`     | off                              | Enable debug logging to stderr (does not affect stdout)|
@@ -1047,7 +1046,7 @@ Register it in Claude Code by adding the following to `.mcp.json` in your projec
 {
   "mcpServers": {
     "ez-rag": {
-      "type": "http",
+      "type": "see",
       "url": "http://localhost:8080/sse"
     }
   }
@@ -1057,19 +1056,6 @@ Register it in Claude Code by adding the following to `.mcp.json` in your projec
 Multiple MCP clients can connect to the same running HTTP server instance simultaneously.
 
 #### Available MCP tools
-
-##### `status`
-
-Returns metadata about the vector store.
-
-No input parameters.
-
-| Return field    | Type             | Description                                    |
-|-----------------|------------------|------------------------------------------------|
-| `storeDirPath`  | String           | Absolute path of the store directory           |
-| `chunkCount`    | Int              | Total number of stored chunks                  |
-| `documents`     | List of objects  | Each entry has `path` (String) and `chunkCount` (Int) |
-| `error`         | String or null   | Set when an error occurred                     |
 
 ##### `search`
 
@@ -1083,90 +1069,13 @@ Hybrid search (BM25 + embedding, RRF fusion). No LLM is involved. Equivalent to 
 
 | Return field | Type            | Description                                 |
 |--------------|-----------------|---------------------------------------------|
-| `chunks`     | List of objects | Each entry has `path`, `chunkIndex`, `score`, `content` |
+| `chunks`     | List of objects | Each entry has `path`, `chunkIndex`, `score`, `text` |
 | `mode`       | String          | Always `"hybrid"`                           |
 | `error`      | String or null  | Set when an error occurred                  |
 
-##### `search_bm25`
-
-Keyword-only BM25 search using the Lucene index. No embedding model involved. Equivalent to `--mode bm25`.
-
-| Parameter  | Type   | Required | Default | Description                       |
-|------------|--------|----------|---------|-----------------------------------|
-| `question` | String | yes      | —       | The keyword query                 |
-| `topK`     | Int    | no       | `5`     | Maximum number of chunks to return|
-
-| Return field | Type            | Description                                 |
-|--------------|-----------------|---------------------------------------------|
-| `chunks`     | List of objects | Each entry has `path`, `chunkIndex`, `score`, `content` |
-| `mode`       | String          | Always `"bm25"`                             |
-| `error`      | String or null  | Set when an error occurred                  |
-
-##### `search_embedding`
-
-Embedding-only vector similarity search. No BM25 index involved. Equivalent to `--mode embedding`.
-
-| Parameter  | Type   | Required | Default | Description                                    |
-|------------|--------|----------|---------|------------------------------------------------|
-| `question` | String | yes      | —       | The search question or query text              |
-| `topK`     | Int    | no       | `5`     | Maximum number of chunks to return             |
-| `minScore` | Double | no       | `0.0`   | Minimum similarity score threshold (0.0–1.0)   |
-
-| Return field | Type            | Description                                 |
-|--------------|-----------------|---------------------------------------------|
-| `chunks`     | List of objects | Each entry has `path`, `chunkIndex`, `score`, `content` |
-| `mode`       | String          | Always `"embedding"`                        |
-| `error`      | String or null  | Set when an error occurred                  |
-
-##### `query`
-
-Retrieves relevant chunks and returns an answer. With the default `passthrough` provider the context chunks are returned directly; with a real provider an LLM generates the answer.
-
-| Parameter  | Type   | Required | Default          | Description                          |
-|------------|--------|----------|------------------|--------------------------------------|
-| `question` | String | yes      | —                | The question to ask                  |
-| `topK`     | Int    | no       | `5`              | Maximum number of chunks to retrieve |
-| `provider` | String | no       | server default   | Override the chat provider           |
-| `model`    | String | no       | provider default | Override the chat model              |
-
-| Return field | Type            | Description                                                              |
-|--------------|-----------------|--------------------------------------------------------------------------|
-| `answer`     | String          | Generated answer, or context chunks if using the `passthrough` provider  |
-| `sources`    | List of objects | Each entry has `path`, `chunkIndex`, `score`, `excerpt`                  |
-| `error`      | String or null  | Set when an error occurred                                               |
-
-##### `delete`
-
-Removes an ingested document from the vector store by file path. The store is saved to disk after each successful call.
-
-| Parameter  | Type   | Required | Description                                    |
-|------------|--------|----------|------------------------------------------------|
-| `filePath` | String | yes      | Path to the file to remove from the store      |
-
-| Return field    | Type           | Description                                    |
-|-----------------|----------------|------------------------------------------------|
-| `path`          | String         | Absolute path that was matched against         |
-| `chunksRemoved` | Int            | Number of chunks removed (0 if not found)      |
-| `error`         | String or null | Set when an error occurred                     |
-
-##### `show`
-
-Returns per-chunk metadata for an ingested file. Optionally includes raw chunk text.
-
-| Parameter       | Type    | Required | Description                                           |
-|-----------------|---------|----------|-------------------------------------------------------|
-| `filePath`      | String  | yes      | Path to the file to inspect                           |
-| `includeChunks` | Boolean | no       | If true, include raw chunk text in each chunk object  |
-
-| Return field | Type            | Description                                                                 |
-|--------------|-----------------|-----------------------------------------------------------------------------|
-| `file`       | String          | Absolute path that was matched against                                      |
-| `chunks`     | List of objects | Each entry has `chunkIndex`, `charCount`, `mtime`, and optionally `text`    |
-| `error`      | String or null  | Set when an error occurred or the file was not found                        |
-
 ##### `chunk`
 
-Retrieves one or more chunks by file path and chunk index. Use `chunkIndex` values from prior `search`, `embedding-search`, or `bm25-search` results. Pass `window` to also fetch surrounding chunks for context.
+Retrieves one or more chunks by file path and chunk index. Use `chunkIndex` values from prior `search` results. Pass `window` to also fetch surrounding chunks for context.
 
 | Parameter    | Type   | Required | Default | Description                                                                       |
 |--------------|--------|----------|---------|-----------------------------------------------------------------------------------|
@@ -1214,6 +1123,16 @@ Ingests documents from a file or directory into the vector store. The store is s
 | `chunksCreated` | Int            | Number of chunks added to the store      |
 | `skipped`       | Int            | Files skipped because already up to date |
 | `error`         | String or null | Set when an error occurred               |
+
+##### `list`
+
+Lists all ingested documents with their chunk count and staleness status. A document is stale when its source file has been modified since last ingest.
+
+No input parameters.
+
+| Return field | Type            | Description                                                                         |
+|--------------|-----------------|-------------------------------------------------------------------------------------|
+| (array)      | List of objects | Each entry has `path` (String), `chunkCount` (Int), and `stale` (Boolean)           |
 
 ### eval
 

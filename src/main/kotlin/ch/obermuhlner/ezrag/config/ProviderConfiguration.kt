@@ -8,7 +8,8 @@ import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.ollama.OllamaChatModel
 import org.springframework.ai.ollama.OllamaEmbeddingModel
 import org.springframework.ai.ollama.api.OllamaApi
-import org.springframework.ai.ollama.api.OllamaOptions
+import org.springframework.ai.ollama.api.OllamaChatOptions
+import org.springframework.ai.ollama.api.OllamaEmbeddingOptions
 import org.springframework.ai.openai.OpenAiChatModel
 import org.springframework.ai.openai.OpenAiChatOptions
 import org.springframework.ai.openai.OpenAiEmbeddingModel
@@ -82,7 +83,7 @@ class ProviderConfiguration(
                     .build()
                 OllamaChatModel.builder()
                     .ollamaApi(ollamaApi)
-                    .defaultOptions(OllamaOptions.builder().model(modelName).build())
+                    .defaultOptions(OllamaChatOptions.builder().model(modelName).build())
                     .build()
             }
             "passthrough" -> PassthroughChatModel()
@@ -125,7 +126,7 @@ class ProviderConfiguration(
                     .build()
                 OllamaEmbeddingModel.builder()
                     .ollamaApi(ollamaApi)
-                    .defaultOptions(OllamaOptions.builder().model(modelName).build())
+                    .defaultOptions(OllamaEmbeddingOptions.builder().model(modelName).build())
                     .build()
             }
             "onnx" -> {

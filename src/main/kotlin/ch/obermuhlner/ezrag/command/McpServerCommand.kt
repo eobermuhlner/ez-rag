@@ -2,13 +2,8 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
-import ch.obermuhlner.ezrag.ingestion.IngestService
 import ch.obermuhlner.ezrag.ingestion.LuceneRepository
-import ch.obermuhlner.ezrag.rag.BM25SearchPipeline
-import ch.obermuhlner.ezrag.rag.EmbeddingSearchPipeline
 import ch.obermuhlner.ezrag.rag.HybridSearchPipeline
-import ch.obermuhlner.ezrag.rag.RagPipeline
-import org.springframework.ai.chat.model.ChatModel
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.support.ToolCallbacks
 import org.springframework.ai.tool.StaticToolCallbackProvider
@@ -35,9 +30,6 @@ class McpServerCommand : Callable<Int> {
 
     @Autowired(required = false)
     private var springEmbeddingModel: EmbeddingModel? = null
-
-    @Autowired(required = false)
-    private var springChatModel: ChatModel? = null
 
     @Autowired(required = false)
     private var springConfigService: ConfigService? = null
@@ -68,33 +60,18 @@ class McpServerCommand : Callable<Int> {
         val analyzer = springConfigService?.resolve()?.analyzer ?: "standard"
         val luceneRepository = LuceneRepository.open(embeddingModel, storeDir, analyzer)
 
-        val chatModel = springChatModel
-        val statusTool = McpStatusTool(luceneRepository)
         val listTool = McpListTool(luceneRepository)
-        val embeddingSearchPipeline = EmbeddingSearchPipeline(luceneRepository)
-        val bm25SearchPipeline = BM25SearchPipeline(luceneRepository)
         val hybridSearchPipeline = HybridSearchPipeline(luceneRepository)
         val searchTool = McpSearchTool(hybridSearchPipeline)
-        val bm25SearchTool = McpBm25SearchTool(bm25SearchPipeline)
-        val embeddingSearchTool = McpEmbeddingSearchTool(embeddingSearchPipeline)
-        val queryTool = chatModel?.let { McpQueryTool(RagPipeline(embeddingSearchPipeline, it)) }
 
         val ingestTool = McpIngestTool(embeddingModel, storeDir)
-        val deleteTool = McpDeleteTool(embeddingModel, storeDir)
-        val showTool = McpShowTool(embeddingModel, storeDir)
         val reIngestTool = McpReIngestTool(embeddingModel, storeDir)
-        val chunkTool = McpChunkTool(embeddingModel, storeDir)
+        val chunkTool = McpChunkTool(luceneRepository)
 
         val tools = buildList {
-            add(statusTool)
             add(listTool)
             add(searchTool)
-            add(bm25SearchTool)
-            add(embeddingSearchTool)
-            if (queryTool != null) add(queryTool)
             add(ingestTool)
-            add(deleteTool)
-            add(showTool)
             add(reIngestTool)
             add(chunkTool)
         }.toTypedArray()
@@ -107,7 +84,7 @@ class McpServerCommand : Callable<Int> {
         // Block this thread until the process receives a termination signal (SIGTERM)
         // so that exitProcess() is not called prematurely.
         if (transport == Transport.http) {
-            println("MCP server listening on http://localhost:$port/sse")
+            println("MCP server listening on http://localhost:$port/mcp")
         }
         val done = CountDownLatch(1)
         Runtime.getRuntime().addShutdownHook(Thread { done.countDown() })

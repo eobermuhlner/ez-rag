@@ -29,7 +29,7 @@ repositories {
     mavenCentral()
 }
 
-extra["springAiVersion"] = "1.0.0"
+extra["springAiVersion"] = "1.1.7"
 
 dependencyManagement {
     imports {

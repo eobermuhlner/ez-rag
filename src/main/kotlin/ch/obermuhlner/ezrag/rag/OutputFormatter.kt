@@ -8,14 +8,14 @@ class OutputFormatter {
         }
         return result.chunks.mapIndexed { idx, chunk ->
             val header = "[${idx + 1}] score=${"%.2f".format(chunk.score)}  source=${chunk.path}  chunk=${chunk.chunkIndex}"
-            "$header\n${chunk.content}"
+            "$header\n${chunk.text}"
         }.joinToString("\n\n")
     }
 
     fun formatJson(result: SearchResult): String {
         val chunksJson = result.chunks.joinToString(",\n    ") { chunk ->
             val escapedPath = escapeJsonString(chunk.path)
-            val escapedContent = escapeJsonString(chunk.content)
+            val escapedContent = escapeJsonString(chunk.text)
             """{"path": "$escapedPath", "chunkIndex": ${chunk.chunkIndex}, "score": ${chunk.score}, "content": "$escapedContent"}"""
         }
         val chunksArray = if (result.chunks.isEmpty()) "[]" else "[\n    $chunksJson\n  ]"
@@ -30,7 +30,7 @@ class OutputFormatter {
         sb.append("<results mode=\"${result.mode}\">")
         result.chunks.forEachIndexed { idx, chunk ->
             sb.append("\n<result index=\"${idx + 1}\" score=\"${"%.2f".format(chunk.score)}\" source=\"${chunk.path}\" chunk=\"${chunk.chunkIndex}\">")
-            sb.append("\n${chunk.content}")
+            sb.append("\n${chunk.text}")
             sb.append("\n</result>")
         }
         if (result.chunks.isNotEmpty()) {
@@ -55,7 +55,7 @@ class OutputFormatter {
     fun formatJson(result: RagResult): String {
         val sourcesJson = result.sources.joinToString(",\n    ") { source ->
             val escapedPath = escapeJsonString(source.path)
-            val escapedExcerpt = escapeJsonString(source.excerpt)
+            val escapedExcerpt = escapeJsonString(source.text)
             """{"path": "$escapedPath", "score": ${source.score}, "excerpt": "$escapedExcerpt"}"""
         }
         val sourcesArray = if (result.sources.isEmpty()) "[]" else "[\n    $sourcesJson\n  ]"

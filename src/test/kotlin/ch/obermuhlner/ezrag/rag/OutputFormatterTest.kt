@@ -12,7 +12,7 @@ class OutputFormatterTest {
             path = "docs/overview.txt",
             chunkIndex = 2,
             score = 0.87,
-            excerpt = "This document describes the system architecture."
+            text = "This document describes the system architecture."
         )
         return RagResult(answer = "The system uses a layered architecture.", sources = listOf(source))
     }
@@ -86,13 +86,13 @@ class OutputFormatterTest {
             path = "docs/arch.md",
             chunkIndex = 3,
             score = 0.87,
-            content = "The architecture consists of three layers..."
+            text = "The architecture consists of three layers..."
         )
         val chunk2 = ChunkMatch(
             path = "docs/overview.md",
             chunkIndex = 1,
             score = 0.74,
-            content = "An overview of the system..."
+            text = "An overview of the system..."
         )
         return SearchResult(chunks = listOf(chunk1, chunk2))
     }
@@ -128,7 +128,7 @@ class OutputFormatterTest {
             path = "docs/single.md",
             chunkIndex = 0,
             score = 0.90,
-            content = "Single chunk content."
+            text = "Single chunk content."
         )
         val result = SearchResult(chunks = listOf(chunk))
         val output = formatter.formatText(result)
@@ -190,8 +190,8 @@ class OutputFormatterTest {
 
     @Test
     fun `formatXml SearchResult has results root element with mode attribute`() {
-        val chunk1 = ChunkMatch(path = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
-        val chunk2 = ChunkMatch(path = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
+        val chunk1 = ChunkMatch(path = "docs/arch.md", chunkIndex = 3, score = 0.87, text = "arch content")
+        val chunk2 = ChunkMatch(path = "docs/overview.md", chunkIndex = 1, score = 0.74, text = "overview content")
         val result = SearchResult(chunks = listOf(chunk1, chunk2), mode = "hybrid")
         val xml = formatter.formatXml(result)
 
@@ -201,8 +201,8 @@ class OutputFormatterTest {
 
     @Test
     fun `formatXml SearchResult result elements have correct index score source chunk attributes`() {
-        val chunk1 = ChunkMatch(path = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
-        val chunk2 = ChunkMatch(path = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
+        val chunk1 = ChunkMatch(path = "docs/arch.md", chunkIndex = 3, score = 0.87, text = "arch content")
+        val chunk2 = ChunkMatch(path = "docs/overview.md", chunkIndex = 1, score = 0.74, text = "overview content")
         val result = SearchResult(chunks = listOf(chunk1, chunk2), mode = "hybrid")
         val xml = formatter.formatXml(result)
 
@@ -212,8 +212,8 @@ class OutputFormatterTest {
 
     @Test
     fun `formatXml SearchResult chunk content appears between result tags`() {
-        val chunk1 = ChunkMatch(path = "docs/arch.md", chunkIndex = 3, score = 0.87, content = "arch content")
-        val chunk2 = ChunkMatch(path = "docs/overview.md", chunkIndex = 1, score = 0.74, content = "overview content")
+        val chunk1 = ChunkMatch(path = "docs/arch.md", chunkIndex = 3, score = 0.87, text = "arch content")
+        val chunk2 = ChunkMatch(path = "docs/overview.md", chunkIndex = 1, score = 0.74, text = "overview content")
         val result = SearchResult(chunks = listOf(chunk1, chunk2), mode = "hybrid")
         val xml = formatter.formatXml(result)
 
@@ -233,7 +233,7 @@ class OutputFormatterTest {
 
     @Test
     fun `formatXml SearchResult score 0_9799999 is rendered as 0_98`() {
-        val chunk = ChunkMatch(path = "test.md", chunkIndex = 1, score = 0.9799999, content = "some content")
+        val chunk = ChunkMatch(path = "test.md", chunkIndex = 1, score = 0.9799999, text = "some content")
         val result = SearchResult(chunks = listOf(chunk), mode = "embedding")
         val xml = formatter.formatXml(result)
 
@@ -246,7 +246,7 @@ class OutputFormatterTest {
             path = "test.txt",
             chunkIndex = 0,
             score = 0.5,
-            content = "Line1\nLine2 with \"quotes\" and \\backslash"
+            text = "Line1\nLine2 with \"quotes\" and \\backslash"
         )
         val result = SearchResult(chunks = listOf(chunk))
         val json = formatter.formatJson(result)

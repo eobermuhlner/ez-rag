@@ -175,7 +175,7 @@ class RagPipelineTest {
 
         assertThat(result.sources).isNotEmpty()
         result.sources.forEach { source ->
-            assertThat(source.excerpt.length).isLessThanOrEqualTo(200)
+            assertThat(source.text.length).isLessThanOrEqualTo(200)
         }
     }
 
@@ -251,7 +251,7 @@ class RagPipelineTest {
         assertThat(result.sources).hasSize(1)
         assertThat(result.sources.first().path).isEqualTo("geography.txt")
         assertThat(result.sources.first().chunkIndex).isEqualTo(0)
-        assertThat(result.sources.first().excerpt).contains("The capital of France is Paris.")
+        assertThat(result.sources.first().text).contains("The capital of France is Paris.")
     }
 
     @Test

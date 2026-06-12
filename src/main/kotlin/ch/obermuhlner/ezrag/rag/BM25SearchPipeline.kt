@@ -14,7 +14,7 @@ open class BM25SearchPipeline(
             val content = doc.text ?: ""
             @Suppress("UNCHECKED_CAST")
             val headingPath = doc.metadata["heading_path"] as? List<String>
-            ChunkMatch(path = filePath, chunkIndex = chunkIndex, score = score, content = content, headingPath = headingPath)
+            ChunkMatch(path = filePath, chunkIndex = chunkIndex, score = score, text = content, headingPath = headingPath)
         }
         return SearchResult(chunks = chunks.filter { it.score >= query.minScore }, mode = "bm25")
     }

@@ -157,7 +157,7 @@ class EmbeddingSearchPipelineTest {
         val result = pipeline.search(SearchQuery(question = "test query", topK = 5, minScore = 0.0))
 
         assertThat(result.chunks).isNotEmpty()
-        assertThat(result.chunks.first().content).isEqualTo(longText)
+        assertThat(result.chunks.first().text).isEqualTo(longText)
         repository.close()
     }
 

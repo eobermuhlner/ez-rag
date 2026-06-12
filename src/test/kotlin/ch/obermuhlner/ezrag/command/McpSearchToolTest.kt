@@ -8,6 +8,7 @@ import ch.obermuhlner.ezrag.rag.SearchResult
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import org.springframework.ai.document.Document
 import org.springframework.ai.embedding.Embedding
@@ -68,13 +69,12 @@ class McpSearchToolTest {
         assertThat(capturedQueries[0].topK).isEqualTo(5)
         assertThat(capturedQueries[0].minScore).isEqualTo(0.0)
         assertThat(result.chunks).isEmpty()
-        assertThat(result.error).isNull()
     }
 
     @Test
     fun `search with explicit topK and minScore forwards those values`(@TempDir tempDir: Path) {
         val capturedQueries = mutableListOf<SearchQuery>()
-        val chunk = ChunkMatch(path = "doc.txt", chunkIndex = 0, score = 0.9, content = "Relevant content")
+        val chunk = ChunkMatch(path = "doc.txt", chunkIndex = 0, score = 0.9, text = "Relevant content")
         val pipeline = stubPipeline(tempDir, capturedQueries, SearchResult(listOf(chunk)))
 
         val tool = McpSearchTool(pipeline)
@@ -85,15 +85,14 @@ class McpSearchToolTest {
         assertThat(result.chunks).hasSize(1)
         assertThat(result.chunks[0].path).isEqualTo("doc.txt")
         assertThat(result.chunks[0].score).isEqualTo(0.9)
-        assertThat(result.chunks[0].content).isEqualTo("Relevant content")
-        assertThat(result.error).isNull()
+        assertThat(result.chunks[0].text).isEqualTo("Relevant content")
     }
 
     @Test
     fun `search returns result with chunks field from SearchResult`(@TempDir tempDir: Path) {
         val chunks = listOf(
-            ChunkMatch(path = "a.txt", chunkIndex = 1, score = 0.8, content = "Content A"),
-            ChunkMatch(path = "b.txt", chunkIndex = 0, score = 0.7, content = "Content B"),
+            ChunkMatch(path = "a.txt", chunkIndex = 1, score = 0.8, text = "Content A"),
+            ChunkMatch(path = "b.txt", chunkIndex = 0, score = 0.7, text = "Content B"),
         )
         val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(chunks))
 
@@ -103,25 +102,22 @@ class McpSearchToolTest {
         assertThat(result.chunks).hasSize(2)
         assertThat(result.chunks[0].path).isEqualTo("a.txt")
         assertThat(result.chunks[1].path).isEqualTo("b.txt")
-        assertThat(result.error).isNull()
     }
 
     @Test
-    fun `search returns structured error response when pipeline throws exception`(@TempDir tempDir: Path) {
+    fun `search throws exception when pipeline throws exception`(@TempDir tempDir: Path) {
         val pipeline = stubPipeline(tempDir, throwException = RuntimeException("Search failed catastrophically"))
 
         val tool = McpSearchTool(pipeline)
-        val result = tool.search("question", null, null)
+        val ex = assertThrows<RuntimeException> { tool.search("question", null, null) }
 
-        assertThat(result.error).isNotNull()
-        assertThat(result.error).contains("Search failed catastrophically")
-        assertThat(result.chunks).isEmpty()
+        assertThat(ex.message).contains("Search failed catastrophically")
     }
 
     @Test
     fun `search headingPath is populated when stub returns chunk with headingPath`(@TempDir tempDir: Path) {
         val headings = listOf("Chapter 1", "Overview")
-        val chunk = ChunkMatch(path = "guide.md", chunkIndex = 0, score = 0.9, content = "content", headingPath = headings)
+        val chunk = ChunkMatch(path = "guide.md", chunkIndex = 0, score = 0.9, text = "content", headingPath = headings)
         val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk)))
 
         val tool = McpSearchTool(pipeline)
@@ -133,7 +129,7 @@ class McpSearchToolTest {
 
     @Test
     fun `search headingPath is null when stub returns chunk without headingPath`(@TempDir tempDir: Path) {
-        val chunk = ChunkMatch(path = "report.pdf", chunkIndex = 0, score = 0.9, content = "content", headingPath = null)
+        val chunk = ChunkMatch(path = "report.pdf", chunkIndex = 0, score = 0.9, text = "content", headingPath = null)
         val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk)))
 
         val tool = McpSearchTool(pipeline)
@@ -156,14 +152,14 @@ class McpSearchToolTest {
     }
 
     @Test
-    fun `SearchToolResult with non-null error serialized to JSON contains error key`(@TempDir tempDir: Path) {
-        val pipeline = stubPipeline(tempDir, throwException = RuntimeException("boom"))
+    fun `search result chunk has text field not content`(@TempDir tempDir: Path) {
+        val chunk = ChunkMatch(path = "doc.txt", chunkIndex = 0, score = 0.9, text = "Relevant content")
+        val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk)))
+
         val tool = McpSearchTool(pipeline)
         val result = tool.search("question", null, null)
 
-        val mapper = ObjectMapper()
-        val json = mapper.writeValueAsString(result)
-
-        assertThat(json).contains("\"error\"")
+        assertThat(result.chunks[0].text).isEqualTo("Relevant content")
     }
+
 }

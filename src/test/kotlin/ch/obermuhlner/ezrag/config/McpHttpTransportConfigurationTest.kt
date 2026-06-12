@@ -1,7 +1,7 @@
 package ch.obermuhlner.ezrag.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import io.modelcontextprotocol.server.transport.HttpServletSseServerTransportProvider
+import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -28,8 +28,8 @@ class McpHttpTransportConfigurationTest {
     private lateinit var applicationContext: ApplicationContext
 
     @Test
-    fun `HttpServletSseServerTransportProvider bean is present when stdio is false`() {
-        val bean = applicationContext.getBean(HttpServletSseServerTransportProvider::class.java)
+    fun `HttpServletStreamableServerTransportProvider bean is present when stdio is false`() {
+        val bean = applicationContext.getBean(HttpServletStreamableServerTransportProvider::class.java)
         assertThat(bean).isNotNull()
     }
 }

@@ -3,6 +3,7 @@ package ch.obermuhlner.ezrag.command
 import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import org.springframework.ai.document.Document
 import org.springframework.ai.embedding.Embedding
@@ -73,14 +74,15 @@ class McpChunkToolTest {
         val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
         ingestChunks(tempDir, filePath, listOf("Alpha", "Beta", "Gamma"))
 
-        val tool = McpChunkTool(fakeEmbeddingModel, tempDir)
-        val result = tool.chunk(filePath, 1, null)
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val tool = McpChunkTool(repo)
+            val result = tool.chunk(filePath, 1, null)
 
-        assertThat(result.error).isNull()
-        assertThat(result.file).isEqualTo(filePath)
-        assertThat(result.chunks).hasSize(1)
-        assertThat(result.chunks[0].chunkIndex).isEqualTo(1)
-        assertThat(result.chunks[0].text).isEqualTo("Beta")
+            assertThat(result.file).isEqualTo(filePath)
+            assertThat(result.chunks).hasSize(1)
+            assertThat(result.chunks[0].chunkIndex).isEqualTo(1)
+            assertThat(result.chunks[0].text).isEqualTo("Beta")
+        }
     }
 
     @Test
@@ -88,12 +90,13 @@ class McpChunkToolTest {
         val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
         ingestChunks(tempDir, filePath, listOf("A", "B", "C", "D", "E"))
 
-        val tool = McpChunkTool(fakeEmbeddingModel, tempDir)
-        val result = tool.chunk(filePath, 2, 1)
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val tool = McpChunkTool(repo)
+            val result = tool.chunk(filePath, 2, 1)
 
-        assertThat(result.error).isNull()
-        assertThat(result.chunks).hasSize(3)
-        assertThat(result.chunks.map { it.chunkIndex }).containsExactly(1, 2, 3)
+            assertThat(result.chunks).hasSize(3)
+            assertThat(result.chunks.map { it.chunkIndex }).containsExactly(1, 2, 3)
+        }
     }
 
     @Test
@@ -101,11 +104,12 @@ class McpChunkToolTest {
         val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
         ingestChunks(tempDir, filePath, listOf("A", "B", "C"))
 
-        val tool = McpChunkTool(fakeEmbeddingModel, tempDir)
-        val result = tool.chunk(filePath, 0, 1)
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val tool = McpChunkTool(repo)
+            val result = tool.chunk(filePath, 0, 1)
 
-        assertThat(result.error).isNull()
-        assertThat(result.chunks.map { it.chunkIndex }).containsExactly(0, 1)
+            assertThat(result.chunks.map { it.chunkIndex }).containsExactly(0, 1)
+        }
     }
 
     @Test
@@ -114,14 +118,15 @@ class McpChunkToolTest {
         ingestHeadingChunk(tempDir, filePath, "Section content", 0,
             headingTitle = "My Section", headingLevel = 2, headingPath = listOf("Top", "My Section"))
 
-        val tool = McpChunkTool(fakeEmbeddingModel, tempDir)
-        val result = tool.chunk(filePath, 0, null)
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val tool = McpChunkTool(repo)
+            val result = tool.chunk(filePath, 0, null)
 
-        assertThat(result.error).isNull()
-        val chunk = result.chunks[0]
-        assertThat(chunk.headingTitle).isEqualTo("My Section")
-        assertThat(chunk.headingLevel).isEqualTo(2)
-        assertThat(chunk.headingPath).containsExactly("Top", "My Section")
+            val chunk = result.chunks[0]
+            assertThat(chunk.headingTitle).isEqualTo("My Section")
+            assertThat(chunk.headingLevel).isEqualTo(2)
+            assertThat(chunk.headingPath).containsExactly("Top", "My Section")
+        }
     }
 
     @Test
@@ -129,14 +134,15 @@ class McpChunkToolTest {
         val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
         ingestChunks(tempDir, filePath, listOf("Plain text"))
 
-        val tool = McpChunkTool(fakeEmbeddingModel, tempDir)
-        val result = tool.chunk(filePath, 0, null)
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val tool = McpChunkTool(repo)
+            val result = tool.chunk(filePath, 0, null)
 
-        assertThat(result.error).isNull()
-        val chunk = result.chunks[0]
-        assertThat(chunk.headingTitle).isNull()
-        assertThat(chunk.headingLevel).isNull()
-        assertThat(chunk.headingPath).isNull()
+            val chunk = result.chunks[0]
+            assertThat(chunk.headingTitle).isNull()
+            assertThat(chunk.headingLevel).isNull()
+            assertThat(chunk.headingPath).isNull()
+        }
     }
 
     @Test
@@ -144,13 +150,14 @@ class McpChunkToolTest {
         val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
         ingestChunks(tempDir, filePath, listOf("X", "Y", "Z"))
 
-        val tool = McpChunkTool(fakeEmbeddingModel, tempDir)
-        val result = tool.chunk(filePath, 1, null)
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val tool = McpChunkTool(repo)
+            val result = tool.chunk(filePath, 1, null)
 
-        assertThat(result.error).isNull()
-        assertThat(result.chunks).hasSize(1)
-        assertThat(result.chunks[0].chunkIndex).isEqualTo(1)
-        assertThat(result.chunks[0].text).isEqualTo("Y")
+            assertThat(result.chunks).hasSize(1)
+            assertThat(result.chunks[0].chunkIndex).isEqualTo(1)
+            assertThat(result.chunks[0].text).isEqualTo("Y")
+        }
     }
 
     @Test
@@ -158,10 +165,27 @@ class McpChunkToolTest {
         LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
 
         val unknownPath = tempDir.resolve("nonexistent.txt").toAbsolutePath().toString()
-        val tool = McpChunkTool(fakeEmbeddingModel, tempDir)
-        val result = tool.chunk(unknownPath, 0, null)
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val tool = McpChunkTool(repo)
+            val exception = assertThrows<IllegalArgumentException> {
+                tool.chunk(unknownPath, 0, null)
+            }
+            assertThat(exception.message).contains("File not found in store")
+        }
+    }
 
-        assertThat(result.error).isNotNull()
-        assertThat(result.chunks).isEmpty()
+    @Test
+    fun `calling chunk tool using shared server repository succeeds while server holds the write lock`(@TempDir tempDir: Path) {
+        val filePath = tempDir.resolve("doc.txt").toAbsolutePath().toString()
+        ingestChunks(tempDir, filePath, listOf("Concurrent chunk"))
+
+        // Simulate MCP server: open the repository (acquires write lock) and pass it to the tool.
+        // The tool uses the shared repository directly — no second open, no write-lock conflict.
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { serverRepo ->
+            val tool = McpChunkTool(serverRepo)
+            val result = tool.chunk(filePath, 0, null)
+            assertThat(result.file).isEqualTo(filePath)
+            assertThat(result.chunks).hasSize(1)
+        }
     }
 }

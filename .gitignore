@@ -5,6 +5,11 @@ build/
 *.jar
 *.war
 *.log
-.ez-rag/
 
+.mcp.local.json
+
+META-INF/
+OSGI-INF/
+
+.ez-rag/
 .ez-rag/vector-store.json

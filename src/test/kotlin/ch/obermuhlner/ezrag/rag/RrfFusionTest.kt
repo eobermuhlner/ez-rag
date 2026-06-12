@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test
 class RrfFusionTest {
 
     private fun chunk(id: String, index: Int = 0, score: Double = 1.0) =
-        ChunkMatch(path = id, chunkIndex = index, score = score, content = "content-$id")
+        ChunkMatch(path = id, chunkIndex = index, score = score, text = "content-$id")
 
     // -----------------------------------------------------------------------
     // Test 1: chunk ranked 1st in both lists gets highest score

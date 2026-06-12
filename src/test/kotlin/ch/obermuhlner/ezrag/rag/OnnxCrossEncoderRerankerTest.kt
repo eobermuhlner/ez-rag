@@ -16,13 +16,13 @@ class OnnxCrossEncoderRerankerTest {
         val reranker = OnnxCrossEncoderReranker(modelName, cacheDir)
 
         val query = "What is the capital of France?"
-        val relevant = ChunkMatch(path = "a.txt", chunkIndex = 0, score = 0.5, content = "Paris is the capital of France")
-        val irrelevant = ChunkMatch(path = "b.txt", chunkIndex = 0, score = 0.9, content = "The weather in London is rainy")
+        val relevant = ChunkMatch(path = "a.txt", chunkIndex = 0, score = 0.5, text = "Paris is the capital of France")
+        val irrelevant = ChunkMatch(path = "b.txt", chunkIndex = 0, score = 0.9, text = "The weather in London is rainy")
 
         val reranked = reranker.rerank(query, listOf(relevant, irrelevant))
 
         assertThat(reranked).hasSize(2)
-        assertThat(reranked[0].content).isEqualTo("Paris is the capital of France")
+        assertThat(reranked[0].text).isEqualTo("Paris is the capital of France")
         assertThat(reranked[0].score).isGreaterThan(reranked[1].score)
     }
 
@@ -32,7 +32,7 @@ class OnnxCrossEncoderRerankerTest {
 
         // Trigger model loading by running a rerank
         val query = "test query"
-        val chunk = ChunkMatch(path = "a.txt", chunkIndex = 0, score = 0.5, content = "test content")
+        val chunk = ChunkMatch(path = "a.txt", chunkIndex = 0, score = 0.5, text = "test content")
         reranker.rerank(query, listOf(chunk))
 
         val modelDir = File(cacheDir).resolve(modelName)

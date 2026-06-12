@@ -35,7 +35,7 @@ class OnnxCrossEncoderReranker(
         val session = ortSession
 
         val scores = candidates.map { candidate ->
-            scoreCandidate(env, session, query, candidate.content)
+            scoreCandidate(env, session, query, candidate.text)
         }
 
         return candidates.zip(scores)

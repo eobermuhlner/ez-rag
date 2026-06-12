@@ -16,7 +16,7 @@ data class ChunkMatch(
     val path: String,
     val chunkIndex: Int,
     val score: Double,
-    val content: String,
+    val text: String,
     val headingPath: List<String>? = null
 )
 

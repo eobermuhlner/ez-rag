@@ -60,34 +60,6 @@ class McpServerCommandTest {
     }
 
     @Test
-    fun `ToolCallbackProvider exposes a tool named status`() {
-        val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
-        val toolNames = toolCallbacks.map { it.toolDefinition.name() }
-        assertThat(toolNames).contains("status")
-    }
-
-    @Test
-    fun `ToolCallbackProvider exposes a tool named query`() {
-        val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
-        val toolNames = toolCallbacks.map { it.toolDefinition.name() }
-        assertThat(toolNames).contains("query")
-    }
-
-    @Test
-    fun `ToolCallbackProvider exposes a tool named search_bm25`() {
-        val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
-        val toolNames = toolCallbacks.map { it.toolDefinition.name() }
-        assertThat(toolNames).contains("search_bm25")
-    }
-
-    @Test
-    fun `ToolCallbackProvider exposes a tool named search_embedding`() {
-        val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
-        val toolNames = toolCallbacks.map { it.toolDefinition.name() }
-        assertThat(toolNames).contains("search_embedding")
-    }
-
-    @Test
     fun `ToolCallbackProvider exposes a tool named reingest`() {
         val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
         val toolNames = toolCallbacks.map { it.toolDefinition.name() }
@@ -106,5 +78,12 @@ class McpServerCommandTest {
         val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
         val toolNames = toolCallbacks.map { it.toolDefinition.name() }
         assertThat(toolNames).contains("list")
+    }
+
+    @Test
+    fun `ToolCallbackProvider exposes exactly the tools search, chunk, ingest, reingest, list`() {
+        val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
+        val toolNames = toolCallbacks.map { it.toolDefinition.name() }.toSet()
+        assertThat(toolNames).containsExactlyInAnyOrder("search", "chunk", "ingest", "reingest", "list")
     }
 }

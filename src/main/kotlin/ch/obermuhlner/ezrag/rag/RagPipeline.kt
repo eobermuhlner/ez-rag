@@ -32,16 +32,16 @@ open class RagPipeline(
         }
 
         val sources = searchResult.chunks.map { chunk ->
-            val excerpt = if (chunk.content.length > EXCERPT_MAX_LENGTH) {
-                chunk.content.substring(0, EXCERPT_MAX_LENGTH)
+            val excerpt = if (chunk.text.length > EXCERPT_MAX_LENGTH) {
+                chunk.text.substring(0, EXCERPT_MAX_LENGTH)
             } else {
-                chunk.content
+                chunk.text
             }
             SourceReference(
                 path = chunk.path,
                 chunkIndex = chunk.chunkIndex,
                 score = chunk.score,
-                excerpt = excerpt
+                text = excerpt
             )
         }
 
@@ -52,7 +52,7 @@ open class RagPipeline(
         }
 
         val contextText = searchResult.chunks.joinToString("\n\n") { chunk ->
-            "<document source=\"${chunk.path}\">\n${chunk.content}\n</document>"
+            "<document source=\"${chunk.path}\">\n${chunk.text}\n</document>"
         }
 
         if (chatModel is PassthroughChatModel) {

@@ -5,6 +5,7 @@ import ch.obermuhlner.ezrag.ingestion.ReIngestResult
 import ch.obermuhlner.ezrag.ingestion.ReIngestService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import org.springframework.ai.document.Document
 import org.springframework.ai.embedding.Embedding
@@ -85,7 +86,6 @@ class McpReIngestToolTest {
         assertThat(result.chunksCreated).isGreaterThan(0)
         assertThat(result.filesSkipped).isEqualTo(0)
         assertThat(result.staleFound).isEqualTo(1)
-        assertThat(result.error).isNull()
     }
 
     @Test
@@ -109,21 +109,17 @@ class McpReIngestToolTest {
         assertThat(capturedForceAll).containsExactly(true)
         assertThat(result.filesReIngested).isEqualTo(2)
         assertThat(result.staleFound).isNull()
-        assertThat(result.error).isNull()
     }
 
     @Test
-    fun `reingest when service throws returns error field and zero counts`(@TempDir tempDir: Path) {
+    fun `reingest throws exception when service throws`(@TempDir tempDir: Path) {
         val tool = makeTool(tempDir, throwException = RuntimeException("Store is corrupt"))
 
-        val result = tool.reingest(forceAll = null, chunkSize = null, chunkOverlap = null)
+        val ex = assertThrows<RuntimeException> {
+            tool.reingest(forceAll = null, chunkSize = null, chunkOverlap = null)
+        }
 
-        assertThat(result.error).isNotNull()
-        assertThat(result.error).contains("Store is corrupt")
-        assertThat(result.filesReIngested).isEqualTo(0)
-        assertThat(result.chunksCreated).isEqualTo(0)
-        assertThat(result.filesSkipped).isEqualTo(0)
-        assertThat(result.staleFound).isNull()
+        assertThat(ex.message).contains("Store is corrupt")
     }
 
     @Test

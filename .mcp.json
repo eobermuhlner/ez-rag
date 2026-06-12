@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ez-rag": {
+      "type": "http",
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}

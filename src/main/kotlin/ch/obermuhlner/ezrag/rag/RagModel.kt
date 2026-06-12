@@ -19,7 +19,7 @@ data class SourceReference(
     val path: String,
     val chunkIndex: Int,
     val score: Double,
-    val excerpt: String
+    val text: String
 )
 
 data class RagResult(

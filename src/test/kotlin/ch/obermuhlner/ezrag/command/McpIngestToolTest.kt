@@ -9,6 +9,7 @@ import ch.obermuhlner.ezrag.ingestion.UrlFetcher
 import ch.obermuhlner.ezrag.ingestion.UrlSource
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import org.springframework.ai.document.Document
 import org.springframework.ai.embedding.Embedding
@@ -94,15 +95,14 @@ class McpIngestToolTest {
     }
 
     @Test
-    fun `ingest returns result with filesIngested chunksCreated and skipped fields`(@TempDir tempDir: Path) {
+    fun `ingest returns result with filesIngested chunksCreated and filesSkipped fields`(@TempDir tempDir: Path) {
         val tool = makeTool(tempDir, resultToReturn = IngestResult(filesIngested = 3, chunksCreated = 12, skipped = 2))
 
         val result = tool.ingest(tempDir.toString(), null, null)
 
         assertThat(result.filesIngested).isEqualTo(3)
         assertThat(result.chunksCreated).isEqualTo(12)
-        assertThat(result.skipped).isEqualTo(2)
-        assertThat(result.error).isNull()
+        assertThat(result.filesSkipped).isEqualTo(2)
     }
 
     @Test
@@ -119,16 +119,12 @@ class McpIngestToolTest {
     }
 
     @Test
-    fun `ingest returns structured error response when IngestService throws exception`(@TempDir tempDir: Path) {
+    fun `ingest throws exception when IngestService throws exception`(@TempDir tempDir: Path) {
         val tool = makeTool(tempDir, throwException = RuntimeException("Disk is full"))
 
-        val result = tool.ingest(tempDir.toString(), null, null)
+        val ex = assertThrows<RuntimeException> { tool.ingest(tempDir.toString(), null, null) }
 
-        assertThat(result.error).isNotNull()
-        assertThat(result.error).contains("Disk is full")
-        assertThat(result.filesIngested).isEqualTo(0)
-        assertThat(result.chunksCreated).isEqualTo(0)
-        assertThat(result.skipped).isEqualTo(0)
+        assertThat(ex.message).contains("Disk is full")
     }
 
     // --- Task 05: URL ingestion ---
@@ -147,12 +143,11 @@ class McpIngestToolTest {
 
         assertThat(result.filesIngested).isEqualTo(1)
         assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
-        assertThat(result.skipped).isEqualTo(0)
-        assertThat(result.error).isNull()
+        assertThat(result.filesSkipped).isEqualTo(0)
     }
 
     @Test
-    fun `ingest URL second call with unchanged bytes returns skipped 1`(@TempDir tempDir: Path) {
+    fun `ingest URL second call with unchanged bytes returns filesSkipped 1`(@TempDir tempDir: Path) {
         val html = "<html><head><title>Test Page</title></head><body><p>Content for unchanged skip test in MCP tool.</p></body></html>"
         val fakeUrlFetcher = object : UrlFetcher {
             override fun fetch(url: String) = FetchResult(html.toByteArray(), "text/html", 0L, 200)
@@ -166,12 +161,11 @@ class McpIngestToolTest {
             .ingest("https://example.com/page.html", null, null)
 
         assertThat(result.filesIngested).isEqualTo(0)
-        assertThat(result.skipped).isEqualTo(1)
-        assertThat(result.error).isNull()
+        assertThat(result.filesSkipped).isEqualTo(1)
     }
 
     @Test
-    fun `ingest URL when IngestService throws returns error`(@TempDir tempDir: Path) {
+    fun `ingest URL when IngestService throws propagates exception`(@TempDir tempDir: Path) {
         val tool = McpIngestTool(
             embeddingModel = fakeEmbeddingModel,
             storeDir = tempDir,
@@ -184,11 +178,9 @@ class McpIngestToolTest {
             }
         )
 
-        val result = tool.ingest("https://unreachable.example.com/", null, null)
+        val ex = assertThrows<RuntimeException> { tool.ingest("https://unreachable.example.com/", null, null) }
 
-        assertThat(result.filesIngested).isEqualTo(0)
-        assertThat(result.error).isNotNull()
-        assertThat(result.error).contains("Connection refused")
+        assertThat(ex.message).contains("Connection refused")
     }
 
     @Test
@@ -202,7 +194,6 @@ class McpIngestToolTest {
         val result = tool.ingest(sampleFile.toString(), null, null)
 
         assertThat(result.filesIngested).isEqualTo(1)
-        assertThat(result.error).isNull()
     }
 
     @Test

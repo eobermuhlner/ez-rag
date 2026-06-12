@@ -23,11 +23,10 @@ class McpReIngestTool(
         val staleFound: Int?,
         val filesReIngested: Int,
         val chunksCreated: Int,
-        val filesSkipped: Int,
-        val error: String? = null
+        val filesSkipped: Int
     )
 
-    @Tool(description = "Re-ingest stale documents in the vector store. By default re-ingests only stale documents (those whose file mtime has changed). Pass forceAll=true to re-ingest every document regardless of staleness.")
+    @Tool(description = "Re-ingest documents in the vector store. By default re-ingests only stale documents (those whose source file has been modified since last ingest). Pass forceAll=true to re-ingest every document regardless of staleness.")
     fun reingest(
         @ToolParam(required = false, description = "If true, re-ingest all documents regardless of staleness. Default false (stale only).") forceAll: Boolean?,
         @ToolParam(required = false, description = "Chunk size in characters (default: 1000).") chunkSize: Int?,
@@ -36,23 +35,13 @@ class McpReIngestTool(
         val cs = chunkSize ?: 1000
         val co = chunkOverlap ?: 200
         val force = forceAll ?: false
-        return try {
-            val service = reIngestServiceFactory(cs, co)
-            val result = service.reIngest(forceAll = force)
-            ReIngestToolResult(
-                staleFound = result.staleFound,
-                filesReIngested = result.filesReIngested,
-                chunksCreated = result.chunksCreated,
-                filesSkipped = result.filesSkipped
-            )
-        } catch (e: Exception) {
-            ReIngestToolResult(
-                staleFound = null,
-                filesReIngested = 0,
-                chunksCreated = 0,
-                filesSkipped = 0,
-                error = "ReIngest failed: ${e.message}"
-            )
-        }
+        val service = reIngestServiceFactory(cs, co)
+        val result = service.reIngest(forceAll = force)
+        return ReIngestToolResult(
+            staleFound = result.staleFound,
+            filesReIngested = result.filesReIngested,
+            chunksCreated = result.chunksCreated,
+            filesSkipped = result.filesSkipped
+        )
     }
 }

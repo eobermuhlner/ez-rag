@@ -1,1 +1,0 @@
-- Discuss: add `html-to-markdown` sub command, or generalize with existing `pdf-to-markdown`? Maybe even a sub command to show the "converted" document, independent of source format, but before chunking?

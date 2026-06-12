@@ -6,7 +6,6 @@ import ch.obermuhlner.ezrag.ingestion.IngestSource
 import ch.obermuhlner.ezrag.ingestion.JsoupUrlFetcher
 import ch.obermuhlner.ezrag.ingestion.UrlFetcher
 import ch.obermuhlner.ezrag.ingestion.UrlSource
-import com.fasterxml.jackson.annotation.JsonInclude
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
@@ -25,42 +24,31 @@ class McpIngestTool(
     }
 ) {
 
-    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class IngestToolResult(
         val filesIngested: Int,
         val chunksCreated: Int,
-        val skipped: Int,
-        val error: String? = null
+        val filesSkipped: Int
     )
 
-    @Tool(description = "Ingest documents from a file, directory path, or HTTP/HTTPS URL into the vector store. Persists the updated store to disk after each call.")
+    @Tool(description = "Ingest documents from a file, directory path, or HTTP/HTTPS URL into the vector store. filesSkipped counts files already up-to-date (content unchanged), unsupported formats, or failed URL fetches.")
     fun ingest(
-        @ToolParam(description = "Path to a file or directory to ingest, or an HTTP/HTTPS URL to fetch and ingest.") path: String,
+        @ToolParam(description = "Path to ingest: an absolute or relative filesystem path (file or directory), or an HTTP/HTTPS URL.") path: String,
         @ToolParam(required = false, description = "Chunk size in characters (default: 1000).") chunkSize: Int?,
         @ToolParam(required = false, description = "Chunk overlap in characters (default: 200).") chunkOverlap: Int?
     ): IngestToolResult {
         val cs = chunkSize ?: 1000
         val co = chunkOverlap ?: 200
-        return try {
-            val service = ingestServiceFactory(cs, co, urlFetcher)
-            val source: IngestSource = if (path.startsWith("http://") || path.startsWith("https://")) {
-                UrlSource(path)
-            } else {
-                FileSource(File(path))
-            }
-            val result = service.ingest(listOf(source))
-            IngestToolResult(
-                filesIngested = result.filesIngested,
-                chunksCreated = result.chunksCreated,
-                skipped = result.skipped
-            )
-        } catch (e: Exception) {
-            IngestToolResult(
-                filesIngested = 0,
-                chunksCreated = 0,
-                skipped = 0,
-                error = "Ingest failed: ${e.message}"
-            )
+        val service = ingestServiceFactory(cs, co, urlFetcher)
+        val source: IngestSource = if (path.startsWith("http://") || path.startsWith("https://")) {
+            UrlSource(path)
+        } else {
+            FileSource(File(path))
         }
+        val result = service.ingest(listOf(source))
+        return IngestToolResult(
+            filesIngested = result.filesIngested,
+            chunksCreated = result.chunksCreated,
+            filesSkipped = result.skipped
+        )
     }
 }
