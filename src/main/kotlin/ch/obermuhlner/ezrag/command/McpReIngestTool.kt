@@ -1,20 +1,18 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.ingestion.ReIngestService
 import com.fasterxml.jackson.annotation.JsonInclude
-import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
-import java.nio.file.Path
 
 /**
  * MCP tool that re-ingests stale (or all) documents into the vector store via [ReIngestService].
  */
 class McpReIngestTool(
-    private val embeddingModel: EmbeddingModel,
-    private val storeDir: Path,
+    private val repository: LuceneRepository,
     private val reIngestServiceFactory: (Int, Int) -> ReIngestService = { chunkSize, chunkOverlap ->
-        ReIngestService(embeddingModel, storeDir, chunkSize, chunkOverlap)
+        ReIngestService(repository, chunkSize, chunkOverlap)
     }
 ) {
 

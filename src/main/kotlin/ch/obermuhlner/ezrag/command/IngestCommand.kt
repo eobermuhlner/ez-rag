@@ -6,6 +6,7 @@ import ch.obermuhlner.ezrag.ingestion.FileSource
 import ch.obermuhlner.ezrag.ingestion.IngestService
 import ch.obermuhlner.ezrag.ingestion.IngestSource
 import ch.obermuhlner.ezrag.ingestion.JsoupUrlFetcher
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.ingestion.UrlFetcher
 import ch.obermuhlner.ezrag.ingestion.UrlSource
 import org.springframework.ai.embedding.EmbeddingModel
@@ -101,34 +102,37 @@ class IngestCommand(
             ?: EzRagDirResolver().resolve(startDirOverride ?: Paths.get("").toAbsolutePath())
         val resolvedChunkSize = chunkSize ?: chunkSizeOption ?: 1000
         val resolvedChunkOverlap = chunkOverlap ?: chunkOverlapOption ?: 200
-
-        val service = IngestService(
-            model, resolvedStoreDir, resolvedChunkSize, resolvedChunkOverlap, warningWriter,
-            urlFetcher = urlFetcher,
-        )
+        val analyzerName = (configServiceOverride ?: springConfigService)?.resolve()?.analyzer ?: "standard"
 
         val isQuiet = quiet || quietOption
         val isVerbose = verbose || detailsOption
 
-        if (!isQuiet) {
-            service.onFileIngesting = { path -> outputWriter.println("Ingesting: $path") }
-            service.onFileSkipped = { path, reason -> outputWriter.println("Skipping: $path ($reason)") }
-        }
+        LuceneRepository.open(model, resolvedStoreDir, analyzerName).use { repo ->
+            val service = IngestService(
+                repo, resolvedChunkSize, resolvedChunkOverlap, warningWriter,
+                urlFetcher = urlFetcher,
+            )
 
-        if (isVerbose) {
-            service.onFileLoaded = { _, chunks ->
-                chunks.forEachIndexed { index, chunk ->
-                    val tokenCount = chunk.text?.split(Regex("\\s+"))?.size ?: 0
-                    val text = chunk.text ?: ""
-                    val preview = if (text.length > 60) text.take(60).replace('\n', ' ') + "…"
-                                  else text.replace('\n', ' ')
-                    outputWriter.println("  Chunk $index [$tokenCount tokens]: \"$preview\"")
+            if (!isQuiet) {
+                service.onFileIngesting = { path -> outputWriter.println("Ingesting: $path") }
+                service.onFileSkipped = { path, reason -> outputWriter.println("Skipping: $path ($reason)") }
+            }
+
+            if (isVerbose) {
+                service.onFileLoaded = { _, chunks ->
+                    chunks.forEachIndexed { index, chunk ->
+                        val tokenCount = chunk.text?.split(Regex("\\s+"))?.size ?: 0
+                        val text = chunk.text ?: ""
+                        val preview = if (text.length > 60) text.take(60).replace('\n', ' ') + "…"
+                                      else text.replace('\n', ' ')
+                        outputWriter.println("  Chunk $index [$tokenCount tokens]: \"$preview\"")
+                    }
                 }
             }
-        }
 
-        val result = service.ingest(sources)
-        outputWriter.println("${result.filesIngested} files ingested, ${result.chunksCreated} chunks created, ${result.skipped} skipped")
+            val result = service.ingest(sources)
+            outputWriter.println("${result.filesIngested} files ingested, ${result.chunksCreated} chunks created, ${result.skipped} skipped")
+        }
         return 0
     }
 

@@ -38,18 +38,38 @@ class ReIngestServiceTest {
     }
 
     private fun ingestFile(storeDir: Path, file: Path, model: EmbeddingModel = fakeEmbeddingModel, chunkSize: Int = 1000, chunkOverlap: Int = 200) {
-        val service = IngestService(model, storeDir, chunkSize, chunkOverlap)
-        service.ingest(listOf(file.toFile()))
+        LuceneRepository.open(model, storeDir, "standard").use { repo ->
+            val service = IngestService(repo, chunkSize, chunkOverlap)
+            service.ingest(listOf(file.toFile()))
+        }
     }
 
-    private fun createReIngestService(
+    /**
+     * Opens a LuceneRepository, runs the given block with a ReIngestService, then closes the repository.
+     */
+    private fun <T> withReIngestService(
         storeDir: Path,
         model: EmbeddingModel = fakeEmbeddingModel,
         warningWriter: PrintWriter = PrintWriter(System.err, true),
         chunkSize: Int = 1000,
-        chunkOverlap: Int = 200
-    ): ReIngestService {
-        return ReIngestService(model, storeDir, chunkSize, chunkOverlap, warningWriter)
+        chunkOverlap: Int = 200,
+        block: (ReIngestService) -> T
+    ): T {
+        return LuceneRepository.open(model, storeDir, "standard").use { repo ->
+            val service = ReIngestService(repo, chunkSize, chunkOverlap, warningWriter)
+            block(service)
+        }
+    }
+
+    @Test
+    fun `ReIngestService can be constructed with an open LuceneRepository`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val service = ReIngestService(repo)
+            val result = service.reIngest(forceAll = false)
+            assertThat(result.staleFound).isEqualTo(0)
+            assertThat(result.filesReIngested).isEqualTo(0)
+        }
     }
 
     @Test
@@ -68,8 +88,9 @@ class ReIngestServiceTest {
         sourceFile.toFile().writeText("updated content after modification")
 
         val warnOut = StringWriter()
-        val service = createReIngestService(storeDir, warningWriter = PrintWriter(warnOut, true))
-        val result = service.reIngest(forceAll = false)
+        val result = withReIngestService(storeDir, warningWriter = PrintWriter(warnOut, true)) { service ->
+            service.reIngest(forceAll = false)
+        }
 
         assertThat(result.filesReIngested).isEqualTo(1)
         assertThat(result.chunksCreated).isGreaterThan(0)
@@ -91,8 +112,9 @@ class ReIngestServiceTest {
         Files.setLastModifiedTime(sourceFile, futureTime)
         sourceFile.toFile().writeText("The capital of Germany is Berlin")
 
-        val service = createReIngestService(storeDir)
-        service.reIngest(forceAll = false)
+        withReIngestService(storeDir) { service ->
+            service.reIngest(forceAll = false)
+        }
 
         // Verify store contents: new content should be present
         LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
@@ -112,8 +134,9 @@ class ReIngestServiceTest {
         // Ingest the file
         ingestFile(storeDir, sourceFile)
 
-        val service = createReIngestService(storeDir)
-        val result = service.reIngest(forceAll = false)
+        val result = withReIngestService(storeDir) { service ->
+            service.reIngest(forceAll = false)
+        }
 
         assertThat(result.filesReIngested).isEqualTo(0)
         assertThat(result.filesSkipped).isEqualTo(0)
@@ -133,8 +156,9 @@ class ReIngestServiceTest {
         Files.delete(sourceFile)
 
         val warnOut = StringWriter()
-        val service = createReIngestService(storeDir, warningWriter = PrintWriter(warnOut, true))
-        val result = service.reIngest(forceAll = false)
+        val result = withReIngestService(storeDir, warningWriter = PrintWriter(warnOut, true)) { service ->
+            service.reIngest(forceAll = false)
+        }
 
         assertThat(result.filesSkipped).isEqualTo(1)
         assertThat(result.filesReIngested).isEqualTo(0)
@@ -169,8 +193,9 @@ class ReIngestServiceTest {
         // file3 remains unchanged
 
         val warnOut = StringWriter()
-        val service = createReIngestService(storeDir, warningWriter = PrintWriter(warnOut, true))
-        val result = service.reIngest(forceAll = false)
+        val result = withReIngestService(storeDir, warningWriter = PrintWriter(warnOut, true)) { service ->
+            service.reIngest(forceAll = false)
+        }
 
         // staleFound should be 2: file1 (changed mtime) + file2 (missing = stale)
         assertThat(result.staleFound).isEqualTo(2)
@@ -193,8 +218,9 @@ class ReIngestServiceTest {
         ingestFile(storeDir, file2)
 
         // Neither file is stale (mtimes match)
-        val service = createReIngestService(storeDir)
-        val result = service.reIngest(forceAll = true)
+        val result = withReIngestService(storeDir) { service ->
+            service.reIngest(forceAll = true)
+        }
 
         // Both files should be re-ingested even though neither is stale
         assertThat(result.filesReIngested).isEqualTo(2)
@@ -211,8 +237,9 @@ class ReIngestServiceTest {
         // Ingest the file
         ingestFile(storeDir, sourceFile)
 
-        val service = createReIngestService(storeDir)
-        val result = service.reIngest(forceAll = true)
+        val result = withReIngestService(storeDir) { service ->
+            service.reIngest(forceAll = true)
+        }
 
         assertThat(result.staleFound).isNull()
     }
@@ -227,10 +254,12 @@ class ReIngestServiceTest {
         val smallModel = createFakeModel(4)
         ingestFile(storeDir, sourceFile, model = smallModel)
 
-        // Re-ingest with dimension-8 model — must not throw
+        // Reset stored dimension, then re-ingest with dimension-8 model — must not throw
         val largeModel = createFakeModel(8)
-        val service = createReIngestService(storeDir, model = largeModel)
-        val result = service.reIngest(forceAll = true)
+        LuceneRepository.resetStoredDimension(storeDir)
+        val result = withReIngestService(storeDir, model = largeModel) { service ->
+            service.reIngest(forceAll = true)
+        }
 
         assertThat(result.filesReIngested).isEqualTo(1)
         assertThat(result.chunksCreated).isGreaterThan(0)
@@ -246,7 +275,10 @@ class ReIngestServiceTest {
         ingestFile(storeDir, sourceFile, model = smallModel)
 
         val largeModel = createFakeModel(8)
-        createReIngestService(storeDir, model = largeModel).reIngest(forceAll = true)
+        LuceneRepository.resetStoredDimension(storeDir)
+        withReIngestService(storeDir, model = largeModel) { service ->
+            service.reIngest(forceAll = true)
+        }
 
         // Searching with the new model must work without dimension errors
         LuceneRepository.open(largeModel, storeDir, "standard").use { repo ->
@@ -266,8 +298,10 @@ class ReIngestServiceTest {
         }
 
     private fun ingestUrl(storeDir: Path, url: String, fetcher: UrlFetcher) {
-        val service = IngestService(fakeEmbeddingModel, storeDir, urlFetcher = fetcher)
-        service.ingest(listOf(UrlSource(url)))
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val service = IngestService(repo, urlFetcher = fetcher)
+            service.ingest(listOf(UrlSource(url)))
+        }
     }
 
     @Test
@@ -282,8 +316,9 @@ class ReIngestServiceTest {
 
         fetchBytes = "<html><head><title>Page</title></head><body><p>updated content</p></body></html>".toByteArray()
 
-        val service = ReIngestService(fakeEmbeddingModel, storeDir, urlFetcher = fetcher)
-        val result = service.reIngest(forceAll = false)
+        val result = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            ReIngestService(repo, urlFetcher = fetcher).reIngest(forceAll = false)
+        }
 
         assertThat(result.filesReIngested).isEqualTo(1)
         assertThat(result.filesSkipped).isEqualTo(0)
@@ -299,8 +334,9 @@ class ReIngestServiceTest {
 
         ingestUrl(storeDir, fakeUrl, fetcher)
 
-        val service = ReIngestService(fakeEmbeddingModel, storeDir, urlFetcher = fetcher)
-        val result = service.reIngest(forceAll = false)
+        val result = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            ReIngestService(repo, urlFetcher = fetcher).reIngest(forceAll = false)
+        }
 
         assertThat(result.filesReIngested).isEqualTo(0)
         assertThat(result.filesSkipped).isEqualTo(1)
@@ -321,12 +357,13 @@ class ReIngestServiceTest {
         }
 
         val warnOut = StringWriter()
-        val service = ReIngestService(
-            fakeEmbeddingModel, storeDir,
-            warningWriter = PrintWriter(warnOut, true),
-            urlFetcher = failingFetcher
-        )
-        val result = service.reIngest(forceAll = false)
+        val result = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            ReIngestService(
+                repo,
+                warningWriter = PrintWriter(warnOut, true),
+                urlFetcher = failingFetcher
+            ).reIngest(forceAll = false)
+        }
 
         assertThat(result.filesReIngested).isEqualTo(0)
         assertThat(result.filesSkipped).isEqualTo(1)
@@ -350,8 +387,9 @@ class ReIngestServiceTest {
         Files.setLastModifiedTime(sourceFile, futureTime)
         sourceFile.toFile().writeText("updated file content")
 
-        val service = createReIngestService(storeDir)
-        val result = service.reIngest(forceAll = false)
+        val result = withReIngestService(storeDir) { service ->
+            service.reIngest(forceAll = false)
+        }
 
         assertThat(result.filesReIngested).isEqualTo(1)
         assertThat(result.filesSkipped).isEqualTo(0)

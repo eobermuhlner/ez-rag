@@ -64,8 +64,8 @@ class McpServerCommand : Callable<Int> {
         val hybridSearchPipeline = HybridSearchPipeline(luceneRepository)
         val searchTool = McpSearchTool(hybridSearchPipeline)
 
-        val ingestTool = McpIngestTool(embeddingModel, storeDir)
-        val reIngestTool = McpReIngestTool(embeddingModel, storeDir)
+        val ingestTool = McpIngestTool(luceneRepository)
+        val reIngestTool = McpReIngestTool(luceneRepository)
         val chunkTool = McpChunkTool(luceneRepository)
 
         val tools = buildList {

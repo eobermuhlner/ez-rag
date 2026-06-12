@@ -160,7 +160,9 @@ class LuceneRepository private constructor(
 
     /**
      * Writes all documents to the index, commits, and updates the source→mtime cache.
+     * Synchronized to prevent interleaved commits and cache races from concurrent MCP calls.
      */
+    @Synchronized
     fun add(documents: List<Document>) {
         if (documents.isEmpty()) return
 
@@ -270,7 +272,9 @@ class LuceneRepository private constructor(
     /**
      * Deletes all Lucene documents for the given source path.
      * Commits the writer. Removes from cache. Returns the number of documents deleted.
+     * Synchronized to prevent interleaved commits and cache races from concurrent MCP calls.
      */
+    @Synchronized
     fun delete(source: String): Int {
         val countBefore = countDocumentsForSource(source)
         if (countBefore == 0) return 0
@@ -279,6 +283,18 @@ class LuceneRepository private constructor(
         writer.commit()
         sourceMtimeCache.remove(source)
         return countBefore
+    }
+
+    /**
+     * Drops all documents from the index and clears the cache.
+     * Uses [IndexWriter.deleteAll] to wipe all segments (including their field-schema),
+     * which is required before writing documents with a different embedding dimension.
+     * After this call the writer is committed and the in-memory cache is empty.
+     */
+    fun dropAllDocuments() {
+        writer.deleteAll()
+        writer.commit()
+        sourceMtimeCache.clear()
     }
 
     /**

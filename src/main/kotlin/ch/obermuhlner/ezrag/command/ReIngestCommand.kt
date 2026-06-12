@@ -2,6 +2,7 @@ package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagDirResolver
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.ingestion.ReIngestService
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.beans.factory.annotation.Autowired
@@ -63,19 +64,26 @@ class ReIngestCommand(
         val resolvedChunkSize = chunkSize ?: chunkSizeOption ?: 1000
         val resolvedChunkOverlap = chunkOverlap ?: chunkOverlapOption ?: 200
         val isQuiet = quiet || quietOption
+        val analyzerName = (configServiceOverride ?: springConfigService)?.resolve()?.analyzer ?: "standard"
 
-        val service = ReIngestService(model, resolvedStoreDir, resolvedChunkSize, resolvedChunkOverlap, warningWriter)
-
-        if (!isQuiet) {
-            service.onFileReIngesting = { path -> outputWriter.println("Re-ingesting: $path") }
+        if (forceAllOption) {
+            LuceneRepository.resetStoredDimension(resolvedStoreDir)
         }
 
-        val result = service.reIngest(forceAll = forceAllOption)
+        LuceneRepository.open(model, resolvedStoreDir, analyzerName).use { repo ->
+            val service = ReIngestService(repo, resolvedChunkSize, resolvedChunkOverlap, warningWriter)
 
-        if (!forceAllOption) {
-            outputWriter.println("Stale documents: ${result.staleFound}")
+            if (!isQuiet) {
+                service.onFileReIngesting = { path -> outputWriter.println("Re-ingesting: $path") }
+            }
+
+            val result = service.reIngest(forceAll = forceAllOption)
+
+            if (!forceAllOption) {
+                outputWriter.println("Stale documents: ${result.staleFound}")
+            }
+            outputWriter.println("${result.filesReIngested} files re-ingested, ${result.chunksCreated} chunks created, ${result.filesSkipped} skipped")
         }
-        outputWriter.println("${result.filesReIngested} files re-ingested, ${result.chunksCreated} chunks created, ${result.filesSkipped} skipped")
         return 0
     }
 

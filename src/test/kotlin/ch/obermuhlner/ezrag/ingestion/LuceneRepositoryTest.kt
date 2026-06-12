@@ -10,6 +10,10 @@ import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
 import org.springframework.ai.embedding.Embedding
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Tests for LuceneRepository — the unified on-disk Lucene index combining HNSW and BM25.
@@ -499,6 +503,154 @@ class LuceneRepositoryTest {
             val metadata = repo.getMetadata { _ -> 1000L }
             assertThat(metadata.documents).hasSize(1)
             assertThat(metadata.documents[0].contentHash).isEqualTo("sha256hex")
+        }
+    }
+
+    // --- concurrent add thread safety ---
+
+    @Test
+    fun `concurrent add calls from two threads complete without exception and total chunk count is correct`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val repo = LuceneRepository.open(model, tempDir, "standard")
+
+        val batchSize = 10
+        val batchA = (0 until batchSize).map { i ->
+            makeDoc("Batch A chunk $i", "/abs/batchA.txt", chunkIndex = i, mtime = 1000L + i)
+        }
+        val batchB = (0 until batchSize).map { i ->
+            makeDoc("Batch B chunk $i", "/abs/batchB.txt", chunkIndex = i, mtime = 2000L + i)
+        }
+
+        val latch = CountDownLatch(1)
+        val errorRef = AtomicReference<Throwable?>()
+        val executor = Executors.newFixedThreadPool(2)
+
+        executor.submit {
+            try {
+                latch.await()
+                repo.add(batchA)
+            } catch (e: Throwable) {
+                errorRef.compareAndSet(null, e)
+            }
+        }
+        executor.submit {
+            try {
+                latch.await()
+                repo.add(batchB)
+            } catch (e: Throwable) {
+                errorRef.compareAndSet(null, e)
+            }
+        }
+
+        latch.countDown()
+        executor.shutdown()
+        executor.awaitTermination(30, TimeUnit.SECONDS)
+
+        repo.close()
+
+        assertThat(errorRef.get()).isNull()
+
+        // Verify both batches were persisted correctly
+        LuceneRepository.open(model, tempDir, "standard").use { verifyRepo ->
+            val chunksA = verifyRepo.getChunksForFile("/abs/batchA.txt")
+            val chunksB = verifyRepo.getChunksForFile("/abs/batchB.txt")
+            assertThat(chunksA.size + chunksB.size).isEqualTo(batchSize * 2)
+        }
+    }
+
+    @Test
+    fun `concurrent delete calls from two threads on different sources complete without exception and both sources are absent`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val repo = LuceneRepository.open(model, tempDir, "standard")
+
+        // Pre-ingest two distinct sources
+        val docsA = (0 until 5).map { i -> makeDoc("Source A chunk $i", "/abs/sourceA.txt", chunkIndex = i, mtime = 1000L + i) }
+        val docsB = (0 until 5).map { i -> makeDoc("Source B chunk $i", "/abs/sourceB.txt", chunkIndex = i, mtime = 2000L + i) }
+        repo.add(docsA + docsB)
+
+        val latch = CountDownLatch(1)
+        val errorRef = AtomicReference<Throwable?>()
+        val executor = Executors.newFixedThreadPool(2)
+
+        executor.submit {
+            try {
+                latch.await()
+                repo.delete("/abs/sourceA.txt")
+            } catch (e: Throwable) {
+                errorRef.compareAndSet(null, e)
+            }
+        }
+        executor.submit {
+            try {
+                latch.await()
+                repo.delete("/abs/sourceB.txt")
+            } catch (e: Throwable) {
+                errorRef.compareAndSet(null, e)
+            }
+        }
+
+        latch.countDown()
+        executor.shutdown()
+        executor.awaitTermination(30, TimeUnit.SECONDS)
+
+        repo.close()
+
+        assertThat(errorRef.get()).isNull()
+
+        // Verify both sources are absent from the index
+        LuceneRepository.open(model, tempDir, "standard").use { verifyRepo ->
+            assertThat(verifyRepo.getChunksForFile("/abs/sourceA.txt")).isEmpty()
+            assertThat(verifyRepo.getChunksForFile("/abs/sourceB.txt")).isEmpty()
+        }
+    }
+
+    @Test
+    fun `concurrent add and delete calls from two threads on distinct sources complete without exception and index reflects both operations`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val repo = LuceneRepository.open(model, tempDir, "standard")
+
+        // Pre-ingest one source to be deleted
+        val existingDocs = (0 until 5).map { i -> makeDoc("Existing chunk $i", "/abs/existing.txt", chunkIndex = i, mtime = 1000L + i) }
+        repo.add(existingDocs)
+
+        // Prepare new batch to be added concurrently
+        val newBatch = (0 until 5).map { i -> makeDoc("New chunk $i", "/abs/new.txt", chunkIndex = i, mtime = 3000L + i) }
+
+        val latch = CountDownLatch(1)
+        val errorRef = AtomicReference<Throwable?>()
+        val executor = Executors.newFixedThreadPool(2)
+
+        // One thread adds new documents
+        executor.submit {
+            try {
+                latch.await()
+                repo.add(newBatch)
+            } catch (e: Throwable) {
+                errorRef.compareAndSet(null, e)
+            }
+        }
+        // Another thread deletes the existing source
+        executor.submit {
+            try {
+                latch.await()
+                repo.delete("/abs/existing.txt")
+            } catch (e: Throwable) {
+                errorRef.compareAndSet(null, e)
+            }
+        }
+
+        latch.countDown()
+        executor.shutdown()
+        executor.awaitTermination(30, TimeUnit.SECONDS)
+
+        repo.close()
+
+        assertThat(errorRef.get()).isNull()
+
+        // Verify: new source is present, deleted source is absent
+        LuceneRepository.open(model, tempDir, "standard").use { verifyRepo ->
+            assertThat(verifyRepo.getChunksForFile("/abs/existing.txt")).isEmpty()
+            assertThat(verifyRepo.getChunksForFile("/abs/new.txt")).hasSize(5)
         }
     }
 

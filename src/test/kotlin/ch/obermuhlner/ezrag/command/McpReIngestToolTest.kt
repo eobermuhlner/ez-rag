@@ -1,6 +1,7 @@
 package ch.obermuhlner.ezrag.command
 
 import ch.obermuhlner.ezrag.ingestion.IngestService
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.ingestion.ReIngestResult
 import ch.obermuhlner.ezrag.ingestion.ReIngestService
 import org.assertj.core.api.Assertions.assertThat
@@ -39,8 +40,10 @@ class McpReIngestToolTest {
     }
 
     private fun ingestFile(storeDir: Path, file: Path) {
-        val service = IngestService(fakeEmbeddingModel, storeDir)
-        service.ingest(listOf(file.toFile()))
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val service = IngestService(repo)
+            service.ingest(listOf(file.toFile()))
+        }
     }
 
     private fun makeTool(
@@ -48,19 +51,19 @@ class McpReIngestToolTest {
         resultToReturn: ReIngestResult? = null,
         throwException: Exception? = null
     ): McpReIngestTool {
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         return McpReIngestTool(
-            embeddingModel = fakeEmbeddingModel,
-            storeDir = tempDir,
+            repository = repo,
             reIngestServiceFactory = { cs: Int, co: Int ->
                 if (resultToReturn != null || throwException != null) {
-                    object : ReIngestService(fakeEmbeddingModel, tempDir, cs, co) {
+                    object : ReIngestService(repo, cs, co) {
                         override fun reIngest(forceAll: Boolean): ReIngestResult {
                             if (throwException != null) throw throwException
                             return resultToReturn!!
                         }
                     }
                 } else {
-                    ReIngestService(fakeEmbeddingModel, tempDir, cs, co)
+                    ReIngestService(repo, cs, co)
                 }
             }
         )
@@ -79,23 +82,25 @@ class McpReIngestToolTest {
         Files.setLastModifiedTime(sourceFile, futureTime)
         sourceFile.toFile().writeText("updated content after modification")
 
-        val tool = McpReIngestTool(fakeEmbeddingModel, storeDir)
-        val result = tool.reingest(forceAll = null, chunkSize = null, chunkOverlap = null)
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val tool = McpReIngestTool(repository = repo)
+            val result = tool.reingest(forceAll = null, chunkSize = null, chunkOverlap = null)
 
-        assertThat(result.filesReIngested).isEqualTo(1)
-        assertThat(result.chunksCreated).isGreaterThan(0)
-        assertThat(result.filesSkipped).isEqualTo(0)
-        assertThat(result.staleFound).isEqualTo(1)
+            assertThat(result.filesReIngested).isEqualTo(1)
+            assertThat(result.chunksCreated).isGreaterThan(0)
+            assertThat(result.filesSkipped).isEqualTo(0)
+            assertThat(result.staleFound).isEqualTo(1)
+        }
     }
 
     @Test
     fun `reingest with forceAll=true re-ingests all documents`(@TempDir tempDir: Path) {
         val capturedForceAll = mutableListOf<Boolean>()
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         val tool = McpReIngestTool(
-            embeddingModel = fakeEmbeddingModel,
-            storeDir = tempDir,
+            repository = repo,
             reIngestServiceFactory = { chunkSize, chunkOverlap ->
-                object : ReIngestService(fakeEmbeddingModel, tempDir, chunkSize, chunkOverlap) {
+                object : ReIngestService(repo, chunkSize, chunkOverlap) {
                     override fun reIngest(forceAll: Boolean): ReIngestResult {
                         capturedForceAll.add(forceAll)
                         return ReIngestResult(staleFound = null, filesReIngested = 2, chunksCreated = 5, filesSkipped = 0)
@@ -126,13 +131,13 @@ class McpReIngestToolTest {
     fun `reingest uses default chunkSize and chunkOverlap when not provided`(@TempDir tempDir: Path) {
         val capturedChunkSizes = mutableListOf<Int>()
         val capturedChunkOverlaps = mutableListOf<Int>()
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         val tool = McpReIngestTool(
-            embeddingModel = fakeEmbeddingModel,
-            storeDir = tempDir,
+            repository = repo,
             reIngestServiceFactory = { chunkSize, chunkOverlap ->
                 capturedChunkSizes.add(chunkSize)
                 capturedChunkOverlaps.add(chunkOverlap)
-                object : ReIngestService(fakeEmbeddingModel, tempDir, chunkSize, chunkOverlap) {
+                object : ReIngestService(repo, chunkSize, chunkOverlap) {
                     override fun reIngest(forceAll: Boolean): ReIngestResult {
                         return ReIngestResult(staleFound = 0, filesReIngested = 0, chunksCreated = 0, filesSkipped = 0)
                     }
@@ -144,5 +149,31 @@ class McpReIngestToolTest {
 
         assertThat(capturedChunkSizes).containsExactly(1000)
         assertThat(capturedChunkOverlaps).containsExactly(200)
+    }
+
+    // --- write-lock regression test ---
+
+    @Test
+    fun `reingest with shared repository no factory override returns filesReIngested 1 after file is modified`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val sourceFile = tempDir.resolve("regression.txt")
+        sourceFile.toFile().writeText("Original content for write-lock reingest regression test.")
+
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repository ->
+            // Pre-ingest using the same shared repository (as McpServerCommand does)
+            IngestService(repository).ingest(listOf(sourceFile.toFile()))
+
+            // Modify the file to make it stale
+            val futureTime = java.nio.file.attribute.FileTime.from(java.time.Instant.now().plusSeconds(3600))
+            Files.setLastModifiedTime(sourceFile, futureTime)
+            sourceFile.toFile().writeText("Updated content after modification for reingest regression test.")
+
+            // Construct McpReIngestTool with the same repository — no factory override
+            val tool = McpReIngestTool(repository)
+            val result = tool.reingest(forceAll = null, chunkSize = null, chunkOverlap = null)
+
+            assertThat(result.filesReIngested).isEqualTo(1)
+            assertThat(result.staleFound).isEqualTo(1)
+        }
     }
 }

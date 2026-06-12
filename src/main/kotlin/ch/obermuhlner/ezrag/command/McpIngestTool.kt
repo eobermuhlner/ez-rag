@@ -4,23 +4,21 @@ import ch.obermuhlner.ezrag.ingestion.FileSource
 import ch.obermuhlner.ezrag.ingestion.IngestService
 import ch.obermuhlner.ezrag.ingestion.IngestSource
 import ch.obermuhlner.ezrag.ingestion.JsoupUrlFetcher
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.ingestion.UrlFetcher
 import ch.obermuhlner.ezrag.ingestion.UrlSource
-import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
 import java.io.File
-import java.nio.file.Path
 
 /**
  * MCP tool that ingests documents into the vector store via [IngestService].
  */
 class McpIngestTool(
-    private val embeddingModel: EmbeddingModel,
-    private val storeDir: Path,
+    private val repository: LuceneRepository,
     private val urlFetcher: UrlFetcher = JsoupUrlFetcher(),
     private val ingestServiceFactory: (Int, Int, UrlFetcher) -> IngestService = { chunkSize, chunkOverlap, fetcher ->
-        IngestService(embeddingModel, storeDir, chunkSize, chunkOverlap, urlFetcher = fetcher)
+        IngestService(repository, chunkSize, chunkOverlap, urlFetcher = fetcher)
     }
 ) {
 
