@@ -1,15 +1,23 @@
-.idea/
+# Build output
 build/
-.gradle/
-*.class
-*.jar
-*.war
-*.log
+out/
 
+# Gradle
+.gradle/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# JVM diagnostics
+*.hprof
+
+# Project-specific: local MCP configuration (credentials, local overrides)
 .mcp.local.json
 
-META-INF/
-OSGI-INF/
-
+# Project-specific: runtime RAG store
 .ez-rag/
-.ez-rag/vector-store.json
