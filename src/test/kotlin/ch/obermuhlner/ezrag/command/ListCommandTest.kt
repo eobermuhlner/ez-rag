@@ -157,7 +157,7 @@ class ListCommandTest {
         assertThat(node.size()).isGreaterThanOrEqualTo(1)
         val first = node[0]
         assertThat(first.has("path")).isTrue()
-        assertThat(first.get("path").asText()).startsWith("/") // absolute path
+        assertThat(java.nio.file.Path.of(first.get("path").asText()).isAbsolute).isTrue()
         assertThat(first.has("chunks")).isTrue()
         assertThat(first.get("chunks").asInt()).isGreaterThanOrEqualTo(1)
         assertThat(first.has("status")).isTrue()

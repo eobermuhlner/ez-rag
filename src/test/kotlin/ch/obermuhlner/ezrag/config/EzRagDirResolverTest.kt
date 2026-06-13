@@ -1,6 +1,7 @@
 package ch.obermuhlner.ezrag.config
 
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -8,6 +9,15 @@ import java.nio.file.Path
 class EzRagDirResolverTest {
 
     private val resolver = EzRagDirResolver()
+
+    private fun noAncestorEzRag(dir: Path): Boolean {
+        var current: Path? = dir.toAbsolutePath().normalize()
+        while (current != null) {
+            if (current.resolve(".ez-rag").toFile().isDirectory) return false
+            current = current.parent
+        }
+        return true
+    }
 
     @Test
     fun `returns ez-rag in start directory when it exists there`(@TempDir tempDir: Path) {
@@ -51,6 +61,7 @@ class EzRagDirResolverTest {
     fun `falls back to ez-rag in start directory when no ez-rag exists anywhere`(@TempDir tempDir: Path) {
         val childDir = tempDir.resolve("child")
         childDir.toFile().mkdirs()
+        assumeTrue(noAncestorEzRag(childDir), "Real .ez-rag exists above tempDir")
 
         val result = resolver.resolve(childDir)
 
@@ -65,6 +76,7 @@ class EzRagDirResolverTest {
 
         val childDir = tempDir.resolve("child")
         childDir.toFile().mkdirs()
+        assumeTrue(noAncestorEzRag(childDir), "Real .ez-rag exists above tempDir")
 
         // Should not pick up the .ez-rag file in tempDir; should fall back to childDir/.ez-rag
         val result = resolver.resolve(childDir)
@@ -74,7 +86,7 @@ class EzRagDirResolverTest {
 
     @Test
     fun `terminates without error when start directory is the filesystem root`() {
-        val root = Path.of("/")
+        val root = Path.of("/").toAbsolutePath().normalize()
 
         // Should not throw; returns root/.ez-rag as fallback
         val result = resolver.resolve(root)

@@ -1,6 +1,7 @@
 package ch.obermuhlner.ezrag.config
 
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.PrintWriter
@@ -70,6 +71,7 @@ class CredentialsFileReaderTest {
 
     @Test
     fun `emits permission warning when file is group-readable`(@TempDir tempDir: Path) {
+        assumeTrue(Files.getFileStore(tempDir).supportsFileAttributeView("posix"), "POSIX permissions not supported")
         val file = tempDir.resolve("credentials.yml")
         file.toFile().writeText("openai-api-key: sk-test\n")
         setPosixPermissions(file, setOf(
@@ -86,6 +88,7 @@ class CredentialsFileReaderTest {
 
     @Test
     fun `emits permission warning when file is world-readable`(@TempDir tempDir: Path) {
+        assumeTrue(Files.getFileStore(tempDir).supportsFileAttributeView("posix"), "POSIX permissions not supported")
         val file = tempDir.resolve("credentials.yml")
         file.toFile().writeText("openai-api-key: sk-test\n")
         setPosixPermissions(file, setOf(
