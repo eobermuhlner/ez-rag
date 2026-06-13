@@ -160,8 +160,8 @@ class ListCommandTest {
         assertThat(first.get("path").asText()).startsWith("/") // absolute path
         assertThat(first.has("chunks")).isTrue()
         assertThat(first.get("chunks").asInt()).isGreaterThanOrEqualTo(1)
-        assertThat(first.has("stale")).isTrue()
-        assertThat(first.get("stale").asBoolean()).isFalse()
+        assertThat(first.has("status")).isTrue()
+        assertThat(first.get("status").asText()).isEqualTo("FRESH")
     }
 
     @Test
@@ -182,7 +182,7 @@ class ListCommandTest {
         val json = out.toString().trim()
         val mapper = ObjectMapper()
         val node = mapper.readTree(json)
-        assertThat(node[0].get("stale").asBoolean()).isTrue()
+        assertThat(node[0].get("status").asText()).isEqualTo("STALE")
     }
 
     @Test
@@ -248,5 +248,121 @@ class ListCommandTest {
         val mapper = ObjectMapper()
         val node = mapper.readTree(json)
         assertThat(node[0].get("path").asText()).isEqualTo(fileA)
+    }
+
+    @Test
+    fun `list text output suppresses STALE marker for FRESH URL`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page"
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            repo.add(listOf(
+                Document.builder()
+                    .text("URL content")
+                    .metadata(mapOf("source" to url, "mtime" to 0L, "chunk_index" to 0, "ingest_time" to System.currentTimeMillis()))
+                    .build()
+            ))
+        }
+
+        val out = StringWriter()
+        val cmd = ListCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+        )
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        val output = out.toString()
+        assertThat(output).contains(url)
+        assertThat(output).doesNotContain("[STALE]")
+    }
+
+    @Test
+    fun `list text output shows STALE marker for URL beyond freshness window`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page"
+        val oldIngestTime = System.currentTimeMillis() - 25 * 3_600_000L // 25 hours ago
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            repo.add(listOf(
+                Document.builder()
+                    .text("URL content")
+                    .metadata(mapOf("source" to url, "mtime" to 0L, "chunk_index" to 0, "ingest_time" to oldIngestTime))
+                    .build()
+            ))
+        }
+
+        val out = StringWriter()
+        val cmd = ListCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+        )
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        val output = out.toString()
+        assertThat(output).contains("[STALE]")
+    }
+
+    @Test
+    fun `list JSON output includes status field instead of stale field`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page"
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            repo.add(listOf(
+                Document.builder()
+                    .text("URL content")
+                    .metadata(mapOf("source" to url, "mtime" to 0L, "chunk_index" to 0, "ingest_time" to System.currentTimeMillis()))
+                    .build()
+            ))
+        }
+
+        val out = StringWriter()
+        val cmd = ListCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+        )
+        cmd.outputFormat = "json"
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isEqualTo(0)
+        val json = out.toString().trim()
+        val mapper = ObjectMapper()
+        val node = mapper.readTree(json)
+        assertThat(node[0].has("status")).isTrue()
+        assertThat(node[0].get("status").asText()).isEqualTo("FRESH")
+    }
+
+    @Test
+    fun `list url-freshness-hours flag changes URL staleness determination`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page"
+        val ingestTime = System.currentTimeMillis() - 8 * 3_600_000L // 8 hours ago
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            repo.add(listOf(
+                Document.builder()
+                    .text("URL content")
+                    .metadata(mapOf("source" to url, "mtime" to 0L, "chunk_index" to 0, "ingest_time" to ingestTime))
+                    .build()
+            ))
+        }
+
+        // With default 24h threshold: FRESH
+        val out1 = StringWriter()
+        val cmd1 = ListCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out1, true),
+        )
+        cmd1.call()
+        assertThat(out1.toString()).doesNotContain("[STALE]")
+
+        // With 6h threshold: STALE
+        val out2 = StringWriter()
+        val cmd2 = ListCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out2, true),
+        )
+        cmd2.urlFreshnessHours = 6
+        cmd2.call()
+        assertThat(out2.toString()).contains("[STALE]")
     }
 }

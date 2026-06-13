@@ -26,8 +26,8 @@ open class ReIngestService(
 
     var onFileReIngesting: ((String) -> Unit)? = null
 
-    open fun reIngest(forceAll: Boolean = false): ReIngestResult {
-        val metadata = repository.getMetadata()
+    open fun reIngest(forceAll: Boolean = false, urlFreshnessThresholdMs: Long = 24 * 3_600_000L): ReIngestResult {
+        val metadata = repository.getMetadata(urlFreshnessThresholdMs = urlFreshnessThresholdMs)
         val allDocuments = metadata.documents
 
         val candidates: List<StoreDocumentInfo>
@@ -37,7 +37,7 @@ open class ReIngestService(
             candidates = allDocuments
             staleFound = null
         } else {
-            val staleDocuments = allDocuments.filter { it.stale }
+            val staleDocuments = allDocuments.filter { it.status == "STALE" }
             staleFound = staleDocuments.size
             candidates = staleDocuments
         }

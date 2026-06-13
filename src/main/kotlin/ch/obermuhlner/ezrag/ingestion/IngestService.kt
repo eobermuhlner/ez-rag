@@ -165,7 +165,15 @@ open class IngestService(
                         continue
                     }
 
-                    repository.add(chunks)
+                    val chunksWithIngestTime = chunks.map { chunk ->
+                        Document.builder()
+                            .id(chunk.id)
+                            .text(chunk.text)
+                            .metadata(chunk.metadata + mapOf("ingest_time" to System.currentTimeMillis()))
+                            .build()
+                    }
+
+                    repository.add(chunksWithIngestTime)
                     filesIngested++
                     chunksCreated += chunks.size
                 }

@@ -43,6 +43,9 @@ class McpServerCommand : Callable<Int> {
     @Option(names = ["--port"], description = ["HTTP port (used with --transport http, default: 8080)."], defaultValue = "8080")
     var port: Int = 8080
 
+    @Option(names = ["--url-freshness-hours"], description = ["Freshness window in hours for URL sources (default: 24)."])
+    var urlFreshnessHours: Int = 24
+
     /**
      * Provides the MCP tool callbacks. Registers the status tool and additional tools
      * added in subsequent tasks. The auto-configuration injects all ToolCallbackProvider
@@ -60,12 +63,12 @@ class McpServerCommand : Callable<Int> {
         val analyzer = springConfigService?.resolve()?.analyzer ?: "standard"
         val luceneRepository = LuceneRepository.open(embeddingModel, storeDir, analyzer)
 
-        val listTool = McpListTool(luceneRepository)
+        val listTool = McpListTool(luceneRepository, urlFreshnessThresholdMs = urlFreshnessHours * 3_600_000L)
         val hybridSearchPipeline = HybridSearchPipeline(luceneRepository)
         val searchTool = McpSearchTool(hybridSearchPipeline)
 
         val ingestTool = McpIngestTool(luceneRepository)
-        val reIngestTool = McpReIngestTool(luceneRepository)
+        val reIngestTool = McpReIngestTool(luceneRepository, urlFreshnessThresholdMs = urlFreshnessHours * 3_600_000L)
         val chunkTool = McpChunkTool(luceneRepository)
 
         val tools = buildList {

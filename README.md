@@ -306,7 +306,7 @@ docs/getting-started.md  (3 chunks)
 docs/old-guide.md  (1 chunks)  [STALE]
 ```
 
-Documents marked `[STALE]` have been modified on disk since they were last ingested, or their source file no longer exists. Re-ingest them to bring the store up to date.
+Documents marked `[STALE]` have been modified on disk since they were last ingested, or their source file no longer exists. URL-based sources that were ingested within the freshness window (default 24 hours) appear without a `[STALE]` marker. Re-ingest them to bring the store up to date.
 
 Documents are listed in alphabetical order by path.
 
@@ -318,8 +318,8 @@ ez-rag list --output-format json
 
 ```json
 [
-  { "path": "/abs/path/to/docs/getting-started.md", "chunks": 3, "stale": false },
-  { "path": "/abs/path/to/docs/old-guide.md", "chunks": 1, "stale": true }
+  { "path": "/abs/path/to/docs/getting-started.md", "chunks": 3, "status": "FRESH" },
+  { "path": "/abs/path/to/docs/old-guide.md", "chunks": 1, "status": "STALE" }
 ]
 ```
 
@@ -328,6 +328,7 @@ If no store exists, `list` prints an error to stderr and exits with code `1`.
 | Flag                | Description                                             |
 |---------------------|---------------------------------------------------------|
 | `--output-format`   | Output format: `text` (default) or `json`.              |
+| `--url-freshness-hours` | Freshness window in hours for URL sources (default: 24). URLs ingested within this window appear as FRESH; those outside it appear as STALE. |
 
 ### reingest
 
@@ -378,6 +379,7 @@ ez-rag reingest --quiet
 | `--chunk-size N`     | `1000`  | Token count per chunk                                          |
 | `--chunk-overlap N`  | `200`   | Overlap between consecutive chunks                             |
 | `--store-dir <path>` | auto    | Target a specific store directory instead of the auto-resolved one |
+| `--url-freshness-hours` | `24` | Freshness window in hours for URL sources. FRESH URLs are skipped by `reingest` (use `--all` to override). |
 
 ### show
 
@@ -1020,6 +1022,7 @@ To use an LLM provider or a non-default store location:
 | `--port`               | `8080`                           | HTTP listening port (HTTP transport only)              |
 | `--embedding-provider` | `onnx`                           | Embedding provider used by all tools                   |
 | `--store-dir`          | `.ez-rag`                        | Path to the store directory                            |
+| `--url-freshness-hours`| `24`                             | Freshness window in hours for URL sources (default: 24)|
 | `--verbose` / `-v`     | off                              | Enable debug logging to stderr (does not affect stdout)|
 
 #### HTTP transport mode
@@ -1132,7 +1135,7 @@ No input parameters.
 
 | Return field | Type            | Description                                                                         |
 |--------------|-----------------|-------------------------------------------------------------------------------------|
-| (array)      | List of objects | Each entry has `path` (String), `chunkCount` (Int), and `stale` (Boolean)           |
+| (array)      | List of objects | Each entry has `path` (String), `chunkCount` (Int), and `status` (String: `"FRESH"` or `"STALE"`) |
 
 ### eval
 

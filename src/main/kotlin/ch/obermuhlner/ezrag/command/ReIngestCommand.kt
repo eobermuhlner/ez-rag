@@ -53,6 +53,9 @@ class ReIngestCommand(
     @Option(names = ["--all"], description = ["Re-ingest all documents regardless of staleness."])
     var forceAllOption: Boolean = false
 
+    @Option(names = ["--url-freshness-hours"], description = ["Freshness window in hours for URL sources (default: 24)."])
+    var urlFreshnessHours: Int = 24
+
     override fun call(): Int {
         val model = embeddingModel ?: springEmbeddingModel ?: return exitWithError("No embedding model configured.")
 
@@ -77,7 +80,7 @@ class ReIngestCommand(
                 service.onFileReIngesting = { path -> outputWriter.println("Re-ingesting: $path") }
             }
 
-            val result = service.reIngest(forceAll = forceAllOption)
+            val result = service.reIngest(forceAll = forceAllOption, urlFreshnessThresholdMs = urlFreshnessHours * 3_600_000L)
 
             if (!forceAllOption) {
                 outputWriter.println("Stale documents: ${result.staleFound}")

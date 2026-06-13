@@ -45,6 +45,9 @@ class ListCommand(
     @Option(names = ["--output-format"], description = ["Output format: text, json."])
     var outputFormat: String = "text"
 
+    @Option(names = ["--url-freshness-hours"], description = ["Freshness window in hours for URL sources (default: 24)."])
+    var urlFreshnessHours: Int = 24
+
     /**
      * Optional override for the filesystem probe used in staleness detection.
      * When non-null, takes precedence over the real filesystem probe.
@@ -76,7 +79,10 @@ class ListCommand(
         }
 
         LuceneRepository.open(model, storeDir, "standard").use { repository ->
-            val metadata = repository.getMetadata(probe)
+            val metadata = repository.getMetadata(
+                filesystemProbe = probe,
+                urlFreshnessThresholdMs = urlFreshnessHours * 3_600_000L,
+            )
             val documents = metadata.documents // already sorted alphabetically
 
             if (outputFormat == "json") {
@@ -85,7 +91,7 @@ class ListCommand(
                     mapOf(
                         "path" to doc.path,
                         "chunks" to doc.chunkCount,
-                        "stale" to doc.stale
+                        "status" to doc.status
                     )
                 }
                 outputWriter.println(mapper.writeValueAsString(result))
@@ -98,7 +104,7 @@ class ListCommand(
                     } catch (_: Exception) {
                         doc.path
                     }
-                    val staleMarker = if (doc.stale) "  [STALE]" else ""
+                    val staleMarker = if (doc.status == "STALE") "  [STALE]" else ""
                     outputWriter.println("$displayPath  (${doc.chunkCount} chunks)$staleMarker")
                 }
             }

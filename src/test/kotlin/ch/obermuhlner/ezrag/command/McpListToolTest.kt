@@ -44,22 +44,22 @@ class McpListToolTest {
             ))
 
             // Inject probe that returns the same mtime — all documents are fresh
-            val tool = McpListTool(repository) { path ->
+            val tool = McpListTool(repository, filesystemProbe = { path ->
                 when (path) {
                     "doc1.txt" -> 1000L
                     "doc2.txt" -> 2000L
                     else -> null
                 }
-            }
+            })
             val result = tool.list()
 
             assertThat(result).hasSize(2)
             val doc1 = result.first { it.path == "doc1.txt" }
             assertThat(doc1.chunkCount).isEqualTo(2)
-            assertThat(doc1.stale).isFalse()
+            assertThat(doc1.status).isEqualTo("FRESH")
             val doc2 = result.first { it.path == "doc2.txt" }
             assertThat(doc2.chunkCount).isEqualTo(1)
-            assertThat(doc2.stale).isFalse()
+            assertThat(doc2.status).isEqualTo("FRESH")
         }
     }
 
@@ -74,29 +74,86 @@ class McpListToolTest {
             ))
 
             // fresh.txt probe returns same mtime; stale.txt probe returns null (missing file)
-            val tool = McpListTool(repository) { path ->
+            val tool = McpListTool(repository, filesystemProbe = { path ->
                 when (path) {
                     "fresh.txt" -> 1000L
                     else -> null
                 }
-            }
+            })
             val result = tool.list()
 
             assertThat(result).hasSize(2)
             val fresh = result.first { it.path == "fresh.txt" }
-            assertThat(fresh.stale).isFalse()
+            assertThat(fresh.status).isEqualTo("FRESH")
             val stale = result.first { it.path == "stale.txt" }
-            assertThat(stale.stale).isTrue()
+            assertThat(stale.status).isEqualTo("STALE")
         }
     }
 
     @Test
     fun `list returns empty list for empty store`(@TempDir tempDir: Path) {
         LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repository ->
-            val tool = McpListTool(repository) { _ -> null }
+            val tool = McpListTool(repository, filesystemProbe = { _ -> null })
             val result = tool.list()
 
             assertThat(result).isEmpty()
+        }
+    }
+
+    @Test
+    fun `list returns status FRESH for recently-ingested URL`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page"
+        val now = System.currentTimeMillis()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repository ->
+            repository.add(listOf(
+                Document.builder().text("URL content")
+                    .metadata(mapOf("source" to url, "mtime" to 0L, "chunk_index" to 0, "ingest_time" to now))
+                    .build(),
+            ))
+
+            val tool = McpListTool(repository, filesystemProbe = { _ -> null })
+            val result = tool.list()
+
+            assertThat(result).hasSize(1)
+            assertThat(result[0].status).isEqualTo("FRESH")
+        }
+    }
+
+    @Test
+    fun `list returns status STALE for URL beyond freshness threshold`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page"
+        val oldIngestTime = System.currentTimeMillis() - 25 * 3_600_000L // 25 hours ago
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repository ->
+            repository.add(listOf(
+                Document.builder().text("URL content")
+                    .metadata(mapOf("source" to url, "mtime" to 0L, "chunk_index" to 0, "ingest_time" to oldIngestTime))
+                    .build(),
+            ))
+
+            val tool = McpListTool(repository, filesystemProbe = { _ -> null })
+            val result = tool.list()
+
+            assertThat(result).hasSize(1)
+            assertThat(result[0].status).isEqualTo("STALE")
+        }
+    }
+
+    @Test
+    fun `list file source status unaffected by URL freshness threshold`(@TempDir tempDir: Path) {
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repository ->
+            repository.add(listOf(
+                Document.builder().text("File content")
+                    .metadata(mapOf("source" to "/abs/file.txt", "mtime" to 1000L, "chunk_index" to 0))
+                    .build(),
+            ))
+
+            val tool = McpListTool(repository, filesystemProbe = { path ->
+                if (path == "/abs/file.txt") 1000L else null
+            })
+            val result = tool.list()
+
+            assertThat(result).hasSize(1)
+            assertThat(result[0].status).isEqualTo("FRESH")
         }
     }
 }

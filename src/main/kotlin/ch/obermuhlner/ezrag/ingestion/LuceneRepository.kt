@@ -55,6 +55,9 @@ class LuceneRepository private constructor(
     // source → mtime cache built on open, updated on add/delete
     private val sourceMtimeCache: MutableMap<String, Long> = mutableMapOf()
 
+    // source → ingest_time cache built on open, updated on add/delete
+    private val sourceIngestTimeCache: MutableMap<String, Long> = mutableMapOf()
+
     companion object {
         private const val CONFIG_FILE = "config.properties"
         private const val PROP_DIMENSION = "embedding.dimension"
@@ -68,6 +71,7 @@ class LuceneRepository private constructor(
         private const val FIELD_HEADING_LEVEL = "heading_level"
         private const val FIELD_HEADING_PATH = "heading_path"
         private const val FIELD_CONTENT_HASH = "content_hash"
+        private const val FIELD_INGEST_TIME = "ingest_time"
 
         /**
          * Opens (or creates) the unified Lucene index at storeDir/lucene/.
@@ -182,6 +186,7 @@ class LuceneRepository private constructor(
             val vector = embeddingModel.embed(text)
 
             val contentHash = doc.metadata["content_hash"] as? String
+            val ingestTime = toLong(doc.metadata["ingest_time"])
 
             val luceneDoc = org.apache.lucene.document.Document().apply {
                 add(KnnFloatVectorField(FIELD_VECTOR, vector, VectorSimilarityFunction.COSINE))
@@ -196,9 +201,16 @@ class LuceneRepository private constructor(
                     add(StoredField(FIELD_HEADING_PATH, objectMapper.writeValueAsString(headingPath)))
                 }
                 if (contentHash != null) add(StoredField(FIELD_CONTENT_HASH, contentHash))
+                if (ingestTime != null) add(StoredField(FIELD_INGEST_TIME, ingestTime))
             }
             writer.addDocument(luceneDoc)
             sourceMtimeCache[source] = mtime
+            if (ingestTime != null) {
+                val existing = sourceIngestTimeCache[source]
+                if (existing == null || ingestTime > existing) {
+                    sourceIngestTimeCache[source] = ingestTime
+                }
+            }
         }
 
         writer.commit()
@@ -282,6 +294,7 @@ class LuceneRepository private constructor(
         writer.deleteDocuments(Term(FIELD_SOURCE, source))
         writer.commit()
         sourceMtimeCache.remove(source)
+        sourceIngestTimeCache.remove(source)
         return countBefore
     }
 
@@ -295,6 +308,7 @@ class LuceneRepository private constructor(
         writer.deleteAll()
         writer.commit()
         sourceMtimeCache.clear()
+        sourceIngestTimeCache.clear()
     }
 
     /**
@@ -352,7 +366,9 @@ class LuceneRepository private constructor(
             } catch (_: Exception) {
                 null
             }
-        }
+        },
+        urlFreshnessThresholdMs: Long = 24 * 3_600_000L,
+        currentTimeMs: Long = System.currentTimeMillis(),
     ): StoreMetadata {
         val chunkCountBySource = mutableMapOf<String, Int>()
         val maxMtimeBySource = mutableMapOf<String, Long>()
@@ -380,17 +396,22 @@ class LuceneRepository private constructor(
             .sortedBy { it.key }
             .map { (src, count) ->
                 val storedMtime = maxMtimeBySource[src] ?: 0L
-                val currentMtime = filesystemProbe(src)
-                val stale = currentMtime == null || currentMtime != storedMtime
+                val status = if (src.startsWith("http://") || src.startsWith("https://")) {
+                    val ingestTime = sourceIngestTimeCache[src] ?: 0L
+                    if (ingestTime > 0 && currentTimeMs - ingestTime < urlFreshnessThresholdMs) "FRESH" else "STALE"
+                } else {
+                    val currentMtime = filesystemProbe(src)
+                    if (currentMtime != null && currentMtime == storedMtime) "FRESH" else "STALE"
+                }
                 StoreDocumentInfo(
                     path = src,
                     chunkCount = count,
                     mtime = storedMtime,
-                    stale = stale,
+                    status = status,
                     contentHash = contentHashBySource[src]
                 )
             }
-        val staleDocumentCount = documents.count { it.stale }
+        val staleDocumentCount = documents.count { it.status == "STALE" }
 
         val storeSizeBytes = if (Files.exists(luceneDir)) {
             luceneDir.toFile().walkTopDown().filter { it.isFile }.sumOf { it.length() }
@@ -427,6 +448,13 @@ class LuceneRepository private constructor(
                 val existing = sourceMtimeCache[src]
                 if (existing == null || mtime > existing) {
                     sourceMtimeCache[src] = mtime
+                }
+                val ingestTime = doc.getField(FIELD_INGEST_TIME)?.numericValue()?.toLong()
+                if (ingestTime != null) {
+                    val existingIngestTime = sourceIngestTimeCache[src]
+                    if (existingIngestTime == null || ingestTime > existingIngestTime) {
+                        sourceIngestTimeCache[src] = ingestTime
+                    }
                 }
             }
         }

@@ -288,14 +288,14 @@ class LuceneRepositoryTest {
         ))
 
         // a.txt is stale (different mtime), b.txt missing (null), c.txt fresh
-        val metadata = repo.getMetadata { path ->
+        val metadata = repo.getMetadata(filesystemProbe = { path ->
             when (path) {
                 "/abs/a.txt" -> 9999L
                 "/abs/b.txt" -> null
                 "/abs/c.txt" -> 3000L
                 else -> null
             }
-        }
+        })
 
         assertThat(metadata.chunkCount).isEqualTo(4)
         assertThat(metadata.documentCount).isEqualTo(3)
@@ -500,7 +500,7 @@ class LuceneRepositoryTest {
                 .build()
             repo.add(listOf(doc))
 
-            val metadata = repo.getMetadata { _ -> 1000L }
+            val metadata = repo.getMetadata(filesystemProbe = { _ -> 1000L })
             assertThat(metadata.documents).hasSize(1)
             assertThat(metadata.documents[0].contentHash).isEqualTo("sha256hex")
         }
@@ -651,6 +651,204 @@ class LuceneRepositoryTest {
         LuceneRepository.open(model, tempDir, "standard").use { verifyRepo ->
             assertThat(verifyRepo.getChunksForFile("/abs/existing.txt")).isEmpty()
             assertThat(verifyRepo.getChunksForFile("/abs/new.txt")).hasSize(5)
+        }
+    }
+
+    // --- URL freshness (ingest_time) ---
+
+    @Test
+    fun `getMetadata returns status FRESH for URL doc with ingest_time within threshold`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val now = 1_700_000_000_000L
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("URL content")
+                .metadata(mutableMapOf<String, Any>(
+                    "source" to "https://example.com/page",
+                    "mtime" to 0L,
+                    "chunk_index" to 0,
+                    "ingest_time" to now,
+                ))
+                .build()
+            repo.add(listOf(doc))
+
+            val metadata = repo.getMetadata(
+                urlFreshnessThresholdMs = 24 * 3_600_000L,
+                currentTimeMs = now + 1_000_000L, // 1000 seconds after ingest
+            )
+            assertThat(metadata.documents).hasSize(1)
+            assertThat(metadata.documents[0].status).isEqualTo("FRESH")
+        }
+    }
+
+    @Test
+    fun `getMetadata returns status STALE for URL doc beyond freshness threshold`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val now = 1_700_000_000_000L
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("URL content")
+                .metadata(mutableMapOf<String, Any>(
+                    "source" to "https://example.com/page",
+                    "mtime" to 0L,
+                    "chunk_index" to 0,
+                    "ingest_time" to now,
+                ))
+                .build()
+            repo.add(listOf(doc))
+
+            val metadata = repo.getMetadata(
+                urlFreshnessThresholdMs = 24 * 3_600_000L,
+                currentTimeMs = now + 25 * 3_600_000L, // 25 hours after ingest
+            )
+            assertThat(metadata.documents).hasSize(1)
+            assertThat(metadata.documents[0].status).isEqualTo("STALE")
+        }
+    }
+
+    @Test
+    fun `getMetadata returns status STALE for URL doc with no ingest_time backward compat`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("URL content")
+                .metadata(mutableMapOf<String, Any>(
+                    "source" to "https://example.com/page",
+                    "mtime" to 0L,
+                    "chunk_index" to 0,
+                ))
+                .build()
+            repo.add(listOf(doc))
+
+            val metadata = repo.getMetadata(urlFreshnessThresholdMs = 24 * 3_600_000L)
+            assertThat(metadata.documents).hasSize(1)
+            assertThat(metadata.documents[0].status).isEqualTo("STALE")
+        }
+    }
+
+    @Test
+    fun `getMetadata returns status FRESH for file source when probe matches mtime`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("File content")
+                .metadata(mutableMapOf<String, Any>(
+                    "source" to "/abs/file.txt",
+                    "mtime" to 1000L,
+                    "chunk_index" to 0,
+                ))
+                .build()
+            repo.add(listOf(doc))
+
+            val metadata = repo.getMetadata(filesystemProbe = { _ -> 1000L })
+            assertThat(metadata.documents).hasSize(1)
+            assertThat(metadata.documents[0].status).isEqualTo("FRESH")
+        }
+    }
+
+    @Test
+    fun `getMetadata returns status STALE for file source when probe returns different mtime`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("File content")
+                .metadata(mutableMapOf<String, Any>(
+                    "source" to "/abs/file.txt",
+                    "mtime" to 1000L,
+                    "chunk_index" to 0,
+                ))
+                .build()
+            repo.add(listOf(doc))
+
+            val metadata = repo.getMetadata(filesystemProbe = { _ -> 9999L })
+            assertThat(metadata.documents).hasSize(1)
+            assertThat(metadata.documents[0].status).isEqualTo("STALE")
+        }
+    }
+
+    @Test
+    fun `getMetadata returns status STALE for file source when probe returns null`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("File content")
+                .metadata(mutableMapOf<String, Any>(
+                    "source" to "/abs/file.txt",
+                    "mtime" to 1000L,
+                    "chunk_index" to 0,
+                ))
+                .build()
+            repo.add(listOf(doc))
+
+            val metadata = repo.getMetadata(filesystemProbe = { _ -> null })
+            assertThat(metadata.documents).hasSize(1)
+            assertThat(metadata.documents[0].status).isEqualTo("STALE")
+        }
+    }
+
+    @Test
+    fun `getMetadata with custom urlFreshnessThresholdMs overrides default`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val now = 1_700_000_000_000L
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("URL content")
+                .metadata(mutableMapOf<String, Any>(
+                    "source" to "https://example.com/page",
+                    "mtime" to 0L,
+                    "chunk_index" to 0,
+                    "ingest_time" to now,
+                ))
+                .build()
+            repo.add(listOf(doc))
+
+            // 12 hours after ingest; default threshold (24h) → FRESH, custom threshold (6h) → STALE
+            val metadata = repo.getMetadata(
+                urlFreshnessThresholdMs = 6 * 3_600_000L,
+                currentTimeMs = now + 12 * 3_600_000L,
+            )
+            assertThat(metadata.documents).hasSize(1)
+            assertThat(metadata.documents[0].status).isEqualTo("STALE")
+        }
+    }
+
+    @Test
+    fun `getMetadata after delete and re-add resets freshness timer for URL`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val now1 = 1_700_000_000_000L
+        LuceneRepository.open(model, tempDir, "standard").use { repo ->
+            val doc = Document.builder()
+                .text("URL content")
+                .metadata(mutableMapOf<String, Any>(
+                    "source" to "https://example.com/page",
+                    "mtime" to 0L,
+                    "chunk_index" to 0,
+                    "ingest_time" to now1,
+                ))
+                .build()
+            repo.add(listOf(doc))
+
+            // Re-add with a newer ingest_time
+            val now2 = now1 + 10_000_000L
+            val doc2 = Document.builder()
+                .text("URL content updated")
+                .metadata(mutableMapOf<String, Any>(
+                    "source" to "https://example.com/page",
+                    "mtime" to 0L,
+                    "chunk_index" to 0,
+                    "ingest_time" to now2,
+                ))
+                .build()
+            repo.delete("https://example.com/page")
+            repo.add(listOf(doc2))
+
+            // Query with currentTimeMs = now1 + 1s should be STALE (old timer), but now2 + 1s should be FRESH
+            val metadata = repo.getMetadata(
+                urlFreshnessThresholdMs = 24 * 3_600_000L,
+                currentTimeMs = now2 + 1_000_000L,
+            )
+            assertThat(metadata.documents).hasSize(1)
+            assertThat(metadata.documents[0].status).isEqualTo("FRESH")
         }
     }
 

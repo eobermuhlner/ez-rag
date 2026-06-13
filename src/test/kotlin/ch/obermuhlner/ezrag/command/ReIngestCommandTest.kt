@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
-import ch.obermuhlner.ezrag.ingestion.LuceneRepository
+import ch.obermuhlner.ezrag.ingestion.*
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -245,5 +245,65 @@ class ReIngestCommandTest {
 
         val output = out.toString()
         assertThat(output).contains("Stale documents:")
+    }
+
+    private fun ingestUrl(storeDir: Path, url: String, fetcher: UrlFetcher) {
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val service = IngestService(repo, urlFetcher = fetcher)
+            service.ingest(listOf(UrlSource(url)))
+        }
+    }
+
+    private fun makeFakeFetcher(responseRef: () -> ByteArray): UrlFetcher =
+        object : UrlFetcher {
+            override fun fetch(url: String) = FetchResult(
+                bytes = responseRef(),
+                contentType = "text/html",
+                lastModifiedEpochMs = 0L,
+                statusCode = 200
+            )
+        }
+
+    @Test
+    fun `reingest --url-freshness-hours is accepted and skips FRESH URL`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val fakeUrl = "https://example.com/page"
+
+        val fetcher = makeFakeFetcher({ "<html><body>content</body></html>".toByteArray() })
+        ingestUrl(storeDir, fakeUrl, fetcher)
+
+        val out = StringWriter()
+        val cmd = ReIngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = storeDir,
+            outputWriter = PrintWriter(out, true),
+        )
+        cmd.urlFreshnessHours = 24
+        cmd.call()
+
+        val output = out.toString()
+        assertThat(output).contains("Stale documents: 0")
+        assertThat(output).contains("0 files re-ingested")
+    }
+
+    @Test
+    fun `reingest --url-freshness-hours 0 treats URL as stale`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val fakeUrl = "https://example.com/page"
+
+        val fetcher = makeFakeFetcher({ "<html><body>content</body></html>".toByteArray() })
+        ingestUrl(storeDir, fakeUrl, fetcher)
+
+        val out = StringWriter()
+        val cmd = ReIngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = storeDir,
+            outputWriter = PrintWriter(out, true),
+        )
+        cmd.urlFreshnessHours = 0
+        cmd.call()
+
+        val output = out.toString()
+        assertThat(output).contains("Stale documents: 1")
     }
 }

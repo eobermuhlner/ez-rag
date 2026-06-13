@@ -17,16 +17,20 @@ class McpListTool(
         } catch (_: Exception) {
             null
         }
-    }
+    },
+    private val urlFreshnessThresholdMs: Long = 24 * 3_600_000L,
 ) {
 
-    data class DocumentInfo(val path: String, val chunkCount: Int, val stale: Boolean)
+    data class DocumentInfo(val path: String, val chunkCount: Int, val status: String)
 
-    @Tool(description = "List all ingested documents with their chunk count and staleness status. A document is stale when its source file has been modified since last ingest. URL-based entries cannot be checked for staleness and always appear as not stale. Use `reingest` to refresh stale documents.")
+    @Tool(description = "List all ingested documents with their chunk count and freshness status. A document is stale when its source file has been modified since last ingest. URL-based entries within the freshness window appear as FRESH; those outside it appear as STALE. Use `reingest` to refresh stale documents.")
     fun list(): List<DocumentInfo> {
-        val metadata = repository.getMetadata(filesystemProbe)
+        val metadata = repository.getMetadata(
+            filesystemProbe = filesystemProbe,
+            urlFreshnessThresholdMs = urlFreshnessThresholdMs,
+        )
         return metadata.documents.map { doc ->
-            DocumentInfo(path = doc.path, chunkCount = doc.chunkCount, stale = doc.stale)
+            DocumentInfo(path = doc.path, chunkCount = doc.chunkCount, status = doc.status)
         }
     }
 }

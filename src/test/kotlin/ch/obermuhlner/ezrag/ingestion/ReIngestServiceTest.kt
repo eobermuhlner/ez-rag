@@ -305,6 +305,85 @@ class ReIngestServiceTest {
     }
 
     @Test
+    fun `FRESH URL is skipped by reIngest when within freshness window`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val fakeUrl = "https://example.com/page"
+
+        val fetchBytes = "<html><head><title>Page</title></head><body><p>some content</p></body></html>".toByteArray()
+        val fetcher = makeFakeFetcher({ fetchBytes })
+
+        ingestUrl(storeDir, fakeUrl, fetcher)
+
+        val result = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            ReIngestService(repo, urlFetcher = fetcher).reIngest(forceAll = false, urlFreshnessThresholdMs = 24 * 3_600_000L)
+        }
+
+        assertThat(result.filesReIngested).isEqualTo(0)
+        assertThat(result.filesSkipped).isEqualTo(0)
+        assertThat(result.staleFound).isEqualTo(0)
+    }
+
+    @Test
+    fun `STALE URL is re-fetched and subsequent getMetadata returns FRESH`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val fakeUrl = "https://example.com/page"
+
+        var fetchBytes = "<html><head><title>Page</title></head><body><p>original</p></body></html>".toByteArray()
+        val fetcher = makeFakeFetcher({ fetchBytes })
+
+        ingestUrl(storeDir, fakeUrl, fetcher)
+
+        fetchBytes = "<html><head><title>Page</title></head><body><p>updated</p></body></html>".toByteArray()
+
+        val result = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            ReIngestService(repo, urlFetcher = fetcher).reIngest(forceAll = false, urlFreshnessThresholdMs = 1)
+        }
+
+        assertThat(result.filesReIngested).isEqualTo(1)
+
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val metadata = repo.getMetadata()
+            val urlDoc = metadata.documents.first { it.path == fakeUrl }
+            assertThat(urlDoc.status).isEqualTo("FRESH")
+        }
+    }
+
+    @Test
+    fun `forceAll=true re-fetches a FRESH URL`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val fakeUrl = "https://example.com/page"
+
+        val fetchBytes = "<html><head><title>Page</title></head><body><p>content</p></body></html>".toByteArray()
+        val fetcher = makeFakeFetcher({ fetchBytes })
+
+        ingestUrl(storeDir, fakeUrl, fetcher)
+
+        val result = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            ReIngestService(repo, urlFetcher = fetcher).reIngest(forceAll = true)
+        }
+
+        assertThat(result.filesReIngested).isEqualTo(1)
+    }
+
+    @Test
+    fun `staleFound excludes FRESH URLs from count`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val staleUrl = "https://example.com/stale"
+        val freshUrl = "https://example.com/fresh"
+
+        val fetcher = makeFakeFetcher({ "<html><body>content</body></html>".toByteArray() })
+
+        ingestUrl(storeDir, staleUrl, fetcher)
+        ingestUrl(storeDir, freshUrl, fetcher)
+
+        val result = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            ReIngestService(repo, urlFetcher = fetcher).reIngest(forceAll = false, urlFreshnessThresholdMs = 1)
+        }
+
+        assertThat(result.staleFound).isEqualTo(2)
+    }
+
+    @Test
     fun `re-ingest re-fetches URL source and reports filesReIngested=1 when content changed`(@TempDir tempDir: Path) {
         val storeDir = tempDir.resolve("store")
         val fakeUrl = "https://example.com/page"
@@ -317,7 +396,7 @@ class ReIngestServiceTest {
         fetchBytes = "<html><head><title>Page</title></head><body><p>updated content</p></body></html>".toByteArray()
 
         val result = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
-            ReIngestService(repo, urlFetcher = fetcher).reIngest(forceAll = false)
+            ReIngestService(repo, urlFetcher = fetcher).reIngest(forceAll = false, urlFreshnessThresholdMs = 1)
         }
 
         assertThat(result.filesReIngested).isEqualTo(1)
@@ -335,7 +414,7 @@ class ReIngestServiceTest {
         ingestUrl(storeDir, fakeUrl, fetcher)
 
         val result = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
-            ReIngestService(repo, urlFetcher = fetcher).reIngest(forceAll = false)
+            ReIngestService(repo, urlFetcher = fetcher).reIngest(forceAll = false, urlFreshnessThresholdMs = 1)
         }
 
         assertThat(result.filesReIngested).isEqualTo(0)
@@ -362,7 +441,7 @@ class ReIngestServiceTest {
                 repo,
                 warningWriter = PrintWriter(warnOut, true),
                 urlFetcher = failingFetcher
-            ).reIngest(forceAll = false)
+            ).reIngest(forceAll = false, urlFreshnessThresholdMs = 1)
         }
 
         assertThat(result.filesReIngested).isEqualTo(0)

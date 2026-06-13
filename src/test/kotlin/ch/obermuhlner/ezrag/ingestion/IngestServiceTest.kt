@@ -441,4 +441,35 @@ class IngestServiceTest {
             assertThat(sorted).isEqualTo((0 until sorted.size).toList())
         }
     }
+
+    @Test
+    fun `URL ingestion results in StoreDocumentInfo with status FRESH within freshness window`(@TempDir tempDir: Path) {
+        val url = "https://example.com/page.html"
+        val fakeUrlFetcher = makeFakeUrlFetcher(url)
+        withIngestService(tempDir, urlFetcher = fakeUrlFetcher) { service ->
+            service.ingest(listOf(UrlSource(url)))
+        }
+
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val metadata = repo.getMetadata(urlFreshnessThresholdMs = 24 * 3_600_000L)
+            val doc = metadata.documents.first { it.path == url }
+            assertThat(doc.status).isEqualTo("FRESH")
+        }
+    }
+
+    @Test
+    fun `file ingestion results in StoreDocumentInfo status determined by mtime not timer`(@TempDir tempDir: Path) {
+        val sampleFile = tempDir.resolve("sample.txt")
+        sampleFile.toFile().writeText("File content for status test.")
+        withIngestService(tempDir) { service ->
+            service.ingest(listOf(sampleFile.toFile()))
+        }
+
+        val absolutePath = sampleFile.toAbsolutePath().normalize().toString()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val metadata = repo.getMetadata(filesystemProbe = { _ -> sampleFile.toFile().lastModified() })
+            val doc = metadata.documents.first { it.path == absolutePath }
+            assertThat(doc.status).isEqualTo("FRESH")
+        }
+    }
 }

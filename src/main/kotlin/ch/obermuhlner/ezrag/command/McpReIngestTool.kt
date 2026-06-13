@@ -11,6 +11,7 @@ import org.springframework.ai.tool.annotation.ToolParam
  */
 class McpReIngestTool(
     private val repository: LuceneRepository,
+    private val urlFreshnessThresholdMs: Long = 24 * 3_600_000L,
     private val reIngestServiceFactory: (Int, Int) -> ReIngestService = { chunkSize, chunkOverlap ->
         ReIngestService(repository, chunkSize, chunkOverlap)
     }
@@ -34,7 +35,7 @@ class McpReIngestTool(
         val co = chunkOverlap ?: 200
         val force = forceAll ?: false
         val service = reIngestServiceFactory(cs, co)
-        val result = service.reIngest(forceAll = force)
+        val result = service.reIngest(forceAll = force, urlFreshnessThresholdMs = urlFreshnessThresholdMs)
         return ReIngestToolResult(
             staleFound = result.staleFound,
             filesReIngested = result.filesReIngested,

@@ -4,6 +4,9 @@ import ch.obermuhlner.ezrag.ingestion.IngestService
 import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.ingestion.ReIngestResult
 import ch.obermuhlner.ezrag.ingestion.ReIngestService
+import ch.obermuhlner.ezrag.ingestion.UrlSource
+import ch.obermuhlner.ezrag.ingestion.UrlFetcher
+import ch.obermuhlner.ezrag.ingestion.FetchResult
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -57,7 +60,7 @@ class McpReIngestToolTest {
             reIngestServiceFactory = { cs: Int, co: Int ->
                 if (resultToReturn != null || throwException != null) {
                     object : ReIngestService(repo, cs, co) {
-                        override fun reIngest(forceAll: Boolean): ReIngestResult {
+                        override fun reIngest(forceAll: Boolean, urlFreshnessThresholdMs: Long): ReIngestResult {
                             if (throwException != null) throw throwException
                             return resultToReturn!!
                         }
@@ -101,7 +104,7 @@ class McpReIngestToolTest {
             repository = repo,
             reIngestServiceFactory = { chunkSize, chunkOverlap ->
                 object : ReIngestService(repo, chunkSize, chunkOverlap) {
-                    override fun reIngest(forceAll: Boolean): ReIngestResult {
+                    override fun reIngest(forceAll: Boolean, urlFreshnessThresholdMs: Long): ReIngestResult {
                         capturedForceAll.add(forceAll)
                         return ReIngestResult(staleFound = null, filesReIngested = 2, chunksCreated = 5, filesSkipped = 0)
                     }
@@ -138,7 +141,7 @@ class McpReIngestToolTest {
                 capturedChunkSizes.add(chunkSize)
                 capturedChunkOverlaps.add(chunkOverlap)
                 object : ReIngestService(repo, chunkSize, chunkOverlap) {
-                    override fun reIngest(forceAll: Boolean): ReIngestResult {
+                    override fun reIngest(forceAll: Boolean, urlFreshnessThresholdMs: Long): ReIngestResult {
                         return ReIngestResult(staleFound = 0, filesReIngested = 0, chunksCreated = 0, filesSkipped = 0)
                     }
                 }
@@ -175,5 +178,40 @@ class McpReIngestToolTest {
             assertThat(result.filesReIngested).isEqualTo(1)
             assertThat(result.staleFound).isEqualTo(1)
         }
+    }
+
+    private fun makeFakeFetcher(responseRef: () -> ByteArray): UrlFetcher =
+        object : UrlFetcher {
+            override fun fetch(url: String) = FetchResult(
+                bytes = responseRef(),
+                contentType = "text/html",
+                lastModifiedEpochMs = 0L,
+                statusCode = 200
+            )
+        }
+
+    @Test
+    fun `FRESH URL is not re-fetched when urlFreshnessThresholdMs is large`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val fakeUrl = "https://example.com/page"
+
+        val fetcher = makeFakeFetcher({ "<html><body>content</body></html>".toByteArray() })
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            IngestService(repo, urlFetcher = fetcher).ingest(listOf(UrlSource(fakeUrl)))
+        }
+
+        val repo = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard")
+        val tool = McpReIngestTool(
+            repository = repo,
+            urlFreshnessThresholdMs = 24 * 3_600_000L,
+            reIngestServiceFactory = { cs, co ->
+                ReIngestService(repo, cs, co, urlFetcher = fetcher)
+            }
+        )
+        val result = tool.reingest(forceAll = null, chunkSize = null, chunkOverlap = null)
+
+        assertThat(result.filesReIngested).isEqualTo(0)
+        assertThat(result.staleFound).isEqualTo(0)
+        repo.close()
     }
 }
