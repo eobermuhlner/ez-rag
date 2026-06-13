@@ -384,6 +384,29 @@ class ReIngestServiceTest {
     }
 
     @Test
+    fun `re-ingest of unchanged URL resets freshness timer`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val fakeUrl = "https://example.com/page"
+
+        val fetchBytes = "<html><head><title>Page</title></head><body><p>same content</p></body></html>".toByteArray()
+        val fetcher = makeFakeFetcher({ fetchBytes })
+
+        ingestUrl(storeDir, fakeUrl, fetcher)
+
+        val result = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            ReIngestService(repo, urlFetcher = fetcher).reIngest(forceAll = false, urlFreshnessThresholdMs = 1)
+        }
+
+        assertThat(result.filesReIngested).isEqualTo(0)
+
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val metadata = repo.getMetadata(urlFreshnessThresholdMs = 24 * 3_600_000L)
+            val urlDoc = metadata.documents.first { it.path == fakeUrl }
+            assertThat(urlDoc.status).isEqualTo("FRESH")
+        }
+    }
+
+    @Test
     fun `re-ingest re-fetches URL source and reports filesReIngested=1 when content changed`(@TempDir tempDir: Path) {
         val storeDir = tempDir.resolve("store")
         val fakeUrl = "https://example.com/page"

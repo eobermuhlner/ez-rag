@@ -299,6 +299,30 @@ class LuceneRepository private constructor(
     }
 
     /**
+     * Updates the ingest_time for all chunks of the given source without altering content.
+     * Used by ReIngestService to reset the freshness timer when content is unchanged.
+     */
+    @Synchronized
+    fun updateIngestTime(source: String, ingestTime: Long) {
+        val chunks = getChunksForFile(source)
+        if (chunks.isEmpty()) return
+        delete(source)
+        val docs = chunks.map { chunk ->
+            Document.builder()
+                .id("${source}#${chunk.chunkIndex}")
+                .text(chunk.text)
+                .metadata(mutableMapOf<String, Any>(
+                    "source" to source,
+                    "mtime" to chunk.mtime,
+                    "chunk_index" to chunk.chunkIndex,
+                    "ingest_time" to ingestTime,
+                ))
+                .build()
+        }
+        add(docs)
+    }
+
+    /**
      * Drops all documents from the index and clears the cache.
      * Uses [IndexWriter.deleteAll] to wipe all segments (including their field-schema),
      * which is required before writing documents with a different embedding dimension.

@@ -59,6 +59,7 @@ open class ReIngestService(
                 }
                 val contentHash = computeSha256(fetchResult.bytes)
                 if (!forceAll && repository.isContentUnchanged(doc.path, fetchResult.lastModifiedEpochMs, contentHash)) {
+                    repository.updateIngestTime(doc.path, System.currentTimeMillis())
                     filesSkipped++
                     continue
                 }
