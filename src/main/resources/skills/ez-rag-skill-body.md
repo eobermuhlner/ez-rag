@@ -38,7 +38,7 @@ of every document regardless of staleness.
 ### Search for relevant chunks
 
 ```sh
-ez-rag search --output xml <question words...>
+ez-rag search --output-format xml <question words...>
 ```
 
 Returns the most semantically similar document chunks to your question using hybrid
