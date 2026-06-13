@@ -63,16 +63,10 @@ class EzRagCommand : Callable<Int> {
     @Option(names = ["--provider"], description = ["Chat provider: openai, anthropic, ollama."], scope = ScopeType.INHERIT)
     var provider: String? = null
 
-    @Option(names = ["--embedding-provider"], description = ["Embedding provider: openai, ollama, onnx."], scope = ScopeType.INHERIT)
-    var embeddingProvider: String? = null
-
     @Option(names = ["--model"], description = ["Chat model name override."], scope = ScopeType.INHERIT)
     var model: String? = null
 
-    @Option(names = ["--embedding-model"], description = ["Embedding model name override."], scope = ScopeType.INHERIT)
-    var embeddingModel: String? = null
-
-    @Option(names = ["--ollama-url"], description = ["Ollama base URL (default: http://localhost:11434)."], scope = ScopeType.INHERIT)
+    @Option(names = ["--ollama-url"], description = ["Ollama base URL (default: http://localhost:11434)."])
     var ollamaUrl: String? = null
 
     @Option(names = ["--rerank-model"], description = ["Cross-encoder reranker model name (empty = reranking disabled)."], scope = ScopeType.INHERIT)

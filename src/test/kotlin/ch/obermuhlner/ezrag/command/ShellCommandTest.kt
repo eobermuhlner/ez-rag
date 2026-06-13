@@ -24,6 +24,7 @@ import org.springframework.ai.embedding.Embedding
 import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
+import picocli.CommandLine
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.io.PrintWriter
@@ -742,5 +743,51 @@ class ShellCommandTest {
         repo.close()
 
         assertThat(out.toString()).contains("/clear")
+    }
+
+    // -----------------------------------------------------------------------
+    // Picocli-level flag tests: --output-format accepted, --output rejected
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--output-format json is accepted by picocli parser for ShellCommand`(@TempDir tempDir: Path) {
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val pipeline = makePipeline(repo)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = ShellCommand(
+            storeDirOverride = tempDir,
+            ragPipeline = pipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = makeInput("exit"),
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--output-format", "json")
+        repo.close()
+        assertThat(exitCode).isNotEqualTo(CommandLine.ExitCode.USAGE)
+    }
+
+    @Test
+    fun `--output json causes picocli UnmatchedArgumentException for ShellCommand`(@TempDir tempDir: Path) {
+        createStore(tempDir)
+        val repo = openRepo(tempDir)
+        val pipeline = makePipeline(repo)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = ShellCommand(
+            storeDirOverride = tempDir,
+            ragPipeline = pipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = makeInput("exit"),
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--output", "json")
+        repo.close()
+        assertThat(exitCode).isEqualTo(CommandLine.ExitCode.USAGE)
     }
 }

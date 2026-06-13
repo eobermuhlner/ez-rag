@@ -132,6 +132,31 @@ class SearchCommandTest {
     }
 
     // -----------------------------------------------------------------------
+    // Test: --min-score causes picocli UnmatchedArgumentException
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--min-score causes picocli UnmatchedArgumentException`(@TempDir tempDir: Path) {
+        populateRepository(tempDir)
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        val pipeline = EmbeddingSearchPipeline(repo)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = SearchCommand(
+            storeDirOverride = tempDir,
+            searchPipeline = pipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--min-score", "0.5", "test query")
+        repo.close()
+        assertThat(exitCode).isEqualTo(CommandLine.ExitCode.USAGE)
+    }
+
+    // -----------------------------------------------------------------------
     // Test 0a: positional words joined into single question string
     // -----------------------------------------------------------------------
 
@@ -491,38 +516,6 @@ class SearchCommandTest {
     // -----------------------------------------------------------------------
 
     @Test
-    fun `--min-score is forwarded to hybrid pipeline in hybrid mode`(@TempDir tempDir: Path) {
-        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
-        val capturedQueries = mutableListOf<SearchQuery>()
-        val hybridPipeline = object : HybridSearchPipeline(repo) {
-            override fun search(query: SearchQuery): SearchResult {
-                capturedQueries.add(query)
-                return SearchResult(emptyList(), mode = "hybrid")
-            }
-        }
-
-        val out = StringWriter()
-        val err = StringWriter()
-        val cmd = SearchCommand(
-            storeDirOverride = tempDir,
-            hybridPipeline = hybridPipeline,
-            outputFormatter = OutputFormatter(),
-            outputWriter = PrintWriter(out, true),
-            errorWriter = PrintWriter(err, true),
-            inputStream = ByteArrayInputStream(ByteArray(0)),
-        )
-        cmd.questionArgs = listOf("test query")
-        cmd.modeOption = "hybrid"
-        cmd.minScore = 0.5
-
-        cmd.call()
-        repo.close()
-
-        assertThat(capturedQueries).hasSize(1)
-        assertThat(capturedQueries[0].minScore).isEqualTo(0.5)
-    }
-
-    @Test
     fun `no --mode flag with hybrid pipeline injected routes to hybrid pipeline not embedding-only`(@TempDir tempDir: Path) {
         val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
         val doc = Document.builder()
@@ -611,35 +604,4 @@ class SearchCommandTest {
         assertThat(output).contains("<result ")
     }
 
-    @Test
-    fun `--min-score is forwarded to bm25 pipeline in bm25 mode`(@TempDir tempDir: Path) {
-        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
-        val capturedQueries = mutableListOf<SearchQuery>()
-        val bm25Pipeline = object : BM25SearchPipeline(repo) {
-            override fun search(query: SearchQuery): SearchResult {
-                capturedQueries.add(query)
-                return SearchResult(emptyList(), mode = "bm25")
-            }
-        }
-
-        val out = StringWriter()
-        val err = StringWriter()
-        val cmd = SearchCommand(
-            storeDirOverride = tempDir,
-            bm25Pipeline = bm25Pipeline,
-            outputFormatter = OutputFormatter(),
-            outputWriter = PrintWriter(out, true),
-            errorWriter = PrintWriter(err, true),
-            inputStream = ByteArrayInputStream(ByteArray(0)),
-        )
-        cmd.questionArgs = listOf("test query")
-        cmd.modeOption = "bm25"
-        cmd.minScore = 0.5
-
-        cmd.call()
-        repo.close()
-
-        assertThat(capturedQueries).hasSize(1)
-        assertThat(capturedQueries[0].minScore).isEqualTo(0.5)
-    }
 }

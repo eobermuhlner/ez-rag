@@ -13,6 +13,7 @@ import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
 import org.springframework.ai.transformers.TransformersEmbeddingModel
+import picocli.CommandLine
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.nio.file.Path
@@ -245,21 +246,15 @@ class IngestCommandTest {
     }
 
     @Test
-    fun `--details flag prints chunk details`(@TempDir tempDir: Path) {
-        val file = tempDir.resolve("file.txt").also { it.toFile().writeText("Hello world. This is a test.") }
-        val out = StringWriter()
-
+    fun `--details flag causes picocli UnmatchedArgumentException`(@TempDir tempDir: Path) {
         val cmd = IngestCommand(
             embeddingModel = fakeEmbeddingModel,
             storeDirOverride = tempDir,
-            outputWriter = PrintWriter(out, true),
+            outputWriter = PrintWriter(StringWriter(), true),
         )
-        cmd.detailsOption = true
-        cmd.call(listOf(file.toFile()))
-
-        val output = out.toString()
-        assertThat(output).contains("Chunk 0")
-        assertThat(output).containsPattern(Regex("\\[\\d+ tokens\\]").toPattern())
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--details", "somefile.txt")
+        assertThat(exitCode).isEqualTo(CommandLine.ExitCode.USAGE)
     }
 
     @Test

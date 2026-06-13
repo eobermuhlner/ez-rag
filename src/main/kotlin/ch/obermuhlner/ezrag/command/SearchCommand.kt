@@ -59,9 +59,6 @@ class SearchCommand(
     @Option(names = ["--top-k"], description = ["Number of chunks to retrieve (default: 5)."])
     var topK: Int = 5
 
-    @Option(names = ["--min-score"], description = ["Minimum similarity score threshold (default: 0.0)."])
-    var minScore: Double = 0.0
-
     @Option(names = ["--store-dir"], description = ["Path to the store directory."])
     var storeDirOption: String? = null
 
@@ -112,12 +109,9 @@ class SearchCommand(
             stdin
         }
 
-        val effectiveMinScore = minScore
-
         val searchQuery = SearchQuery(
             question = resolvedQuestion,
             topK = topK,
-            minScore = effectiveMinScore,
             rerankCandidates = null,
             verbose = verbose,
             mode = resolvedMode,
@@ -151,7 +145,7 @@ class SearchCommand(
                 } else {
                     null
                 }
-                searchPipeline.search(searchQuery.copy(rerankCandidates = effectiveRerankCandidates, minScore = minScore))
+                searchPipeline.search(searchQuery.copy(rerankCandidates = effectiveRerankCandidates))
             }
             else -> {
                 val embeddingModel = springEmbeddingModel
@@ -168,7 +162,7 @@ class SearchCommand(
                         errorWriter.println("Total chunks in store: ${repo.getMetadata().chunkCount}")
                     }
                     EmbeddingSearchPipeline(repo, springReranker)
-                        .search(searchQuery.copy(rerankCandidates = effectiveRerankCandidates, minScore = minScore))
+                        .search(searchQuery.copy(rerankCandidates = effectiveRerankCandidates))
                 }
             }
         }

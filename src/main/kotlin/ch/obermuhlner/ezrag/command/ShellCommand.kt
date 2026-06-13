@@ -55,7 +55,7 @@ class ShellCommand(
     @Option(names = ["--top-k"], description = ["Number of chunks to retrieve (default: 5)."])
     var topK: Int = 5
 
-    @Option(names = ["--output"], description = ["Output format: text (default) or json."])
+    @Option(names = ["--output-format"], description = ["Output format: text (default) or json."])
     var outputFormat: String = "text"
 
     var modelOverride: String? = null

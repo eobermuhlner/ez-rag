@@ -64,9 +64,6 @@ class IngestCommand(
     @Option(names = ["--quiet", "-q"], description = ["Suppress per-file output; show only the summary line."])
     var quietOption: Boolean = false
 
-    @Option(names = ["--details"], description = ["Print chunk details (token count and text preview) for each ingested file."])
-    var detailsOption: Boolean = false
-
     override fun call(): Int {
         val sources = paths.map { path ->
             if (path.startsWith("http://") || path.startsWith("https://")) UrlSource(path)
@@ -105,7 +102,7 @@ class IngestCommand(
         val analyzerName = (configServiceOverride ?: springConfigService)?.resolve()?.analyzer ?: "standard"
 
         val isQuiet = quiet || quietOption
-        val isVerbose = verbose || detailsOption
+        val isVerbose = verbose
 
         LuceneRepository.open(model, resolvedStoreDir, analyzerName).use { repo ->
             val service = IngestService(

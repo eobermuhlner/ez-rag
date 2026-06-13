@@ -65,7 +65,7 @@ class QueryCommand(
     @Option(names = ["--system-prompt"], description = ["Override the system prompt for this query."])
     var systemPromptOverride: String = ""
 
-    @Option(names = ["--output"], description = ["Output format: text (default) or json."])
+    @Option(names = ["--output-format"], description = ["Output format: text (default) or json."])
     var outputFormat: String = "text"
 
     @Option(names = ["--store-dir"], description = ["Path to the store directory."])

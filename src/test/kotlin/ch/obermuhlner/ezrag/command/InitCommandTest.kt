@@ -1,5 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.config.readConfigRaw
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -188,5 +189,57 @@ class InitCommandTest {
         cmd.call()
 
         assertThat(tempDir.resolve(".agents/skills/ez-rag/SKILL.md").toFile().exists()).isTrue()
+    }
+
+    // ---- config-writing tests ----
+
+    @Test
+    fun `writes embeddingProvider to config yml when embedding-provider option is supplied`(@TempDir tempDir: Path) {
+        val (_, pw) = makeWriter()
+        val cmd = InitCommand(cwdOverride = tempDir, outputWriter = pw, embeddingProvider = "openai")
+        cmd.call()
+
+        val configFile = tempDir.resolve(".ez-rag/config.yml")
+        assertThat(configFile.toFile().exists()).isTrue()
+        val raw = readConfigRaw(configFile.toString())
+        assertThat(raw).isNotNull()
+        assertThat(raw!!["embeddingProvider"]).isEqualTo("openai")
+    }
+
+    @Test
+    fun `updates embeddingProvider when config yml already contains a different value`(@TempDir tempDir: Path) {
+        val ezRagDir = tempDir.resolve(".ez-rag").toFile().also { it.mkdirs() }
+        ezRagDir.resolve("config.yml").writeText("embeddingProvider: onnx\n")
+        val (_, pw) = makeWriter()
+        val cmd = InitCommand(cwdOverride = tempDir, outputWriter = pw, embeddingProvider = "openai")
+        cmd.call()
+
+        val raw = readConfigRaw(tempDir.resolve(".ez-rag/config.yml").toString())
+        assertThat(raw).isNotNull()
+        assertThat(raw!!["embeddingProvider"]).isEqualTo("openai")
+    }
+
+    @Test
+    fun `does not create or modify config yml when no config options are provided`(@TempDir tempDir: Path) {
+        val (_, pw) = makeWriter()
+        val cmd = InitCommand(cwdOverride = tempDir, outputWriter = pw)
+        cmd.call()
+
+        val configFile = tempDir.resolve(".ez-rag/config.yml")
+        assertThat(configFile.toFile().exists()).isFalse()
+    }
+
+    @Test
+    fun `preserves existing embeddingProvider when only chunkSize is written`(@TempDir tempDir: Path) {
+        val ezRagDir = tempDir.resolve(".ez-rag").toFile().also { it.mkdirs() }
+        ezRagDir.resolve("config.yml").writeText("embeddingProvider: openai\n")
+        val (_, pw) = makeWriter()
+        val cmd = InitCommand(cwdOverride = tempDir, outputWriter = pw, chunkSize = 500)
+        cmd.call()
+
+        val raw = readConfigRaw(tempDir.resolve(".ez-rag/config.yml").toString())
+        assertThat(raw).isNotNull()
+        assertThat(raw!!["embeddingProvider"]).isEqualTo("openai")
+        assertThat(raw["chunkSize"]).isEqualTo(500)
     }
 }

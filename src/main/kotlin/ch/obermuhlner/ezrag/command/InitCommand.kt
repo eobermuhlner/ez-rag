@@ -1,5 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.config.ConfigFileWriter
 import ch.obermuhlner.ezrag.config.GitIgnoreUpdater
 import org.springframework.stereotype.Component
 import picocli.CommandLine.Command
@@ -23,6 +24,11 @@ class InitCommand(
     installSkill: Boolean = false,
     isGlobal: Boolean = false,
     explicitToolNames: List<String> = emptyList(),
+    embeddingProvider: String? = null,
+    embeddingModel: String? = null,
+    chunkSize: Int? = null,
+    chunkOverlap: Int? = null,
+    ollamaUrl: String? = null,
 ) : Callable<Int> {
 
     @Option(names = ["--install-skill"], description = ["Install the ez-rag skill for your AI coding tool after init."])
@@ -33,6 +39,21 @@ class InitCommand(
 
     @Option(names = ["--tool"], description = ["Install skill for a specific tool (repeatable). Valid: claude-code, opencode, generic."])
     private var toolNames: List<String> = explicitToolNames
+
+    @Option(names = ["--embedding-provider"], description = ["Embedding provider: openai, ollama, onnx."])
+    private var embeddingProviderFlag: String? = embeddingProvider
+
+    @Option(names = ["--embedding-model"], description = ["Embedding model name override."])
+    private var embeddingModelFlag: String? = embeddingModel
+
+    @Option(names = ["--chunk-size"], description = ["Default chunk size in tokens."])
+    private var chunkSizeFlag: Int? = chunkSize
+
+    @Option(names = ["--chunk-overlap"], description = ["Default chunk overlap in tokens."])
+    private var chunkOverlapFlag: Int? = chunkOverlap
+
+    @Option(names = ["--ollama-url"], description = ["Ollama base URL."])
+    private var ollamaUrlFlag: String? = ollamaUrl
 
     companion object {
         private const val VECTOR_STORE_ENTRY = ".ez-rag/"
@@ -47,6 +68,18 @@ class InitCommand(
 
         val gitIgnoreUpdater = GitIgnoreUpdater(outputWriter)
         gitIgnoreUpdater.ensureEntry(cwd.toFile(), VECTOR_STORE_ENTRY)
+
+        // Write config options if any were supplied
+        val configValues: Map<String, Any> = buildMap {
+            embeddingProviderFlag?.let { put("embeddingProvider", it) }
+            embeddingModelFlag?.let { put("embeddingModel", it) }
+            chunkSizeFlag?.let { put("chunkSize", it) }
+            chunkOverlapFlag?.let { put("chunkOverlap", it) }
+            ollamaUrlFlag?.let { put("ollamaUrl", it) }
+        }
+        if (configValues.isNotEmpty()) {
+            ConfigFileWriter().write(ezRagDir.resolve("config.yml"), configValues)
+        }
 
         if (alreadyExists) {
             outputWriter.println(".ez-rag/ already exists at ${ezRagDir.toAbsolutePath()}")

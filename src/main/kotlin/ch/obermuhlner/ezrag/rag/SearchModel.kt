@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude
 data class SearchQuery(
     val question: String,
     val topK: Int,
-    val minScore: Double,
+    val minScore: Double = 0.0,
     val rerankCandidates: Int? = null,
     val verbose: Boolean = false,
     val mode: String = "embedding"

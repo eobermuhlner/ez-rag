@@ -2,7 +2,9 @@ package ch.obermuhlner.ezrag
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import picocli.CommandLine
+import java.nio.file.Path
 
 class EzRagCommandTest {
 
@@ -134,6 +136,60 @@ class EzRagCommandTest {
     // -----------------------------------------------------------------------
     // verbose propagation via @ParentCommand
     // -----------------------------------------------------------------------
+
+    // -----------------------------------------------------------------------
+    // preParseProviderFlags — local config file
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `preParseProviderFlags reads embeddingProvider from local config yml`(@TempDir tempDir: Path) {
+        val ezRagDir = tempDir.resolve(".ez-rag").toFile().also { it.mkdirs() }
+        ezRagDir.resolve("config.yml").writeText("embeddingProvider: openai\n")
+
+        val result = preParseProviderFlags(arrayOf("search", "test"), localEzRagDir = tempDir.resolve(".ez-rag"))
+        assertThat(result["ez.rag.embeddingProvider"]).isEqualTo("openai")
+    }
+
+    @Test
+    fun `preParseProviderFlags reads embeddingModel from local config yml`(@TempDir tempDir: Path) {
+        val ezRagDir = tempDir.resolve(".ez-rag").toFile().also { it.mkdirs() }
+        ezRagDir.resolve("config.yml").writeText("embeddingModel: text-embedding-3-small\n")
+
+        val result = preParseProviderFlags(arrayOf("search", "test"), localEzRagDir = tempDir.resolve(".ez-rag"))
+        assertThat(result["ez.rag.embeddingModel"]).isEqualTo("text-embedding-3-small")
+    }
+
+    @Test
+    fun `preParseProviderFlags returns no embeddingProvider when no config file exists`(@TempDir tempDir: Path) {
+        val result = preParseProviderFlags(arrayOf("search", "test"), localEzRagDir = tempDir.resolve(".ez-rag"))
+        assertThat(result.containsKey("ez.rag.embeddingProvider")).isFalse()
+        assertThat(result.containsKey("ez.rag.embeddingModel")).isFalse()
+    }
+
+    @Test
+    fun `preParseProviderFlags with no local config dir succeeds without error`(@TempDir tempDir: Path) {
+        val nonExistent = tempDir.resolve("nonexistent/.ez-rag")
+        val result = preParseProviderFlags(arrayOf("status"), localEzRagDir = nonExistent)
+        assertThat(result).isNotNull()
+    }
+
+    // -----------------------------------------------------------------------
+    // --embedding-provider and --embedding-model removed from global options
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `passing --embedding-provider as global flag causes UnmatchedArgumentException`() {
+        val commandLine = CommandLine(EzRagCommand())
+        val exitCode = commandLine.execute("--embedding-provider=openai", "status")
+        assertThat(exitCode).isNotEqualTo(0)
+    }
+
+    @Test
+    fun `passing --embedding-model as global flag causes UnmatchedArgumentException`() {
+        val commandLine = CommandLine(EzRagCommand())
+        val exitCode = commandLine.execute("--embedding-model=text-embedding-3-small", "status")
+        assertThat(exitCode).isNotEqualTo(0)
+    }
 
     @Test
     fun `--verbose propagates to SearchCommand via parent`() {

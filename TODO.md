@@ -1,0 +1,1 @@
+- add a --version option. How to increment the version as automatically as possible ? 

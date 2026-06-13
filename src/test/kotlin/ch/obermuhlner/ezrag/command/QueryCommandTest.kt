@@ -474,6 +474,52 @@ class QueryCommandTest {
     }
 
     // -----------------------------------------------------------------------
+    // Picocli-level flag tests: --output-format accepted, --output rejected
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--output-format json is accepted by picocli parser for QueryCommand`(@TempDir tempDir: Path) {
+        populateRepository(tempDir)
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        val pipeline = RagPipeline(EmbeddingSearchPipeline(repo), stubChatModel)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = QueryCommand(
+            storeDirOverride = tempDir,
+            ragPipeline = pipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--output-format", "json", "test question")
+        repo.close()
+        assertThat(exitCode).isNotEqualTo(CommandLine.ExitCode.USAGE)
+    }
+
+    @Test
+    fun `--output json causes picocli UnmatchedArgumentException for QueryCommand`(@TempDir tempDir: Path) {
+        populateRepository(tempDir)
+        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        val pipeline = RagPipeline(EmbeddingSearchPipeline(repo), stubChatModel)
+        val out = StringWriter()
+        val err = StringWriter()
+        val cmd = QueryCommand(
+            storeDirOverride = tempDir,
+            ragPipeline = pipeline,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = ByteArrayInputStream(ByteArray(0)),
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute("--output", "json", "test question")
+        repo.close()
+        assertThat(exitCode).isEqualTo(CommandLine.ExitCode.USAGE)
+    }
+
+    // -----------------------------------------------------------------------
     // Task 03-onnx-provider-wiring: default provider is OnnxChatModel
     // -----------------------------------------------------------------------
 

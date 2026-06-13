@@ -1,10 +1,13 @@
 package ch.obermuhlner.ezrag
 
+import ch.obermuhlner.ezrag.config.EzRagDirResolver
+import ch.obermuhlner.ezrag.config.readConfigRaw
 import org.springframework.boot.CommandLineRunner
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.context.ApplicationContext
 import picocli.CommandLine
+import java.nio.file.Paths
 import kotlin.system.exitProcess
 
 @SpringBootApplication
@@ -30,12 +33,10 @@ class EzRagApplication(
  * Also detects the `mcp-server` subcommand so that MCP stdio transport and
  * logging can be configured before the Spring context starts.
  */
-fun preParseProviderFlags(args: Array<String>): Map<String, String> {
+fun preParseProviderFlags(args: Array<String>, localEzRagDir: java.nio.file.Path? = null): Map<String, String> {
     val flags = mapOf(
         "--provider" to "ez.rag.provider",
-        "--embedding-provider" to "ez.rag.embeddingProvider",
         "--model" to "ez.rag.model",
-        "--embedding-model" to "ez.rag.embeddingModel",
         "--ollama-url" to "ez.rag.ollamaUrl",
         "--rerank-model" to "ez.rag.rerankModel",
         "--rerank-candidates" to "ez.rag.rerankCandidates",
@@ -46,6 +47,7 @@ fun preParseProviderFlags(args: Array<String>): Map<String, String> {
     var transport = "stdio"
     var port = "8080"
     var verbose = false
+    var storeDirArg: String? = null
     var i = 0
     while (i < args.size) {
         val arg = args[i]
@@ -62,6 +64,7 @@ fun preParseProviderFlags(args: Array<String>): Map<String, String> {
             flags[name]?.let { result[it] = value }
             if (name == "--transport") transport = value
             if (name == "--port") port = value
+            if (name == "--store-dir") storeDirArg = value
         } else {
             flags[arg]?.let { propKey ->
                 if (i + 1 < args.size) {
@@ -77,8 +80,26 @@ fun preParseProviderFlags(args: Array<String>): Map<String, String> {
                 port = args[i + 1]
                 i++
             }
+            if (arg == "--store-dir" && i + 1 < args.size) {
+                storeDirArg = args[i + 1]
+            }
         }
         i++
+    }
+
+    // Resolve local config: use provided localEzRagDir (for tests), or derive from CLI/cwd
+    val ezRagDir = localEzRagDir ?: run {
+        if (storeDirArg != null) {
+            Paths.get(storeDirArg).resolve(".ez-rag")
+        } else {
+            EzRagDirResolver().resolve(Paths.get("").toAbsolutePath())
+        }
+    }
+    val localConfigPath = ezRagDir.resolve("config.yml")
+    val localConfig = readConfigRaw(localConfigPath.toString())
+    if (localConfig != null) {
+        (localConfig["embeddingProvider"] as? String)?.let { result["ez.rag.embeddingProvider"] = it }
+        (localConfig["embeddingModel"] as? String)?.let { result["ez.rag.embeddingModel"] = it }
     }
 
     if (isMcpServer) {
