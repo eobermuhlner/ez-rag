@@ -1,5 +1,8 @@
 package ch.obermuhlner.ezrag.ingestion
 
+import org.apache.lucene.store.BaseDirectory
+import org.apache.lucene.store.NIOFSDirectory
+import org.apache.lucene.store.NativeFSLockFactory
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
@@ -953,6 +956,18 @@ class LuceneRepositoryTest {
         LuceneRepository.open(model, tempDir, "standard").use { verifyRepo ->
             val meta = verifyRepo.getMetadata()
             assertThat(meta.chunkCount).isBetween(0, 10)
+        }
+    }
+
+    // --- lock factory ---
+
+    @Test
+    fun `LuceneRepository uses NativeFSLockFactory so write lock is released on process death`(@TempDir tempDir: Path) {
+        LuceneRepository.open(makeEmbeddingModel(), tempDir, "standard").use { }
+        NIOFSDirectory.open(tempDir.resolve("lucene")).use { dir ->
+            val field = BaseDirectory::class.java.getDeclaredField("lockFactory")
+            field.isAccessible = true
+            assertThat(field.get(dir)).isInstanceOf(NativeFSLockFactory::class.java)
         }
     }
 

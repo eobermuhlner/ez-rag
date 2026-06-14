@@ -10,6 +10,10 @@ import org.springframework.ai.embedding.EmbeddingModel
 import org.springframework.ai.embedding.EmbeddingRequest
 import org.springframework.ai.embedding.EmbeddingResponse
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class McpListToolTest {
 
@@ -171,5 +175,46 @@ class McpListToolTest {
 
         assertThat(result).hasSize(1)
         assertThat(result[0].status).isEqualTo("FRESH")
+    }
+
+    @Test
+    fun `two concurrent list calls serialise via openWithRetry and both return the seeded document`(@TempDir tempDir: Path) {
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            repo.add(listOf(
+                Document.builder().text("content")
+                    .metadata(mapOf("source" to "doc.txt", "mtime" to 1000L, "chunk_index" to 0)).build()
+            ))
+        }
+
+        val storeConfig = StoreConfig(
+            embeddingModel = fakeEmbeddingModel,
+            storeDir = tempDir,
+            analyzerName = "standard",
+            lockTimeoutSeconds = 5,
+        )
+        val tool = McpListTool(storeConfig = storeConfig, filesystemProbe = { _ -> 1000L })
+
+        val latch = CountDownLatch(1)
+        val errorRef = AtomicReference<Throwable?>()
+        @Suppress("UNCHECKED_CAST")
+        val results = arrayOfNulls<List<McpListTool.DocumentInfo>>(2)
+        val executor = Executors.newFixedThreadPool(2)
+
+        executor.submit {
+            try { latch.await(); results[0] = tool.list() }
+            catch (e: Throwable) { errorRef.compareAndSet(null, e) }
+        }
+        executor.submit {
+            try { latch.await(); results[1] = tool.list() }
+            catch (e: Throwable) { errorRef.compareAndSet(null, e) }
+        }
+
+        latch.countDown()
+        executor.shutdown()
+        executor.awaitTermination(30, TimeUnit.SECONDS)
+
+        assertThat(errorRef.get()).isNull()
+        assertThat(results[0]).hasSize(1)
+        assertThat(results[1]).hasSize(1)
     }
 }
