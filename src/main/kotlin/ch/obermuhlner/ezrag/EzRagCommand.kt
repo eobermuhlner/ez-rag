@@ -75,6 +75,13 @@ class EzRagCommand : Callable<Int> {
     @Option(names = ["--rerank-candidates"], description = ["Number of candidates to fetch before reranking (default: topK * 3)."], scope = ScopeType.INHERIT)
     var rerankCandidates: Int? = null
 
+    @Option(
+        names = ["--lock-timeout"],
+        description = ["Seconds to retry acquiring the write lock (0 = fail immediately, default: 30)."],
+        scope = ScopeType.INHERIT
+    )
+    var lockTimeout: Int = 30
+
     override fun call(): Int {
         if (verbose) {
             (LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger).level = Level.DEBUG

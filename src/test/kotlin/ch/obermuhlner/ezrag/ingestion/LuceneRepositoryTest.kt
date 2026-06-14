@@ -3,6 +3,7 @@ package ch.obermuhlner.ezrag.ingestion
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
 import org.springframework.ai.document.Document
 import org.springframework.ai.embedding.EmbeddingModel
@@ -849,6 +850,109 @@ class LuceneRepositoryTest {
             )
             assertThat(metadata.documents).hasSize(1)
             assertThat(metadata.documents[0].status).isEqualTo("FRESH")
+        }
+    }
+
+    // --- openWithRetry ---
+
+    @Test
+    @Timeout(1, unit = TimeUnit.SECONDS)
+    fun `openWithRetry with timeoutSeconds 0 throws IllegalStateException immediately when write lock is held`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        // Hold the write lock open
+        val holder = LuceneRepository.open(model, tempDir, "standard")
+        try {
+            assertThatThrownBy {
+                LuceneRepository.openWithRetry(model, tempDir, "standard", timeoutSeconds = 0)
+            }.isInstanceOf(IllegalStateException::class.java)
+                .hasMessageContaining(tempDir.toString())
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
+    fun `openWithRetry error message contains store path and timeout value`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val holder = LuceneRepository.open(model, tempDir, "standard")
+        try {
+            assertThatThrownBy {
+                LuceneRepository.openWithRetry(model, tempDir, "standard", timeoutSeconds = 0)
+            }.isInstanceOf(IllegalStateException::class.java)
+                .hasMessageContaining(tempDir.toString())
+                .hasMessageContaining("0s")
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
+    fun `openWithRetry with positive timeout succeeds once competing instance is closed`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        // Open the holder and schedule it to close after 200 ms
+        val holder = LuceneRepository.open(model, tempDir, "standard")
+        val releaseThread = Thread {
+            Thread.sleep(200)
+            holder.close()
+        }
+        releaseThread.isDaemon = true
+        releaseThread.start()
+
+        // openWithRetry with 5 second timeout should succeed once holder closes
+        val repo = LuceneRepository.openWithRetry(model, tempDir, "standard", timeoutSeconds = 5)
+        repo.close()
+        releaseThread.join(2000)
+    }
+
+    // --- dropAllDocuments concurrent safety ---
+
+    @Test
+    fun `concurrent dropAllDocuments and add on same instance do not corrupt document count`(@TempDir tempDir: Path) {
+        val model = makeEmbeddingModel()
+        val repo = LuceneRepository.open(model, tempDir, "standard")
+
+        // Pre-load some documents
+        val initial = (0 until 5).map { i -> makeDoc("Initial chunk $i", "/abs/initial.txt", chunkIndex = i, mtime = 1000L + i) }
+        repo.add(initial)
+
+        val newBatch = (0 until 5).map { i -> makeDoc("New chunk $i", "/abs/new.txt", chunkIndex = i, mtime = 2000L + i) }
+
+        val latch = CountDownLatch(1)
+        val errorRef = AtomicReference<Throwable?>()
+        val executor = Executors.newFixedThreadPool(2)
+
+        // Thread 1: drop all documents
+        executor.submit {
+            try {
+                latch.await()
+                repo.dropAllDocuments()
+            } catch (e: Throwable) {
+                errorRef.compareAndSet(null, e)
+            }
+        }
+        // Thread 2: add new documents
+        executor.submit {
+            try {
+                latch.await()
+                repo.add(newBatch)
+            } catch (e: Throwable) {
+                errorRef.compareAndSet(null, e)
+            }
+        }
+
+        latch.countDown()
+        executor.shutdown()
+        executor.awaitTermination(30, TimeUnit.SECONDS)
+
+        repo.close()
+
+        assertThat(errorRef.get()).isNull()
+
+        // After concurrent ops, the index should contain between 0 and 10 chunks (either outcome is valid)
+        // but must NOT be corrupted (i.e., openable and countable)
+        LuceneRepository.open(model, tempDir, "standard").use { verifyRepo ->
+            val meta = verifyRepo.getMetadata()
+            assertThat(meta.chunkCount).isBetween(0, 10)
         }
     }
 

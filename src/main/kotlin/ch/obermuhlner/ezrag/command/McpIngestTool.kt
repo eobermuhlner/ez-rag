@@ -13,12 +13,13 @@ import java.io.File
 
 /**
  * MCP tool that ingests documents into the vector store via [IngestService].
+ * Opens a repository per-request via [StoreConfig] so the write lock is not held between calls.
  */
 class McpIngestTool(
-    private val repository: LuceneRepository,
+    private val storeConfig: StoreConfig,
     private val urlFetcher: UrlFetcher = JsoupUrlFetcher(),
-    private val ingestServiceFactory: (Int, Int, UrlFetcher) -> IngestService = { chunkSize, chunkOverlap, fetcher ->
-        IngestService(repository, chunkSize, chunkOverlap, urlFetcher = fetcher)
+    private val ingestServiceFactory: (LuceneRepository, Int, Int, UrlFetcher) -> IngestService = { repo, chunkSize, chunkOverlap, fetcher ->
+        IngestService(repo, chunkSize, chunkOverlap, urlFetcher = fetcher)
     }
 ) {
 
@@ -36,17 +37,24 @@ class McpIngestTool(
     ): IngestToolResult {
         val cs = chunkSize ?: 1000
         val co = chunkOverlap ?: 200
-        val service = ingestServiceFactory(cs, co, urlFetcher)
         val source: IngestSource = if (path.startsWith("http://") || path.startsWith("https://")) {
             UrlSource(path)
         } else {
             FileSource(File(path))
         }
-        val result = service.ingest(listOf(source))
-        return IngestToolResult(
-            filesIngested = result.filesIngested,
-            chunksCreated = result.chunksCreated,
-            filesSkipped = result.skipped
-        )
+        LuceneRepository.openWithRetry(
+            storeConfig.embeddingModel,
+            storeConfig.storeDir,
+            storeConfig.analyzerName,
+            storeConfig.lockTimeoutSeconds,
+        ).use { repository ->
+            val service = ingestServiceFactory(repository, cs, co, urlFetcher)
+            val result = service.ingest(listOf(source))
+            return IngestToolResult(
+                filesIngested = result.filesIngested,
+                chunksCreated = result.chunksCreated,
+                filesSkipped = result.skipped
+            )
+        }
     }
 }

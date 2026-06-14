@@ -687,6 +687,7 @@ These flags apply to all subcommands:
 | `--analyzer`              | `standard`               | Lucene analyzer for BM25: `standard` or `english` (enables stemming) |
 | `--verbose` / `-v`        | off                      | Enable debug logging; for `query`, also prints each source file path, similarity score, and chunk index to stderr. When reranking is active also prints reranker name and candidate pool size. |
 | `--stack-trace`           | off                      | Print the full Java stack trace when an error occurs. Useful for diagnosing unexpected failures. |
+| `--lock-timeout`          | `30`                     | Seconds to retry acquiring the write lock before failing with an error (0 = fail immediately). Useful when two processes target the same store simultaneously — the second process waits up to this many seconds for the first to release the lock. |
 
 ## Configuration
 

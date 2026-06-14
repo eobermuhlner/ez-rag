@@ -746,6 +746,38 @@ class ShellCommandTest {
     }
 
     // -----------------------------------------------------------------------
+    // Test 29: per-request lifecycle — write lock released after each query
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `write lock is released after each REPL query so a second process can open the store`(@TempDir tempDir: Path) {
+        createStore(tempDir)
+        val out = StringWriter()
+        val err = StringWriter()
+        // Provide embeddingModelOverride so ShellCommand uses the per-request openWithRetry path
+        // (no pre-built ragPipeline is injected here).
+        val stubChatModelLocal: ChatModel = ChatModel { _ ->
+            ChatResponse(listOf(Generation(AssistantMessage("PerRequestAnswer"))))
+        }
+        val cmd = ShellCommand(
+            storeDirOverride = tempDir,
+            embeddingModelOverride = fakeEmbeddingModel,
+            chatModelOverride = stubChatModelLocal,
+            outputFormatter = OutputFormatter(),
+            outputWriter = PrintWriter(out, true),
+            errorWriter = PrintWriter(err, true),
+            inputStream = makeInput("What is the answer?"),
+        )
+
+        cmd.call()
+
+        // After call() returns, the shell must have released the write lock.
+        // Attempt to open a fresh repository on the same directory — must succeed.
+        val secondRepo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        secondRepo.close()
+    }
+
+    // -----------------------------------------------------------------------
     // Picocli-level flag tests: --output-format accepted, --output rejected
     // -----------------------------------------------------------------------
 

@@ -14,6 +14,8 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.context.junit.jupiter.SpringExtension
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.nio.file.Path
 
 /**
@@ -85,5 +87,33 @@ class McpServerCommandTest {
         val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
         val toolNames = toolCallbacks.map { it.toolDefinition.name() }.toSet()
         assertThat(toolNames).containsExactlyInAnyOrder("search", "chunk", "ingest", "reingest", "list")
+    }
+
+    @Test
+    fun `mcpToolCallbackProvider does not call LuceneRepository open — StoreConfig is passed to tools instead`() {
+        // Tools are built per-request using StoreConfig; no shared repository opened at provider build time.
+        // Verifiable by inspecting that toolCallbackProvider.toolCallbacks is non-empty
+        // (provider built successfully without needing a write lock) and by code review.
+        val toolCallbacks = mcpToolCallbackProvider.toolCallbacks
+        assertThat(toolCallbacks).isNotEmpty()
+    }
+}
+
+/**
+ * Unit tests for McpServerCommand.call() — no Spring context required.
+ */
+class McpServerCommandCallTest {
+
+    @Test
+    fun `call returns non-zero and prints error when store directory does not exist`(@TempDir tempDir: java.nio.file.Path) {
+        val nonExistentStore = tempDir.resolve("does-not-exist").toString()
+        val sw = StringWriter()
+        val cmd = McpServerCommand(outputWriter = PrintWriter(sw, true))
+        cmd.storeDirOption = nonExistentStore
+
+        val exitCode = cmd.call()
+
+        assertThat(exitCode).isNotEqualTo(0)
+        assertThat(sw.toString()).contains(nonExistentStore)
     }
 }

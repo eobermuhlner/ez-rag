@@ -23,6 +23,7 @@ import org.apache.lucene.queryparser.classic.QueryParser
 import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.search.KnnFloatVectorQuery
 import org.apache.lucene.search.TermQuery
+import org.apache.lucene.store.LockObtainFailedException
 import org.apache.lucene.store.NIOFSDirectory
 import org.springframework.ai.document.Document
 import org.springframework.ai.embedding.EmbeddingModel
@@ -96,6 +97,38 @@ class LuceneRepository private constructor(
             val repo = LuceneRepository(embeddingModel, storeDir, analyzer, writer)
             repo.buildCache()
             return repo
+        }
+
+        /**
+         * Opens the Lucene index with a retry loop to handle transient write-lock contention.
+         *
+         * When [timeoutSeconds] is 0 a single attempt is made; if the write lock is held by
+         * another process an [IllegalStateException] is thrown immediately.
+         * For positive [timeoutSeconds] the call retries every 100 ms until the timeout elapses,
+         * then throws an [IllegalStateException] with a message that names the store path and
+         * the elapsed wait time.
+         */
+        fun openWithRetry(
+            embeddingModel: EmbeddingModel,
+            storeDir: Path,
+            analyzerName: String,
+            timeoutSeconds: Int,
+        ): LuceneRepository {
+            val deadlineMs = System.currentTimeMillis() + timeoutSeconds * 1000L
+            while (true) {
+                try {
+                    return open(embeddingModel, storeDir, analyzerName)
+                } catch (e: LockObtainFailedException) {
+                    if (timeoutSeconds == 0 || System.currentTimeMillis() >= deadlineMs) {
+                        throw IllegalStateException(
+                            "Could not acquire write lock on store '$storeDir' after ${timeoutSeconds}s" +
+                            " — another ez-rag process may be running",
+                            e
+                        )
+                    }
+                    Thread.sleep(100)
+                }
+            }
         }
 
         /**
@@ -327,7 +360,9 @@ class LuceneRepository private constructor(
      * Uses [IndexWriter.deleteAll] to wipe all segments (including their field-schema),
      * which is required before writing documents with a different embedding dimension.
      * After this call the writer is committed and the in-memory cache is empty.
+     * Synchronized to prevent data races when called concurrently with add() or delete().
      */
+    @Synchronized
     fun dropAllDocuments() {
         writer.deleteAll()
         writer.commit()

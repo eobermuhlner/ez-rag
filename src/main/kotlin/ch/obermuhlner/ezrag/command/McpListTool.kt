@@ -7,10 +7,10 @@ import java.nio.file.Paths
 
 /**
  * MCP tool that returns a per-document inventory with path, chunk count, and staleness status.
- * Delegates staleness detection to LuceneRepository.getMetadata(filesystemProbe).
+ * Opens a repository per-request via [StoreConfig] so the write lock is not held between calls.
  */
 class McpListTool(
-    private val repository: LuceneRepository,
+    private val storeConfig: StoreConfig,
     private val filesystemProbe: (String) -> Long? = { path ->
         try {
             Files.getLastModifiedTime(Paths.get(path)).toMillis()
@@ -25,12 +25,19 @@ class McpListTool(
 
     @Tool(description = "List all ingested documents with their chunk count and freshness status. A document is stale when its source file has been modified since last ingest. URL-based entries within the freshness window appear as FRESH; those outside it appear as STALE. Use `reingest` to refresh stale documents.")
     fun list(): List<DocumentInfo> {
-        val metadata = repository.getMetadata(
-            filesystemProbe = filesystemProbe,
-            urlFreshnessThresholdMs = urlFreshnessThresholdMs,
-        )
-        return metadata.documents.map { doc ->
-            DocumentInfo(path = doc.path, chunkCount = doc.chunkCount, status = doc.status)
+        LuceneRepository.openWithRetry(
+            storeConfig.embeddingModel,
+            storeConfig.storeDir,
+            storeConfig.analyzerName,
+            storeConfig.lockTimeoutSeconds,
+        ).use { repository ->
+            val metadata = repository.getMetadata(
+                filesystemProbe = filesystemProbe,
+                urlFreshnessThresholdMs = urlFreshnessThresholdMs,
+            )
+            return metadata.documents.map { doc ->
+                DocumentInfo(path = doc.path, chunkCount = doc.chunkCount, status = doc.status)
+            }
         }
     }
 }

@@ -42,6 +42,13 @@ class McpIngestToolTest {
         override fun dimensions(): Int = 4
     }
 
+    private fun makeStoreConfig(storeDir: Path) = StoreConfig(
+        embeddingModel = fakeEmbeddingModel,
+        storeDir = storeDir,
+        analyzerName = "standard",
+        lockTimeoutSeconds = 0,
+    )
+
     private fun makeTool(
         tempDir: Path,
         capturedChunkSizes: MutableList<Int> = mutableListOf(),
@@ -50,13 +57,14 @@ class McpIngestToolTest {
         resultToReturn: IngestResult = IngestResult(0, 0, 0),
         throwException: Exception? = null
     ): McpIngestTool {
-        val repository = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        // Ensure the store exists for openWithRetry
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
         return McpIngestTool(
-            repository = repository,
-            ingestServiceFactory = { chunkSize, chunkOverlap, _ ->
+            storeConfig = makeStoreConfig(tempDir),
+            ingestServiceFactory = { repo, chunkSize, chunkOverlap, _ ->
                 capturedChunkSizes.add(chunkSize)
                 capturedChunkOverlaps.add(chunkOverlap)
-                object : IngestService(repository, chunkSize, chunkOverlap) {
+                object : IngestService(repo, chunkSize, chunkOverlap) {
                     override fun ingest(sources: Iterable<IngestSource>): IngestResult {
                         capturedSources.add(sources.toList())
                         if (throwException != null) throw throwException
@@ -113,10 +121,8 @@ class McpIngestToolTest {
         val storeDir = tempDir.resolve("store-dir")
         storeDir.toFile().mkdirs()
 
-        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
-            val tool = McpIngestTool(repo)
-            tool.ingest(sampleFile.toString(), null, null)
-        }
+        val tool = McpIngestTool(makeStoreConfig(storeDir))
+        tool.ingest(sampleFile.toString(), null, null)
 
         assertThat(LuceneRepository.storeExists(storeDir)).isTrue()
     }
@@ -140,13 +146,12 @@ class McpIngestToolTest {
         }
         val storeDir = tempDir.resolve("store")
         storeDir.toFile().mkdirs()
-        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
-            val tool = McpIngestTool(repo, urlFetcher = fakeUrlFetcher)
-            val result = tool.ingest("https://example.com/page.html", null, null)
-            assertThat(result.filesIngested).isEqualTo(1)
-            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
-            assertThat(result.filesSkipped).isEqualTo(0)
-        }
+
+        val tool = McpIngestTool(makeStoreConfig(storeDir), urlFetcher = fakeUrlFetcher)
+        val result = tool.ingest("https://example.com/page.html", null, null)
+        assertThat(result.filesIngested).isEqualTo(1)
+        assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+        assertThat(result.filesSkipped).isEqualTo(0)
     }
 
     @Test
@@ -158,26 +163,23 @@ class McpIngestToolTest {
         val storeDir = tempDir.resolve("store")
         storeDir.toFile().mkdirs()
 
-        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
-            McpIngestTool(repo, urlFetcher = fakeUrlFetcher)
-                .ingest("https://example.com/page.html", null, null)
-        }
+        val config = makeStoreConfig(storeDir)
+        McpIngestTool(config, urlFetcher = fakeUrlFetcher)
+            .ingest("https://example.com/page.html", null, null)
 
-        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
-            val result = McpIngestTool(repo, urlFetcher = fakeUrlFetcher)
-                .ingest("https://example.com/page.html", null, null)
-            assertThat(result.filesIngested).isEqualTo(0)
-            assertThat(result.filesSkipped).isEqualTo(1)
-        }
+        val result = McpIngestTool(config, urlFetcher = fakeUrlFetcher)
+            .ingest("https://example.com/page.html", null, null)
+        assertThat(result.filesIngested).isEqualTo(0)
+        assertThat(result.filesSkipped).isEqualTo(1)
     }
 
     @Test
     fun `ingest URL when IngestService throws propagates exception`(@TempDir tempDir: Path) {
-        val repository = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
         val tool = McpIngestTool(
-            repository = repository,
-            ingestServiceFactory = { cs, co, _ ->
-                object : IngestService(repository, cs, co) {
+            storeConfig = makeStoreConfig(tempDir),
+            ingestServiceFactory = { repo, cs, co, _ ->
+                object : IngestService(repo, cs, co) {
                     override fun ingest(sources: Iterable<IngestSource>): IngestResult {
                         throw RuntimeException("Connection refused")
                     }
@@ -197,11 +199,9 @@ class McpIngestToolTest {
         val storeDir = tempDir.resolve("store")
         storeDir.toFile().mkdirs()
 
-        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
-            val tool = McpIngestTool(repo)
-            val result = tool.ingest(sampleFile.toString(), null, null)
-            assertThat(result.filesIngested).isEqualTo(1)
-        }
+        val tool = McpIngestTool(makeStoreConfig(storeDir))
+        val result = tool.ingest(sampleFile.toString(), null, null)
+        assertThat(result.filesIngested).isEqualTo(1)
     }
 
     @Test
@@ -228,21 +228,23 @@ class McpIngestToolTest {
     // --- write-lock regression test ---
 
     @Test
-    fun `ingest with shared repository no factory override returns filesIngested 1 and chunk is retrievable`(@TempDir tempDir: Path) {
+    fun `ingest with StoreConfig opens and closes repository per call — chunk is retrievable`(@TempDir tempDir: Path) {
         val sampleFile = tempDir.resolve("regression.txt")
-        sampleFile.toFile().writeText("Write-lock regression test content for shared repository ingest.")
+        sampleFile.toFile().writeText("Write-lock regression test content for StoreConfig ingest.")
         val storeDir = tempDir.resolve("store")
         storeDir.toFile().mkdirs()
 
-        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repository ->
-            val tool = McpIngestTool(repository)
+        val config = makeStoreConfig(storeDir)
+        val tool = McpIngestTool(config)
 
-            val result = tool.ingest(sampleFile.toString(), null, null)
+        val result = tool.ingest(sampleFile.toString(), null, null)
 
-            assertThat(result.filesIngested).isEqualTo(1)
-            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+        assertThat(result.filesIngested).isEqualTo(1)
+        assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
 
-            val chunks = repository.getChunksForFile(sampleFile.toAbsolutePath().toString())
+        // After tool call, repository is closed — we can open a new one to verify the chunk is there
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val chunks = repo.getChunksForFile(sampleFile.toAbsolutePath().toString())
             assertThat(chunks).isNotEmpty()
         }
     }

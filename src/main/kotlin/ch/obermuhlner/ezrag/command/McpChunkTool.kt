@@ -6,7 +6,11 @@ import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
 import java.nio.file.Paths
 
-class McpChunkTool(private val repository: LuceneRepository) {
+/**
+ * MCP tool that retrieves chunks by file path and index with optional surrounding context.
+ * Opens a repository per-request via [StoreConfig] so the write lock is not held between calls.
+ */
+class McpChunkTool(private val storeConfig: StoreConfig) {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     data class ChunkResult(
@@ -35,19 +39,26 @@ class McpChunkTool(private val repository: LuceneRepository) {
         val w = window ?: 0
         val fromIndex = maxOf(0, chunkIndex - w)
         val toIndex = chunkIndex + w
-        val chunks = repository.getChunkRange(absolutePath, fromIndex, toIndex)
-        if (chunks.isEmpty()) {
-            throw IllegalArgumentException("File not found in store: $absolutePath")
+        LuceneRepository.openWithRetry(
+            storeConfig.embeddingModel,
+            storeConfig.storeDir,
+            storeConfig.analyzerName,
+            storeConfig.lockTimeoutSeconds,
+        ).use { repository ->
+            val chunks = repository.getChunkRange(absolutePath, fromIndex, toIndex)
+            if (chunks.isEmpty()) {
+                throw IllegalArgumentException("File not found in store: $absolutePath")
+            }
+            val chunkResults = chunks.map { chunk ->
+                ChunkResult(
+                    chunkIndex = chunk.chunkIndex,
+                    text = chunk.text,
+                    headingTitle = chunk.headingTitle,
+                    headingLevel = chunk.headingLevel,
+                    headingPath = chunk.headingPath
+                )
+            }
+            return ChunkToolResult(file = absolutePath, chunks = chunkResults)
         }
-        val chunkResults = chunks.map { chunk ->
-            ChunkResult(
-                chunkIndex = chunk.chunkIndex,
-                text = chunk.text,
-                headingTitle = chunk.headingTitle,
-                headingLevel = chunk.headingLevel,
-                headingPath = chunk.headingPath
-            )
-        }
-        return ChunkToolResult(file = absolutePath, chunks = chunkResults)
     }
 }

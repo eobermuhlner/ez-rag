@@ -8,12 +8,13 @@ import org.springframework.ai.tool.annotation.ToolParam
 
 /**
  * MCP tool that re-ingests stale (or all) documents into the vector store via [ReIngestService].
+ * Opens a repository per-request via [StoreConfig] so the write lock is not held between calls.
  */
 class McpReIngestTool(
-    private val repository: LuceneRepository,
+    private val storeConfig: StoreConfig,
     private val urlFreshnessThresholdMs: Long = 24 * 3_600_000L,
-    private val reIngestServiceFactory: (Int, Int) -> ReIngestService = { chunkSize, chunkOverlap ->
-        ReIngestService(repository, chunkSize, chunkOverlap)
+    private val reIngestServiceFactory: (LuceneRepository, Int, Int) -> ReIngestService = { repo, chunkSize, chunkOverlap ->
+        ReIngestService(repo, chunkSize, chunkOverlap)
     }
 ) {
 
@@ -34,13 +35,20 @@ class McpReIngestTool(
         val cs = chunkSize ?: 1000
         val co = chunkOverlap ?: 200
         val force = forceAll ?: false
-        val service = reIngestServiceFactory(cs, co)
-        val result = service.reIngest(forceAll = force, urlFreshnessThresholdMs = urlFreshnessThresholdMs)
-        return ReIngestToolResult(
-            staleFound = result.staleFound,
-            filesReIngested = result.filesReIngested,
-            chunksCreated = result.chunksCreated,
-            filesSkipped = result.filesSkipped
-        )
+        LuceneRepository.openWithRetry(
+            storeConfig.embeddingModel,
+            storeConfig.storeDir,
+            storeConfig.analyzerName,
+            storeConfig.lockTimeoutSeconds,
+        ).use { repository ->
+            val service = reIngestServiceFactory(repository, cs, co)
+            val result = service.reIngest(forceAll = force, urlFreshnessThresholdMs = urlFreshnessThresholdMs)
+            return ReIngestToolResult(
+                staleFound = result.staleFound,
+                filesReIngested = result.filesReIngested,
+                chunksCreated = result.chunksCreated,
+                filesSkipped = result.filesSkipped
+            )
+        }
     }
 }

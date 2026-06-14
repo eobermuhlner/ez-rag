@@ -1,5 +1,6 @@
 package ch.obermuhlner.ezrag.command
 
+import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.rag.ChunkMatch
 import ch.obermuhlner.ezrag.rag.HybridSearchPipeline
 import ch.obermuhlner.ezrag.rag.SearchQuery
@@ -8,9 +9,14 @@ import org.springframework.ai.tool.annotation.ToolParam
 
 /**
  * MCP tool that searches the vector store using hybrid search (BM25 + embedding via RRF)
- * and returns matching chunks.
+ * and returns matching chunks. Opens a repository per-request via [StoreConfig].
  */
-class McpSearchTool(private val pipeline: HybridSearchPipeline) {
+class McpSearchTool(
+    private val storeConfig: StoreConfig,
+    private val searchPipelineFactory: (LuceneRepository) -> HybridSearchPipeline = { repo ->
+        HybridSearchPipeline(repo)
+    },
+) {
 
     data class SearchToolResult(
         val chunks: List<ChunkMatch>
@@ -28,7 +34,15 @@ class McpSearchTool(private val pipeline: HybridSearchPipeline) {
             minScore = minScore ?: 0.0,
             mode = "hybrid"
         )
-        val result = pipeline.search(query)
-        return SearchToolResult(chunks = result.chunks)
+        LuceneRepository.openWithRetry(
+            storeConfig.embeddingModel,
+            storeConfig.storeDir,
+            storeConfig.analyzerName,
+            storeConfig.lockTimeoutSeconds,
+        ).use { repository ->
+            val pipeline = searchPipelineFactory(repository)
+            val result = pipeline.search(query)
+            return SearchToolResult(chunks = result.chunks)
+        }
     }
 }

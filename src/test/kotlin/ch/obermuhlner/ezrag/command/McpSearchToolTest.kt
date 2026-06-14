@@ -40,28 +40,45 @@ class McpSearchToolTest {
         override fun dimensions(): Int = 4
     }
 
-    private fun stubPipeline(
+    private fun makeStoreConfig(tempDir: Path) = StoreConfig(
+        embeddingModel = fakeEmbeddingModel,
+        storeDir = tempDir,
+        analyzerName = "standard",
+        lockTimeoutSeconds = 0,
+    )
+
+    /**
+     * Creates a [McpSearchTool] backed by a [StoreConfig] that uses a stub [HybridSearchPipeline].
+     * The stub is created via [searchPipelineFactory] which receives the opened repository.
+     */
+    private fun makeToolWithStubPipeline(
         tempDir: Path,
         capturedQueries: MutableList<SearchQuery> = mutableListOf(),
         resultToReturn: SearchResult = SearchResult(emptyList()),
         throwException: Exception? = null
-    ): HybridSearchPipeline {
-        val repo = LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard")
-        return object : HybridSearchPipeline(repo) {
-            override fun search(query: SearchQuery): SearchResult {
-                capturedQueries.add(query)
-                if (throwException != null) throw throwException
-                return resultToReturn
+    ): McpSearchTool {
+        // Ensure the store exists so openWithRetry can open it
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
+
+        return McpSearchTool(
+            storeConfig = makeStoreConfig(tempDir),
+            searchPipelineFactory = { repo ->
+                object : HybridSearchPipeline(repo) {
+                    override fun search(query: SearchQuery): SearchResult {
+                        capturedQueries.add(query)
+                        if (throwException != null) throw throwException
+                        return resultToReturn
+                    }
+                }
             }
-        }
+        )
     }
 
     @Test
     fun `search with only question uses default topK and minScore`(@TempDir tempDir: Path) {
         val capturedQueries = mutableListOf<SearchQuery>()
-        val pipeline = stubPipeline(tempDir, capturedQueries)
+        val tool = makeToolWithStubPipeline(tempDir, capturedQueries)
 
-        val tool = McpSearchTool(pipeline)
         val result = tool.search("What is RAG?", null, null)
 
         assertThat(capturedQueries).hasSize(1)
@@ -75,9 +92,8 @@ class McpSearchToolTest {
     fun `search with explicit topK and minScore forwards those values`(@TempDir tempDir: Path) {
         val capturedQueries = mutableListOf<SearchQuery>()
         val chunk = ChunkMatch(path = "doc.txt", chunkIndex = 0, score = 0.9, text = "Relevant content")
-        val pipeline = stubPipeline(tempDir, capturedQueries, SearchResult(listOf(chunk)))
+        val tool = makeToolWithStubPipeline(tempDir, capturedQueries, SearchResult(listOf(chunk)))
 
-        val tool = McpSearchTool(pipeline)
         val result = tool.search("What is RAG?", 10, 0.75)
 
         assertThat(capturedQueries[0].topK).isEqualTo(10)
@@ -94,9 +110,8 @@ class McpSearchToolTest {
             ChunkMatch(path = "a.txt", chunkIndex = 1, score = 0.8, text = "Content A"),
             ChunkMatch(path = "b.txt", chunkIndex = 0, score = 0.7, text = "Content B"),
         )
-        val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(chunks))
+        val tool = makeToolWithStubPipeline(tempDir, resultToReturn = SearchResult(chunks))
 
-        val tool = McpSearchTool(pipeline)
         val result = tool.search("question", null, null)
 
         assertThat(result.chunks).hasSize(2)
@@ -106,9 +121,8 @@ class McpSearchToolTest {
 
     @Test
     fun `search throws exception when pipeline throws exception`(@TempDir tempDir: Path) {
-        val pipeline = stubPipeline(tempDir, throwException = RuntimeException("Search failed catastrophically"))
+        val tool = makeToolWithStubPipeline(tempDir, throwException = RuntimeException("Search failed catastrophically"))
 
-        val tool = McpSearchTool(pipeline)
         val ex = assertThrows<RuntimeException> { tool.search("question", null, null) }
 
         assertThat(ex.message).contains("Search failed catastrophically")
@@ -118,9 +132,8 @@ class McpSearchToolTest {
     fun `search headingPath is populated when stub returns chunk with headingPath`(@TempDir tempDir: Path) {
         val headings = listOf("Chapter 1", "Overview")
         val chunk = ChunkMatch(path = "guide.md", chunkIndex = 0, score = 0.9, text = "content", headingPath = headings)
-        val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk)))
+        val tool = makeToolWithStubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk)))
 
-        val tool = McpSearchTool(pipeline)
         val result = tool.search("question", null, null)
 
         assertThat(result.chunks).hasSize(1)
@@ -130,9 +143,8 @@ class McpSearchToolTest {
     @Test
     fun `search headingPath is null when stub returns chunk without headingPath`(@TempDir tempDir: Path) {
         val chunk = ChunkMatch(path = "report.pdf", chunkIndex = 0, score = 0.9, text = "content", headingPath = null)
-        val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk)))
+        val tool = makeToolWithStubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk)))
 
-        val tool = McpSearchTool(pipeline)
         val result = tool.search("question", null, null)
 
         assertThat(result.chunks).hasSize(1)
@@ -141,8 +153,7 @@ class McpSearchToolTest {
 
     @Test
     fun `successful SearchToolResult serialized to JSON does not contain error key`(@TempDir tempDir: Path) {
-        val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(emptyList()))
-        val tool = McpSearchTool(pipeline)
+        val tool = makeToolWithStubPipeline(tempDir, resultToReturn = SearchResult(emptyList()))
         val result = tool.search("question", null, null)
 
         val mapper = ObjectMapper()
@@ -154,9 +165,8 @@ class McpSearchToolTest {
     @Test
     fun `search result chunk has text field not content`(@TempDir tempDir: Path) {
         val chunk = ChunkMatch(path = "doc.txt", chunkIndex = 0, score = 0.9, text = "Relevant content")
-        val pipeline = stubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk)))
+        val tool = makeToolWithStubPipeline(tempDir, resultToReturn = SearchResult(listOf(chunk)))
 
-        val tool = McpSearchTool(pipeline)
         val result = tool.search("question", null, null)
 
         assertThat(result.chunks[0].text).isEqualTo("Relevant content")

@@ -210,4 +210,34 @@ class EzRagCommandTest {
         val parent = parentField.get(searchCommand) as? EzRagCommand
         assertThat(parent?.verbose).isTrue()
     }
+
+    // -----------------------------------------------------------------------
+    // --lock-timeout flag
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `--lock-timeout default is 30`() {
+        val ezRag = EzRagCommand()
+        val commandLine = CommandLine(ezRag)
+        // Execute any subcommand so picocli wires the command hierarchy
+        commandLine.execute("ingest", "somefile.txt")
+        assertThat(ezRag.lockTimeout).isEqualTo(30)
+    }
+
+    @Test
+    fun `--lock-timeout 10 is inherited by EzRagCommand`() {
+        val ezRag = EzRagCommand()
+        val commandLine = CommandLine(ezRag)
+        commandLine.execute("--lock-timeout", "10", "ingest", "somefile.txt")
+        assertThat(ezRag.lockTimeout).isEqualTo(10)
+    }
+
+    @Test
+    fun `--lock-timeout 0 is accepted`() {
+        val ezRag = EzRagCommand()
+        val commandLine = CommandLine(ezRag)
+        val exitCode = commandLine.execute("--lock-timeout", "0", "ingest", "somefile.txt")
+        assertThat(exitCode).isNotEqualTo(CommandLine.ExitCode.USAGE)
+        assertThat(ezRag.lockTimeout).isEqualTo(0)
+    }
 }
