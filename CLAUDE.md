@@ -41,7 +41,7 @@ The version is defined in `gradle.properties` as `version=x.y.z`.
 - **major** (`x+1.0.0`): any commit with `!` suffix or `BREAKING CHANGE:` footer (breaking changes to CLI interface, MCP tool signatures, or configuration format)
 
 Do NOT bump the version for `test:`, `docs:`, or `chore:` commits.
-Do NOT create git tags — tagging is done manually at release time.
+Do NOT create git tags manually — the release pipeline (`.github/workflows/release.yml`) creates and pushes the tag `v{version}` automatically when a version-bumped commit is pushed to `master`.
 
 ## Documentation
 
