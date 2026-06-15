@@ -29,6 +29,7 @@ import java.util.concurrent.Callable
 @Command(
     name = "ez-rag",
     mixinStandardHelpOptions = true,
+    versionProvider = VersionProvider::class,
     commandListHeading = "Subcommands:%n",
     description = ["A command-line tool for RAG (retrieval-augmented generation)."],
     subcommands = [

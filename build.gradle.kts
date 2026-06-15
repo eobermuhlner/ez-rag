@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "ch.obermuhlner"
-version = "0.0.1-SNAPSHOT"
+version = property("version") as String
 
 java {
     toolchain {
@@ -23,6 +23,10 @@ application {
         "-XX:TieredStopAtLevel=1",  // skip C2 JIT — wasted work for a short-lived CLI process
         "-XX:+UseSerialGC",         // lower GC overhead for short-lived single-invocation processes
     )
+}
+
+springBoot {
+    buildInfo()
 }
 
 repositories {

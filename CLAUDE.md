@@ -20,6 +20,29 @@ Write one test at a time, and make it pass before moving on to the next test.
 
 Verify the test fails before writing implementation code (`./gradlew test`), then make it pass.
 
+## Commit Messages
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) format:
+
+```
+<type>(<scope>): <description>
+```
+
+Types: `feat`, `fix`, `test`, `chore`, `refactor`, `docs`, `perf`. Scope is optional and describes the affected area (e.g. `concurrency`, `freshness`, `cli`).
+
+## Versioning
+
+The version is defined in `gradle.properties` as `version=x.y.z`.
+
+**You MUST increment the version in `gradle.properties` before every commit that introduces a user-visible change.** Follow semantic versioning:
+
+- **patch** (`x.y.z+1`): commits with type `fix:`, `refactor:`, or `perf:` (bug fixes, internal refactors, dependency updates)
+- **minor** (`x.y+1.0`): commits with type `feat:` (new CLI options, new subcommands, new MCP tools, new config keys)
+- **major** (`x+1.0.0`): any commit with `!` suffix or `BREAKING CHANGE:` footer (breaking changes to CLI interface, MCP tool signatures, or configuration format)
+
+Do NOT bump the version for `test:`, `docs:`, or `chore:` commits.
+Do NOT create git tags — tagging is done manually at release time.
+
 ## Documentation
 
 Update README.md when CLI behaviour, options, or output formats change. Update CLAUDE.md when architecture constraints or the MCP tool inventory change.

@@ -8,7 +8,15 @@ import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.context.ApplicationContext
 import picocli.CommandLine
 import java.nio.file.Paths
+import java.util.Properties
 import kotlin.system.exitProcess
+
+private fun readBuildVersion(): String {
+    val props = Properties()
+    EzRagApplication::class.java.getResourceAsStream("/META-INF/build-info.properties")
+        ?.use { props.load(it) }
+    return props.getProperty("build.version", "unknown")
+}
 
 @SpringBootApplication
 class EzRagApplication(
@@ -104,7 +112,7 @@ fun preParseProviderFlags(args: Array<String>, localEzRagDir: java.nio.file.Path
 
     if (isMcpServer) {
         result["spring.ai.mcp.server.name"] = "ez-rag"
-        result["spring.ai.mcp.server.version"] = "1.0.0"
+        result["spring.ai.mcp.server.version"] = readBuildVersion()
         if (transport == "http") {
             // HTTP transport: start embedded servlet container.
             // Disable lazy init so McpSyncServer is created at startup and calls

@@ -16,6 +16,30 @@ class EzRagCommandTest {
     }
 
     @Test
+    fun `--version exits 0`() {
+        val commandLine = CommandLine(EzRagCommand())
+        val exitCode = commandLine.execute("--version")
+        assertThat(exitCode).isEqualTo(0)
+    }
+
+    @Test
+    fun `-V exits 0`() {
+        val commandLine = CommandLine(EzRagCommand())
+        val exitCode = commandLine.execute("-V")
+        assertThat(exitCode).isEqualTo(0)
+    }
+
+    @Test
+    fun `--version output contains 'ez-rag ' followed by semver`() {
+        val output = java.io.ByteArrayOutputStream()
+        val commandLine = CommandLine(EzRagCommand())
+        commandLine.out = java.io.PrintWriter(output)
+        commandLine.execute("--version")
+        val text = output.toString()
+        assertThat(text).containsPattern("ez-rag \\d+\\.\\d+\\.\\d+")
+    }
+
+    @Test
     fun `unknown subcommand exits non-zero`() {
         val commandLine = CommandLine(EzRagCommand())
         val exitCode = commandLine.execute("unknown-subcommand")
@@ -209,6 +233,25 @@ class EzRagCommandTest {
         parentField.isAccessible = true
         val parent = parentField.get(searchCommand) as? EzRagCommand
         assertThat(parent?.verbose).isTrue()
+    }
+
+    // -----------------------------------------------------------------------
+    // MCP server version sync
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `preParseProviderFlags mcp-server spring ai mcp server version matches semver`(@TempDir tempDir: Path) {
+        val result = preParseProviderFlags(arrayOf("mcp-server"), localEzRagDir = tempDir.resolve(".ez-rag"))
+        val version = result["spring.ai.mcp.server.version"]
+        assertThat(version).matches("\\d+\\.\\d+\\.\\d+")
+    }
+
+    @Test
+    fun `preParseProviderFlags mcp-server spring ai mcp server version matches VersionProvider version`(@TempDir tempDir: Path) {
+        val result = preParseProviderFlags(arrayOf("mcp-server"), localEzRagDir = tempDir.resolve(".ez-rag"))
+        val mcpVersion = result["spring.ai.mcp.server.version"]
+        val providerVersion = VersionProvider().getVersion()[0].removePrefix("ez-rag ")
+        assertThat(mcpVersion).isEqualTo(providerVersion)
     }
 
     // -----------------------------------------------------------------------
