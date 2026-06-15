@@ -4,7 +4,9 @@ import ch.obermuhlner.ezrag.config.ConfigService
 import ch.obermuhlner.ezrag.config.EzRagConfig
 import ch.obermuhlner.ezrag.ingestion.FetchResult
 import ch.obermuhlner.ezrag.ingestion.UrlFetcher
+import ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.springframework.ai.document.Document
@@ -25,6 +27,16 @@ import java.nio.file.Path
  * A temp directory is used as the model cache path.
  */
 class IngestCommandTest {
+
+    companion object {
+        @JvmStatic
+        @BeforeAll
+        fun createFixtures() {
+            EncryptedWordFixtureGenerator.createEncryptedDocxFixture(
+                EncryptedWordFixtureGenerator.encryptedDocxFile
+            )
+        }
+    }
 
     /**
      * A safe stub for TransformersEmbeddingModel that overrides call() to return fake embeddings
@@ -391,6 +403,72 @@ class IngestCommandTest {
         assertThat(exitCode).isEqualTo(0)
         // File-path handling would produce "Path does not exist" for an http:// string
         assertThat(warnings.toString()).doesNotContain("Path does not exist")
+        assertThat(out.toString()).contains("1 files ingested")
+    }
+
+    @Test
+    fun `--password option passes passwords to IngestService and unlocks protected file`(@TempDir tempDir: Path) {
+        val protectedFile = EncryptedWordFixtureGenerator.encryptedDocxFile
+
+        val out = StringWriter()
+        val warnings = StringWriter()
+        val cmd = IngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+            warningWriter = PrintWriter(warnings, true),
+            passwords = listOf(EncryptedWordFixtureGenerator.CORRECT_PASSWORD),
+        )
+        val exitCode = cmd.call(listOf(protectedFile))
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(warnings.toString()).doesNotContain("Cannot open encrypted")
+        assertThat(out.toString()).contains("1 files ingested")
+    }
+
+    @Test
+    fun `no --password on protected file skips with warning and does not throw`(@TempDir tempDir: Path) {
+        val normalFile = tempDir.resolve("normal.txt").toFile()
+        normalFile.writeText("Normal document content.")
+        val protectedFile = EncryptedWordFixtureGenerator.encryptedDocxFile
+
+        val out = StringWriter()
+        val warnings = StringWriter()
+        val cmd = IngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+            warningWriter = PrintWriter(warnings, true),
+            // No passwords supplied
+        )
+        val exitCode = cmd.call(listOf(protectedFile, normalFile))
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(warnings.toString()).contains("Cannot open encrypted file")
+        // Normal file should still be ingested
+        assertThat(out.toString()).contains("1 files ingested")
+    }
+
+    @Test
+    fun `--password picocli option is parsed and forwarded`(@TempDir tempDir: Path) {
+        val protectedFile = EncryptedWordFixtureGenerator.encryptedDocxFile
+
+        val out = StringWriter()
+        val warnings = StringWriter()
+        val cmd = IngestCommand(
+            embeddingModel = fakeEmbeddingModel,
+            storeDirOverride = tempDir,
+            outputWriter = PrintWriter(out, true),
+            warningWriter = PrintWriter(warnings, true),
+        )
+        val commandLine = CommandLine(cmd)
+        val exitCode = commandLine.execute(
+            "--password", EncryptedWordFixtureGenerator.CORRECT_PASSWORD,
+            protectedFile.absolutePath
+        )
+
+        assertThat(exitCode).isEqualTo(0)
+        assertThat(warnings.toString()).doesNotContain("Cannot open encrypted")
         assertThat(out.toString()).contains("1 files ingested")
     }
 }

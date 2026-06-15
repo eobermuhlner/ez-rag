@@ -63,6 +63,8 @@ dependencies {
     implementation("org.apache.lucene:lucene-analysis-common:9.12.1")
     implementation("org.apache.lucene:lucene-queryparser:9.12.1")
     implementation("org.jsoup:jsoup:1.18.3")
+    implementation("org.apache.poi:poi-ooxml:5.5.1")
+    implementation("org.apache.poi:poi-scratchpad:5.5.1")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 

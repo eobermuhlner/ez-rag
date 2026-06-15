@@ -8,6 +8,7 @@ import ch.obermuhlner.ezrag.ingestion.IngestSource
 import ch.obermuhlner.ezrag.ingestion.LuceneRepository
 import ch.obermuhlner.ezrag.ingestion.UrlFetcher
 import ch.obermuhlner.ezrag.ingestion.UrlSource
+import ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -54,6 +55,7 @@ class McpIngestToolTest {
         capturedChunkSizes: MutableList<Int> = mutableListOf(),
         capturedChunkOverlaps: MutableList<Int> = mutableListOf(),
         capturedSources: MutableList<List<IngestSource>> = mutableListOf(),
+        capturedPasswords: MutableList<List<String>> = mutableListOf(),
         resultToReturn: IngestResult = IngestResult(0, 0, 0),
         throwException: Exception? = null
     ): McpIngestTool {
@@ -61,9 +63,10 @@ class McpIngestToolTest {
         LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
         return McpIngestTool(
             storeConfig = makeStoreConfig(tempDir),
-            ingestServiceFactory = { repo, chunkSize, chunkOverlap, _ ->
+            ingestServiceFactory = { repo, chunkSize, chunkOverlap, _, passwords ->
                 capturedChunkSizes.add(chunkSize)
                 capturedChunkOverlaps.add(chunkOverlap)
+                capturedPasswords.add(passwords)
                 object : IngestService(repo, chunkSize, chunkOverlap) {
                     override fun ingest(sources: Iterable<IngestSource>): IngestResult {
                         capturedSources.add(sources.toList())
@@ -84,7 +87,7 @@ class McpIngestToolTest {
             resultToReturn = IngestResult(1, 3, 0))
 
         val targetPath = tempDir.resolve("docs").toString()
-        tool.ingest(targetPath, null, null)
+        tool.ingest(targetPath, null, null, null)
 
         assertThat(capturedChunkSizes).containsExactly(1000)
         assertThat(capturedChunkOverlaps).containsExactly(200)
@@ -97,7 +100,7 @@ class McpIngestToolTest {
         val capturedChunkOverlaps = mutableListOf<Int>()
         val tool = makeTool(tempDir, capturedChunkSizes, capturedChunkOverlaps)
 
-        tool.ingest(tempDir.toString(), 500, 100)
+        tool.ingest(tempDir.toString(), 500, 100, null)
 
         assertThat(capturedChunkSizes).containsExactly(500)
         assertThat(capturedChunkOverlaps).containsExactly(100)
@@ -107,7 +110,7 @@ class McpIngestToolTest {
     fun `ingest returns result with filesIngested chunksCreated and filesSkipped fields`(@TempDir tempDir: Path) {
         val tool = makeTool(tempDir, resultToReturn = IngestResult(filesIngested = 3, chunksCreated = 12, skipped = 2))
 
-        val result = tool.ingest(tempDir.toString(), null, null)
+        val result = tool.ingest(tempDir.toString(), null, null, null)
 
         assertThat(result.filesIngested).isEqualTo(3)
         assertThat(result.chunksCreated).isEqualTo(12)
@@ -122,7 +125,7 @@ class McpIngestToolTest {
         storeDir.toFile().mkdirs()
 
         val tool = McpIngestTool(makeStoreConfig(storeDir))
-        tool.ingest(sampleFile.toString(), null, null)
+        tool.ingest(sampleFile.toString(), null, null, null)
 
         assertThat(LuceneRepository.storeExists(storeDir)).isTrue()
     }
@@ -131,7 +134,7 @@ class McpIngestToolTest {
     fun `ingest throws exception when IngestService throws exception`(@TempDir tempDir: Path) {
         val tool = makeTool(tempDir, throwException = RuntimeException("Disk is full"))
 
-        val ex = assertThrows<RuntimeException> { tool.ingest(tempDir.toString(), null, null) }
+        val ex = assertThrows<RuntimeException> { tool.ingest(tempDir.toString(), null, null, null) }
 
         assertThat(ex.message).contains("Disk is full")
     }
@@ -148,7 +151,7 @@ class McpIngestToolTest {
         storeDir.toFile().mkdirs()
 
         val tool = McpIngestTool(makeStoreConfig(storeDir), urlFetcher = fakeUrlFetcher)
-        val result = tool.ingest("https://example.com/page.html", null, null)
+        val result = tool.ingest("https://example.com/page.html", null, null, null)
         assertThat(result.filesIngested).isEqualTo(1)
         assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
         assertThat(result.filesSkipped).isEqualTo(0)
@@ -165,10 +168,10 @@ class McpIngestToolTest {
 
         val config = makeStoreConfig(storeDir)
         McpIngestTool(config, urlFetcher = fakeUrlFetcher)
-            .ingest("https://example.com/page.html", null, null)
+            .ingest("https://example.com/page.html", null, null, null)
 
         val result = McpIngestTool(config, urlFetcher = fakeUrlFetcher)
-            .ingest("https://example.com/page.html", null, null)
+            .ingest("https://example.com/page.html", null, null, null)
         assertThat(result.filesIngested).isEqualTo(0)
         assertThat(result.filesSkipped).isEqualTo(1)
     }
@@ -178,7 +181,7 @@ class McpIngestToolTest {
         LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
         val tool = McpIngestTool(
             storeConfig = makeStoreConfig(tempDir),
-            ingestServiceFactory = { repo, cs, co, _ ->
+            ingestServiceFactory = { repo, cs, co, _, _ ->
                 object : IngestService(repo, cs, co) {
                     override fun ingest(sources: Iterable<IngestSource>): IngestResult {
                         throw RuntimeException("Connection refused")
@@ -187,7 +190,7 @@ class McpIngestToolTest {
             }
         )
 
-        val ex = assertThrows<RuntimeException> { tool.ingest("https://unreachable.example.com/", null, null) }
+        val ex = assertThrows<RuntimeException> { tool.ingest("https://unreachable.example.com/", null, null, null) }
 
         assertThat(ex.message).contains("Connection refused")
     }
@@ -200,7 +203,7 @@ class McpIngestToolTest {
         storeDir.toFile().mkdirs()
 
         val tool = McpIngestTool(makeStoreConfig(storeDir))
-        val result = tool.ingest(sampleFile.toString(), null, null)
+        val result = tool.ingest(sampleFile.toString(), null, null, null)
         assertThat(result.filesIngested).isEqualTo(1)
     }
 
@@ -209,7 +212,7 @@ class McpIngestToolTest {
         val capturedSources = mutableListOf<List<IngestSource>>()
         val tool = makeTool(tempDir, capturedSources = capturedSources)
 
-        tool.ingest("https://example.com/page.html", null, null)
+        tool.ingest("https://example.com/page.html", null, null, null)
 
         assertThat(capturedSources[0][0]).isEqualTo(UrlSource("https://example.com/page.html"))
     }
@@ -220,7 +223,7 @@ class McpIngestToolTest {
         val tool = makeTool(tempDir, capturedSources = capturedSources)
 
         val targetPath = tempDir.resolve("doc.txt").toString()
-        tool.ingest(targetPath, null, null)
+        tool.ingest(targetPath, null, null, null)
 
         assertThat(capturedSources[0][0]).isEqualTo(FileSource(java.io.File(targetPath)))
     }
@@ -237,7 +240,7 @@ class McpIngestToolTest {
         val config = makeStoreConfig(storeDir)
         val tool = McpIngestTool(config)
 
-        val result = tool.ingest(sampleFile.toString(), null, null)
+        val result = tool.ingest(sampleFile.toString(), null, null, null)
 
         assertThat(result.filesIngested).isEqualTo(1)
         assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
@@ -247,5 +250,65 @@ class McpIngestToolTest {
             val chunks = repo.getChunksForFile(sampleFile.toAbsolutePath().toString())
             assertThat(chunks).isNotEmpty()
         }
+    }
+
+    // --- Task 06: passwords parameter ---
+
+    @Test
+    fun `ingest with passwords list forwards passwords to IngestService via factory`(@TempDir tempDir: Path) {
+        val capturedPasswords = mutableListOf<List<String>>()
+        val tool = makeTool(tempDir, capturedPasswords = capturedPasswords)
+
+        tool.ingest(tempDir.toString(), null, null, listOf("secret1", "secret2"))
+
+        assertThat(capturedPasswords).hasSize(1)
+        assertThat(capturedPasswords[0]).containsExactly("secret1", "secret2")
+    }
+
+    @Test
+    fun `ingest without passwords passes empty list to IngestService via factory`(@TempDir tempDir: Path) {
+        val capturedPasswords = mutableListOf<List<String>>()
+        val tool = makeTool(tempDir, capturedPasswords = capturedPasswords)
+
+        tool.ingest(tempDir.toString(), null, null, null)
+
+        assertThat(capturedPasswords).hasSize(1)
+        assertThat(capturedPasswords[0]).isEmpty()
+    }
+
+    @Test
+    fun `ingest with correct password successfully indexes password-protected Office file`(@TempDir tempDir: Path) {
+        EncryptedWordFixtureGenerator.createEncryptedDocxFixture(EncryptedWordFixtureGenerator.encryptedDocxFile)
+        val storeDir = tempDir.resolve("store")
+        storeDir.toFile().mkdirs()
+
+        val tool = McpIngestTool(makeStoreConfig(storeDir))
+        val result = tool.ingest(
+            EncryptedWordFixtureGenerator.encryptedDocxFile.absolutePath,
+            null,
+            null,
+            listOf(EncryptedWordFixtureGenerator.CORRECT_PASSWORD)
+        )
+
+        assertThat(result.filesIngested).isEqualTo(1)
+        assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+    }
+
+    @Test
+    fun `ingest without password on protected file skips file with warning and returns filesSkipped 1`(@TempDir tempDir: Path) {
+        EncryptedWordFixtureGenerator.createEncryptedDocxFixture(EncryptedWordFixtureGenerator.encryptedDocxFile)
+        val storeDir = tempDir.resolve("store")
+        storeDir.toFile().mkdirs()
+
+        val tool = McpIngestTool(makeStoreConfig(storeDir))
+        val result = tool.ingest(
+            EncryptedWordFixtureGenerator.encryptedDocxFile.absolutePath,
+            null,
+            null,
+            null
+        )
+
+        assertThat(result.filesIngested).isEqualTo(0)
+        assertThat(result.filesSkipped).isEqualTo(1)
     }
 }

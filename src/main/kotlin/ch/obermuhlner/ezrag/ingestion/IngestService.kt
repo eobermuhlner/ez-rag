@@ -20,6 +20,7 @@ open class IngestService(
     private val warningWriter: PrintWriter = PrintWriter(System.err, true),
     private val urlFetcher: UrlFetcher = JsoupUrlFetcher(),
     private val tempDirProvider: () -> Path = { Files.createTempDirectory("ez-rag-url-") },
+    private val passwords: List<String> = emptyList(),
 ) {
 
     var onFileIngesting: ((Path) -> Unit)? = null
@@ -29,7 +30,7 @@ open class IngestService(
     open fun ingest(files: List<File>): IngestResult = ingest(files.map { FileSource(it) })
 
     open fun ingest(sources: Iterable<IngestSource>): IngestResult {
-        val registry = DocumentReaderRegistry(chunkSize, chunkOverlap)
+        val registry = DocumentReaderRegistry(chunkSize, chunkOverlap, passwords)
         val directoryWalker = DirectoryWalker(warningWriter)
 
         var filesIngested = 0
@@ -83,7 +84,16 @@ open class IngestService(
                     }
 
                     onFileIngesting?.invoke(absolutePath)
-                    val rawChunks = registry.read(absolutePath.toFile())
+                    val rawChunks = try {
+                        registry.read(absolutePath.toFile())
+                    } catch (e: IllegalStateException) {
+                        if (e.message?.contains("Cannot open encrypted file") == true) {
+                            warningWriter.println("WARN: Cannot open encrypted file, skipping: $absolutePath")
+                            skipped++
+                            continue
+                        }
+                        throw e
+                    }
                     val chunks = withSourceAndMtime(rawChunks, sourceKey, mtime, contentHash)
                     onFileLoaded?.invoke(absolutePath, chunks)
 

@@ -30,7 +30,7 @@ class DirectoryWalkerTest {
     fun `walk emits a warning for each unsupported file`(@TempDir tempDir: Path) {
         tempDir.resolve("valid.txt").toFile().writeText("text")
         tempDir.resolve("bad.xyz").toFile().writeText("unsupported")
-        tempDir.resolve("bad2.doc").toFile().writeText("also unsupported")
+        tempDir.resolve("bad2.csv").toFile().writeText("also unsupported")
 
         val warningOutput = StringWriter()
         val walker = DirectoryWalker(PrintWriter(warningOutput))
@@ -38,7 +38,7 @@ class DirectoryWalkerTest {
 
         val warnings = warningOutput.toString()
         assertThat(warnings).contains("bad.xyz")
-        assertThat(warnings).contains("bad2.doc")
+        assertThat(warnings).contains("bad2.csv")
     }
 
     @Test

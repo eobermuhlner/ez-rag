@@ -1,17 +1,27 @@
 package ch.obermuhlner.ezrag.ingestion
 
+import ch.obermuhlner.ezrag.ingestion.office.ExcelDocumentReader
+import ch.obermuhlner.ezrag.ingestion.office.PowerPointDocumentReader
+import ch.obermuhlner.ezrag.ingestion.office.WordDocumentReader
 import org.springframework.ai.document.Document
 import java.io.File
 
 class DocumentReaderRegistry(
     private val chunkSize: Int = 1000,
     private val chunkOverlap: Int = 200,
+    private val passwords: List<String> = emptyList(),
 ) {
 
     private val readers: Map<String, (File) -> List<Document>> = mapOf(
-        "txt" to { file -> PlainTextDocumentReader(file, chunkSize, chunkOverlap).read() },
-        "pdf" to { file -> PdfDocumentReader(file, chunkSize, chunkOverlap).read() },
-        "md"  to { file -> MarkdownDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "txt"  to { file -> PlainTextDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "pdf"  to { file -> PdfDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "md"   to { file -> MarkdownDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "docx" to { file -> WordDocumentReader(file, chunkSize, chunkOverlap, passwords).read() },
+        "doc"  to { file -> WordDocumentReader(file, chunkSize, chunkOverlap, passwords).read() },
+        "pptx" to { file -> PowerPointDocumentReader(file, chunkSize, chunkOverlap, passwords).read() },
+        "ppt"  to { file -> PowerPointDocumentReader(file, chunkSize, chunkOverlap, passwords).read() },
+        "xlsx" to { file -> ExcelDocumentReader(file, chunkSize, chunkOverlap, passwords).read() },
+        "xls"  to { file -> ExcelDocumentReader(file, chunkSize, chunkOverlap, passwords).read() },
     )
 
     fun supports(extension: String): Boolean = extension.lowercase() in readers

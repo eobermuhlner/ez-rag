@@ -18,8 +18,8 @@ import java.io.File
 class McpIngestTool(
     private val storeConfig: StoreConfig,
     private val urlFetcher: UrlFetcher = JsoupUrlFetcher(),
-    private val ingestServiceFactory: (LuceneRepository, Int, Int, UrlFetcher) -> IngestService = { repo, chunkSize, chunkOverlap, fetcher ->
-        IngestService(repo, chunkSize, chunkOverlap, urlFetcher = fetcher)
+    private val ingestServiceFactory: (LuceneRepository, Int, Int, UrlFetcher, List<String>) -> IngestService = { repo, chunkSize, chunkOverlap, fetcher, passwords ->
+        IngestService(repo, chunkSize, chunkOverlap, urlFetcher = fetcher, passwords = passwords)
     }
 ) {
 
@@ -29,14 +29,16 @@ class McpIngestTool(
         val filesSkipped: Int
     )
 
-    @Tool(description = "Ingest documents from a file, directory path, or HTTP/HTTPS URL into the vector store. filesSkipped counts files already up-to-date (content unchanged), unsupported formats, or failed URL fetches.")
+    @Tool(description = "Ingest documents from a file, directory path, or HTTP/HTTPS URL into the vector store. filesSkipped counts files already up-to-date (content unchanged), unsupported formats, or failed URL fetches. Supply passwords to unlock encrypted Office files.")
     fun ingest(
         @ToolParam(description = "Path to ingest: an absolute or relative filesystem path (file or directory), or an HTTP/HTTPS URL.") path: String,
         @ToolParam(required = false, description = "Chunk size in characters (default: 1000).") chunkSize: Int?,
-        @ToolParam(required = false, description = "Chunk overlap in characters (default: 200).") chunkOverlap: Int?
+        @ToolParam(required = false, description = "Chunk overlap in characters (default: 200).") chunkOverlap: Int?,
+        @ToolParam(required = false, description = "Passwords to try when opening encrypted Office files. Each entry is tried in order until one succeeds.") passwords: List<String>? = null
     ): IngestToolResult {
         val cs = chunkSize ?: 1000
         val co = chunkOverlap ?: 200
+        val pwds = passwords ?: emptyList()
         val source: IngestSource = if (path.startsWith("http://") || path.startsWith("https://")) {
             UrlSource(path)
         } else {
@@ -48,7 +50,7 @@ class McpIngestTool(
             storeConfig.analyzerName,
             storeConfig.lockTimeoutSeconds,
         ).use { repository ->
-            val service = ingestServiceFactory(repository, cs, co, urlFetcher)
+            val service = ingestServiceFactory(repository, cs, co, urlFetcher, pwds)
             val result = service.ingest(listOf(source))
             return IngestToolResult(
                 filesIngested = result.filesIngested,

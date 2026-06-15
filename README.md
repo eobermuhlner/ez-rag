@@ -71,7 +71,7 @@ No configuration needed — works out of the box:
 
 ```sh
 # Ingest a single file (downloads embedding model on first run)
-# Supported file types: .txt, .pdf, .md, .html / .htm
+# Supported file types: .txt, .pdf, .md, .html / .htm, .docx, .doc, .xlsx, .xls, .pptx, .ppt
 ez-rag ingest README.md
 
 # Ingest a webpage
@@ -138,7 +138,7 @@ A document is marked `[STALE]` when its filesystem mtime has changed since the l
 |--------------------------------|----------------------------------------------------------------------------------------------------|
 | `init`                         | Initialize a `.ez-rag/` workspace in the current directory and add the store to `.gitignore`.      |
 | `install-skill`                | Install the ez-rag skill for your AI coding tool. Auto-detects Claude Code, OpenCode, or falls back to generic. |
-| `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`, `.html`/`.htm`. Prints each file as it is ingested. |
+| `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`. Prints each file as it is ingested. |
 | `delete <file> [<file>...]`    | Remove one or more ingested documents from the vector store without touching other content.        |
 | `list`                         | List all ingested documents with chunk counts and staleness flags. Use `--output-format json` for machine-readable output with absolute paths. |
 | `reingest`                     | Re-ingest all stale documents (mtime changed since last ingest). Use `--all` to force re-ingest of every document. |
@@ -218,11 +218,23 @@ ez-rag install-skill --tool claude-code --tool opencode
 
 ### ingest
 
-Ingest files or directories into the vector store. Supported file types: `.txt`, `.pdf`, `.md`, `.html`/`.htm`.
+Ingest files or directories into the vector store. Supported file types: `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`.
 
 ```sh
 ez-rag ingest ./docs
 ```
+
+To ingest a password-protected Office file:
+
+```sh
+# Single password
+ez-rag ingest --password mypassword report.docx
+
+# Multiple passwords (tried in order until one succeeds — useful for directories with mixed passwords)
+ez-rag ingest --password password1 --password password2 ./office-docs
+```
+
+If a file is encrypted and no matching password is supplied, it is skipped with a warning and ingestion of other files in the batch continues normally.
 
 ## Ingest-specific flags
 
@@ -230,6 +242,7 @@ ez-rag ingest ./docs
 |------------------|-----------------------------------------------------------------------------------------------|
 | `--quiet` / `-q` | Suppress per-file output; print only the final summary line.                                  |
 | `--details`      | Print chunk details (token count and text preview) for each ingested file.                    |
+| `--password`     | Password for encrypted Office files. Repeat the flag for multiple passwords: `--password p1 --password p2`. Each password is tried in order; the first that succeeds is used. |
 
 By default, `ingest` prints one line per file as it processes it:
 

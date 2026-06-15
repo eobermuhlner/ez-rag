@@ -472,4 +472,144 @@ class IngestServiceTest {
             assertThat(doc.status).isEqualTo("FRESH")
         }
     }
+
+    @Test
+    fun `single pptx file passed to IngestService is ingested and not skipped`(@TempDir tempDir: Path) {
+        ch.obermuhlner.ezrag.ingestion.office.PowerPointFixtureGenerator.createPptxFixture(
+            ch.obermuhlner.ezrag.ingestion.office.PowerPointFixtureGenerator.pptxFile
+        )
+        val pptxFile = ch.obermuhlner.ezrag.ingestion.office.PowerPointFixtureGenerator.pptxFile
+
+        withIngestService(tempDir) { service ->
+            val result = service.ingest(listOf(pptxFile))
+            assertThat(result.filesIngested).isEqualTo(1)
+            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+            assertThat(result.skipped).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `directory containing pptx files causes IngestService to discover and ingest them`(@TempDir pptxDir: Path, @TempDir storeDir: Path) {
+        ch.obermuhlner.ezrag.ingestion.office.PowerPointFixtureGenerator.createPptxFixture(
+            ch.obermuhlner.ezrag.ingestion.office.PowerPointFixtureGenerator.pptxFile
+        )
+        val sourcePptx = ch.obermuhlner.ezrag.ingestion.office.PowerPointFixtureGenerator.pptxFile
+
+        val pptxInDir = pptxDir.resolve("test.pptx").toFile()
+        sourcePptx.copyTo(pptxInDir, overwrite = true)
+        pptxDir.resolve("test.txt").toFile().writeText("Some plain text content.")
+
+        withIngestService(storeDir) { service ->
+            val result = service.ingest(listOf(pptxDir.toFile()))
+            assertThat(result.filesIngested).isEqualTo(2)
+            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(2)
+        }
+    }
+
+    @Test
+    fun `single xlsx file passed to IngestService is ingested and not skipped`(@TempDir tempDir: Path) {
+        ch.obermuhlner.ezrag.ingestion.office.ExcelFixtureGenerator.createXlsxFixture(
+            ch.obermuhlner.ezrag.ingestion.office.ExcelFixtureGenerator.xlsxFile
+        )
+        val xlsxFile = ch.obermuhlner.ezrag.ingestion.office.ExcelFixtureGenerator.xlsxFile
+
+        withIngestService(tempDir) { service ->
+            val result = service.ingest(listOf(xlsxFile))
+            assertThat(result.filesIngested).isEqualTo(1)
+            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+            assertThat(result.skipped).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `directory containing xlsx files causes IngestService to discover and ingest them`(@TempDir xlsxDir: Path, @TempDir storeDir: Path) {
+        ch.obermuhlner.ezrag.ingestion.office.ExcelFixtureGenerator.createXlsxFixture(
+            ch.obermuhlner.ezrag.ingestion.office.ExcelFixtureGenerator.xlsxFile
+        )
+        val sourceXlsx = ch.obermuhlner.ezrag.ingestion.office.ExcelFixtureGenerator.xlsxFile
+
+        val xlsxInDir = xlsxDir.resolve("test.xlsx").toFile()
+        sourceXlsx.copyTo(xlsxInDir, overwrite = true)
+        xlsxDir.resolve("test.txt").toFile().writeText("Some plain text content.")
+
+        withIngestService(storeDir) { service ->
+            val result = service.ingest(listOf(xlsxDir.toFile()))
+            assertThat(result.filesIngested).isEqualTo(2)
+            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(2)
+        }
+    }
+
+    @Test
+    fun `single docx file passed to IngestService is ingested and not skipped`(@TempDir tempDir: Path) {
+        // Ensure DOCX fixture exists
+        ch.obermuhlner.ezrag.ingestion.office.WordFixtureGenerator.createDocxFixture(
+            ch.obermuhlner.ezrag.ingestion.office.WordFixtureGenerator.docxFile
+        )
+        val docxFile = ch.obermuhlner.ezrag.ingestion.office.WordFixtureGenerator.docxFile
+
+        withIngestService(tempDir) { service ->
+            val result = service.ingest(listOf(docxFile))
+            assertThat(result.filesIngested).isEqualTo(1)
+            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+            assertThat(result.skipped).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `directory containing docx files causes IngestService to discover and ingest them`(@TempDir docxDir: Path, @TempDir storeDir: Path) {
+        // Ensure DOCX fixture exists
+        ch.obermuhlner.ezrag.ingestion.office.WordFixtureGenerator.createDocxFixture(
+            ch.obermuhlner.ezrag.ingestion.office.WordFixtureGenerator.docxFile
+        )
+        val sourceDocx = ch.obermuhlner.ezrag.ingestion.office.WordFixtureGenerator.docxFile
+
+        // Copy the docx fixture into a temp directory
+        val docxInDir = docxDir.resolve("test.docx").toFile()
+        sourceDocx.copyTo(docxInDir, overwrite = true)
+        // Also add a .txt file to confirm mixed-type directories work
+        docxDir.resolve("test.txt").toFile().writeText("Some plain text content.")
+
+        withIngestService(storeDir) { service ->
+            val result = service.ingest(listOf(docxDir.toFile()))
+            // Both the docx and the txt should be ingested
+            assertThat(result.filesIngested).isEqualTo(2)
+            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(2)
+        }
+    }
+
+    @Test
+    fun `encrypted docx is skipped with a warning when no password is supplied`(@TempDir tempDir: Path) {
+        val encryptedFixture = ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator.encryptedDocxFile
+        ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator.createEncryptedDocxFixture(encryptedFixture)
+        val normalFile = tempDir.resolve("normal.txt")
+        normalFile.toFile().writeText("This is normal plain text content for the batch test.")
+
+        val warnings = StringWriter()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            // No passwords supplied — encrypted file should be skipped
+            val service = IngestService(repo, 1000, 200, PrintWriter(warnings, true))
+            val result = service.ingest(listOf(encryptedFixture, normalFile.toFile()))
+            // Normal file ingested, encrypted file skipped
+            assertThat(result.filesIngested).isEqualTo(1)
+            assertThat(result.skipped).isGreaterThanOrEqualTo(1)
+            assertThat(warnings.toString()).contains("WARN:")
+            assertThat(warnings.toString()).contains("encrypted")
+        }
+    }
+
+    @Test
+    fun `encrypted docx is ingested when correct password is supplied to IngestService`(@TempDir tempDir: Path) {
+        val encryptedFixture = ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator.encryptedDocxFile
+        ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator.createEncryptedDocxFixture(encryptedFixture)
+
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { repo ->
+            val service = IngestService(
+                repository = repo,
+                passwords = listOf(ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator.CORRECT_PASSWORD)
+            )
+            val result = service.ingest(listOf(encryptedFixture))
+            assertThat(result.filesIngested).isEqualTo(1)
+            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+        }
+    }
 }

@@ -22,6 +22,7 @@ open class ReIngestService(
     private val chunkOverlap: Int = 200,
     private val warningWriter: PrintWriter = PrintWriter(System.err, true),
     private val urlFetcher: UrlFetcher = JsoupUrlFetcher(),
+    private val passwords: List<String> = emptyList(),
 ) {
 
     var onFileReIngesting: ((String) -> Unit)? = null
@@ -91,7 +92,7 @@ open class ReIngestService(
                 // those segments have been marked for deletion.
                 repository.dropAllDocuments()
             }
-            val ingestResult = IngestService(repository, chunkSize, chunkOverlap, warningWriter, urlFetcher = urlFetcher).ingest(sourcesToReIngest)
+            val ingestResult = IngestService(repository, chunkSize, chunkOverlap, warningWriter, urlFetcher = urlFetcher, passwords = passwords).ingest(sourcesToReIngest)
             filesReIngested = ingestResult.filesIngested
             chunksCreated = ingestResult.chunksCreated
         }

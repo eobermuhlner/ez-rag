@@ -13,8 +13,8 @@ import org.springframework.ai.tool.annotation.ToolParam
 class McpReIngestTool(
     private val storeConfig: StoreConfig,
     private val urlFreshnessThresholdMs: Long = 24 * 3_600_000L,
-    private val reIngestServiceFactory: (LuceneRepository, Int, Int) -> ReIngestService = { repo, chunkSize, chunkOverlap ->
-        ReIngestService(repo, chunkSize, chunkOverlap)
+    private val reIngestServiceFactory: (LuceneRepository, Int, Int, List<String>) -> ReIngestService = { repo, chunkSize, chunkOverlap, passwords ->
+        ReIngestService(repo, chunkSize, chunkOverlap, passwords = passwords)
     }
 ) {
 
@@ -26,22 +26,24 @@ class McpReIngestTool(
         val filesSkipped: Int
     )
 
-    @Tool(description = "Re-ingest documents in the vector store. By default re-ingests only stale documents (those whose source file has been modified since last ingest). Pass forceAll=true to re-ingest every document regardless of staleness.")
+    @Tool(description = "Re-ingest documents in the vector store. By default re-ingests only stale documents (those whose source file has been modified since last ingest). Pass forceAll=true to re-ingest every document regardless of staleness. Supply passwords to unlock encrypted Office files.")
     fun reingest(
         @ToolParam(required = false, description = "If true, re-ingest all documents regardless of staleness. Default false (stale only).") forceAll: Boolean?,
         @ToolParam(required = false, description = "Chunk size in characters (default: 1000).") chunkSize: Int?,
-        @ToolParam(required = false, description = "Chunk overlap in characters (default: 200).") chunkOverlap: Int?
+        @ToolParam(required = false, description = "Chunk overlap in characters (default: 200).") chunkOverlap: Int?,
+        @ToolParam(required = false, description = "Passwords to try when opening encrypted Office files. Each entry is tried in order until one succeeds.") passwords: List<String>? = null
     ): ReIngestToolResult {
         val cs = chunkSize ?: 1000
         val co = chunkOverlap ?: 200
         val force = forceAll ?: false
+        val pwds = passwords ?: emptyList()
         LuceneRepository.openWithRetry(
             storeConfig.embeddingModel,
             storeConfig.storeDir,
             storeConfig.analyzerName,
             storeConfig.lockTimeoutSeconds,
         ).use { repository ->
-            val service = reIngestServiceFactory(repository, cs, co)
+            val service = reIngestServiceFactory(repository, cs, co, pwds)
             val result = service.reIngest(forceAll = force, urlFreshnessThresholdMs = urlFreshnessThresholdMs)
             return ReIngestToolResult(
                 staleFound = result.staleFound,

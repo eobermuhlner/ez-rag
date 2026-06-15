@@ -7,6 +7,7 @@ import ch.obermuhlner.ezrag.ingestion.ReIngestService
 import ch.obermuhlner.ezrag.ingestion.UrlSource
 import ch.obermuhlner.ezrag.ingestion.UrlFetcher
 import ch.obermuhlner.ezrag.ingestion.FetchResult
+import ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -59,11 +60,13 @@ class McpReIngestToolTest {
     private fun makeTool(
         storeDir: Path,
         resultToReturn: ReIngestResult? = null,
-        throwException: Exception? = null
+        throwException: Exception? = null,
+        capturedPasswords: MutableList<List<String>> = mutableListOf()
     ): McpReIngestTool {
         return McpReIngestTool(
             storeConfig = makeStoreConfig(storeDir),
-            reIngestServiceFactory = { repo, cs: Int, co: Int ->
+            reIngestServiceFactory = { repo, cs: Int, co: Int, passwords: List<String> ->
+                capturedPasswords.add(passwords)
                 if (resultToReturn != null || throwException != null) {
                     object : ReIngestService(repo, cs, co) {
                         override fun reIngest(forceAll: Boolean, urlFreshnessThresholdMs: Long): ReIngestResult {
@@ -72,7 +75,7 @@ class McpReIngestToolTest {
                         }
                     }
                 } else {
-                    ReIngestService(repo, cs, co)
+                    ReIngestService(repo, cs, co, passwords = passwords)
                 }
             }
         )
@@ -107,7 +110,7 @@ class McpReIngestToolTest {
         LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
         val tool = McpReIngestTool(
             storeConfig = makeStoreConfig(tempDir),
-            reIngestServiceFactory = { repo, chunkSize, chunkOverlap ->
+            reIngestServiceFactory = { repo, chunkSize, chunkOverlap, _ ->
                 object : ReIngestService(repo, chunkSize, chunkOverlap) {
                     override fun reIngest(forceAll: Boolean, urlFreshnessThresholdMs: Long): ReIngestResult {
                         capturedForceAll.add(forceAll)
@@ -144,7 +147,7 @@ class McpReIngestToolTest {
         LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
         val tool = McpReIngestTool(
             storeConfig = makeStoreConfig(tempDir),
-            reIngestServiceFactory = { repo, chunkSize, chunkOverlap ->
+            reIngestServiceFactory = { repo, chunkSize, chunkOverlap, _ ->
                 capturedChunkSizes.add(chunkSize)
                 capturedChunkOverlaps.add(chunkOverlap)
                 object : ReIngestService(repo, chunkSize, chunkOverlap) {
@@ -211,7 +214,7 @@ class McpReIngestToolTest {
         val tool = McpReIngestTool(
             storeConfig = makeStoreConfig(storeDir),
             urlFreshnessThresholdMs = 24 * 3_600_000L,
-            reIngestServiceFactory = { repo, cs, co ->
+            reIngestServiceFactory = { repo, cs, co, _ ->
                 ReIngestService(repo, cs, co, urlFetcher = fetcher)
             }
         )
@@ -219,5 +222,66 @@ class McpReIngestToolTest {
 
         assertThat(result.filesReIngested).isEqualTo(0)
         assertThat(result.staleFound).isEqualTo(0)
+    }
+
+    // --- Task 06: passwords parameter ---
+
+    @Test
+    fun `reingest with passwords list forwards passwords to ReIngestService via factory`(@TempDir tempDir: Path) {
+        val capturedPasswords = mutableListOf<List<String>>()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
+        val tool = makeTool(
+            storeDir = tempDir,
+            resultToReturn = ReIngestResult(staleFound = 0, filesReIngested = 0, chunksCreated = 0, filesSkipped = 0),
+            capturedPasswords = capturedPasswords
+        )
+
+        tool.reingest(forceAll = null, chunkSize = null, chunkOverlap = null, passwords = listOf("pass1", "pass2"))
+
+        assertThat(capturedPasswords).hasSize(1)
+        assertThat(capturedPasswords[0]).containsExactly("pass1", "pass2")
+    }
+
+    @Test
+    fun `reingest without passwords passes empty list to ReIngestService via factory`(@TempDir tempDir: Path) {
+        val capturedPasswords = mutableListOf<List<String>>()
+        LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
+        val tool = makeTool(
+            storeDir = tempDir,
+            resultToReturn = ReIngestResult(staleFound = 0, filesReIngested = 0, chunksCreated = 0, filesSkipped = 0),
+            capturedPasswords = capturedPasswords
+        )
+
+        tool.reingest(forceAll = null, chunkSize = null, chunkOverlap = null, passwords = null)
+
+        assertThat(capturedPasswords).hasSize(1)
+        assertThat(capturedPasswords[0]).isEmpty()
+    }
+
+    @Test
+    fun `reingest with correct password successfully re-ingests password-protected Office file`(@TempDir tempDir: Path) {
+        EncryptedWordFixtureGenerator.createEncryptedDocxFixture(EncryptedWordFixtureGenerator.encryptedDocxFile)
+        val storeDir = tempDir.resolve("store")
+
+        // First ingest with password so it exists in the store
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            IngestService(repo, passwords = listOf(EncryptedWordFixtureGenerator.CORRECT_PASSWORD))
+                .ingest(listOf(EncryptedWordFixtureGenerator.encryptedDocxFile))
+        }
+
+        // Make the file stale by updating its modification time
+        val futureTime = java.nio.file.attribute.FileTime.from(java.time.Instant.now().plusSeconds(3600))
+        java.nio.file.Files.setLastModifiedTime(EncryptedWordFixtureGenerator.encryptedDocxFile.toPath(), futureTime)
+
+        val tool = McpReIngestTool(
+            storeConfig = makeStoreConfig(storeDir),
+            reIngestServiceFactory = { repo, cs, co, passwords ->
+                ReIngestService(repo, cs, co, passwords = passwords)
+            }
+        )
+        val result = tool.reingest(forceAll = null, chunkSize = null, chunkOverlap = null, passwords = listOf(EncryptedWordFixtureGenerator.CORRECT_PASSWORD))
+
+        assertThat(result.filesReIngested).isEqualTo(1)
+        assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
     }
 }

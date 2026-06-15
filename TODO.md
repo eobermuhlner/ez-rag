@@ -1,0 +1,2 @@
+- use Apache POI for reading MS Office files to ingest a document
+- use Apache Tika for remaining file types (?)

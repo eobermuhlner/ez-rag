@@ -496,4 +496,36 @@ class ReIngestServiceTest {
         assertThat(result.filesReIngested).isEqualTo(1)
         assertThat(result.filesSkipped).isEqualTo(0)
     }
+
+    @Test
+    fun `ReIngestService passes passwords through to IngestService for re-ingesting encrypted files`(@TempDir tempDir: Path) {
+        val storeDir = tempDir.resolve("store")
+        val encryptedFixture = ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator.encryptedDocxFile
+        ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator.createEncryptedDocxFixture(encryptedFixture)
+
+        // First ingest with correct password
+        LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            val service = IngestService(
+                repository = repo,
+                passwords = listOf(ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator.CORRECT_PASSWORD)
+            )
+            val result = service.ingest(listOf(encryptedFixture))
+            assertThat(result.filesIngested).isEqualTo(1)
+        }
+
+        // Make the file stale by advancing its mtime
+        val futureTime = java.nio.file.attribute.FileTime.from(java.time.Instant.now().plusSeconds(3600))
+        java.nio.file.Files.setLastModifiedTime(encryptedFixture.toPath(), futureTime)
+
+        // Re-ingest with correct password — should succeed
+        val result = LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
+            ReIngestService(
+                repository = repo,
+                passwords = listOf(ch.obermuhlner.ezrag.ingestion.office.EncryptedWordFixtureGenerator.CORRECT_PASSWORD)
+            ).reIngest(forceAll = false)
+        }
+
+        assertThat(result.filesReIngested).isEqualTo(1)
+        assertThat(result.chunksCreated).isGreaterThan(0)
+    }
 }

@@ -41,6 +41,7 @@ class IngestCommand(
     private val startDirOverride: Path? = null,
     private val configServiceOverride: ConfigService? = null,
     private val urlFetcher: UrlFetcher = JsoupUrlFetcher(),
+    private val passwords: List<String> = emptyList(),
 ) : Callable<Int> {
 
     @Autowired(required = false)
@@ -60,6 +61,12 @@ class IngestCommand(
 
     @Option(names = ["--chunk-overlap"], description = ["Chunk overlap in tokens (default: 200)."])
     var chunkOverlapOption: Int? = null
+
+    @Option(
+        names = ["--password"],
+        description = ["Password for encrypted Office files. Repeat for multiple passwords: --password p1 --password p2. Comma-separated values in a single --password are NOT split."]
+    )
+    var passwordsOption: List<String> = emptyList()
 
     @Option(names = ["--quiet", "-q"], description = ["Suppress per-file output; show only the summary line."])
     var quietOption: Boolean = false
@@ -104,10 +111,13 @@ class IngestCommand(
         val isQuiet = quiet || quietOption
         val isVerbose = verbose
 
+        val resolvedPasswords = if (passwordsOption.isNotEmpty()) passwordsOption else passwords
+
         LuceneRepository.open(model, resolvedStoreDir, analyzerName).use { repo ->
             val service = IngestService(
                 repo, resolvedChunkSize, resolvedChunkOverlap, warningWriter,
                 urlFetcher = urlFetcher,
+                passwords = resolvedPasswords,
             )
 
             if (!isQuiet) {
