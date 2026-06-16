@@ -71,6 +71,12 @@ class IngestCommand(
     @Option(names = ["--quiet", "-q"], description = ["Suppress per-file output; show only the summary line."])
     var quietOption: Boolean = false
 
+    @Option(
+        names = ["--binary-strip-extensions"],
+        description = ["File extensions to enable binary text-stripping for (e.g. bin exe dll). Binary files with extensions not in this list are skipped. Default: no binary stripping."]
+    )
+    var binaryStripExtensionsOption: List<String> = emptyList()
+
     override fun call(): Int {
         val sources = paths.map { path ->
             if (path.startsWith("http://") || path.startsWith("https://")) UrlSource(path)
@@ -113,11 +119,14 @@ class IngestCommand(
 
         val resolvedPasswords = if (passwordsOption.isNotEmpty()) passwordsOption else passwords
 
+        val resolvedBinaryStripExtensions = binaryStripExtensionsOption.map { it.trimStart('.').lowercase() }.toSet()
+
         LuceneRepository.open(model, resolvedStoreDir, analyzerName).use { repo ->
             val service = IngestService(
                 repo, resolvedChunkSize, resolvedChunkOverlap, warningWriter,
                 urlFetcher = urlFetcher,
                 passwords = resolvedPasswords,
+                binaryStripExtensions = resolvedBinaryStripExtensions,
             )
 
             if (!isQuiet) {

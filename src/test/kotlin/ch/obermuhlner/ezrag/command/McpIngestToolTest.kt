@@ -63,7 +63,7 @@ class McpIngestToolTest {
         LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
         return McpIngestTool(
             storeConfig = makeStoreConfig(tempDir),
-            ingestServiceFactory = { repo, chunkSize, chunkOverlap, _, passwords ->
+            ingestServiceFactory = { repo, chunkSize, chunkOverlap, _, passwords, _ ->
                 capturedChunkSizes.add(chunkSize)
                 capturedChunkOverlaps.add(chunkOverlap)
                 capturedPasswords.add(passwords)
@@ -181,7 +181,7 @@ class McpIngestToolTest {
         LuceneRepository.open(fakeEmbeddingModel, tempDir, "standard").use { }
         val tool = McpIngestTool(
             storeConfig = makeStoreConfig(tempDir),
-            ingestServiceFactory = { repo, cs, co, _, _ ->
+            ingestServiceFactory = { repo, cs, co, _, _, _ ->
                 object : IngestService(repo, cs, co) {
                     override fun ingest(sources: Iterable<IngestSource>): IngestResult {
                         throw RuntimeException("Connection refused")

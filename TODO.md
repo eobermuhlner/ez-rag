@@ -1,6 +1,6 @@
-- add parsing/chunking fallback for all text file formats
-- add parsing/chunking fallback for all binary file formats (simple text stripping) ?
 - add parsing/chunking for xml
 - add parsing/chunking for document text file formats (adoc, ...)
+- generalize `to-markdown` sub-command
 - add table with supported file formats and parsing/chunking information
 - support for indexing source code
+- unpack zip files during ingestion ?

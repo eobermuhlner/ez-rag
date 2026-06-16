@@ -21,7 +21,10 @@ open class IngestService(
     private val urlFetcher: UrlFetcher = JsoupUrlFetcher(),
     private val tempDirProvider: () -> Path = { Files.createTempDirectory("ez-rag-url-") },
     private val passwords: List<String> = emptyList(),
+    binaryStripExtensions: Set<String> = emptySet(),
 ) {
+    private val normalizedBinaryStripExtensions: Set<String> =
+        binaryStripExtensions.map { it.trimStart('.').lowercase() }.toSet()
 
     var onFileIngesting: ((Path) -> Unit)? = null
     var onFileSkipped: ((Path, String) -> Unit)? = null
@@ -79,9 +82,27 @@ open class IngestService(
                     val rawChunks = try {
                         registry.read(absolutePath.toFile())
                     } catch (e: IllegalArgumentException) {
-                        warningWriter.println("Warning: Skipping binary file: $absolutePath — ${e.message}")
-                        skipped++
-                        continue
+                        val ext = absolutePath.toFile().extension.lowercase()
+                        if (ext !in normalizedBinaryStripExtensions) {
+                            warningWriter.println("Warning: Skipping binary file: $absolutePath")
+                            skipped++
+                            continue
+                        }
+                        val strippedText = BinaryTextStripper.strip(fileBytes)
+                        warningWriter.println("Warning: Binary file stripped to plain text: $absolutePath")
+                        if (strippedText.isBlank()) {
+                            warningWriter.println("Warning: No extractable text in binary file: $absolutePath")
+                            skipped++
+                            continue
+                        }
+                        val tempDir = tempDirProvider()
+                        val tempFile = Files.createTempFile(tempDir, "ez-rag-bin-", ".txt").toFile()
+                        try {
+                            tempFile.writeText(strippedText)
+                            PlainTextDocumentReader(tempFile, chunkSize, chunkOverlap).read()
+                        } finally {
+                            tempFile.delete()
+                        }
                     } catch (e: IllegalStateException) {
                         if (e.message?.contains("Cannot open encrypted file") == true) {
                             warningWriter.println("WARN: Cannot open encrypted file, skipping: $absolutePath")
@@ -158,20 +179,42 @@ open class IngestService(
                         else -> {
                             // Fallback: binary detection on the raw bytes
                             if (BinaryDetector.isBinary(fetchResult.bytes)) {
+                                val urlPath = try { java.net.URI(url).path } catch (_: Exception) { "" }
+                                val urlExt = urlPath.substringAfterLast('.', "").lowercase()
+                                if (urlExt !in normalizedBinaryStripExtensions) {
+                                    warningWriter.println(
+                                        "Warning: Skipping binary content at URL: $url (content-type: ${fetchResult.contentType})"
+                                    )
+                                    skipped++
+                                    continue
+                                }
+                                val strippedText = BinaryTextStripper.strip(fetchResult.bytes)
                                 warningWriter.println(
-                                    "Warning: Skipping binary content at URL: $url (content-type: ${fetchResult.contentType})"
+                                    "Warning: Binary content stripped to plain text at URL: $url (content-type: ${fetchResult.contentType})"
                                 )
-                                skipped++
-                                continue
-                            }
-                            // Text content — ingest as plain text using a temp file
-                            val tempDir = tempDirProvider()
-                            val tempFile = Files.createTempFile(tempDir, "ez-rag-txt-", ".txt").toFile()
-                            try {
-                                tempFile.writeBytes(fetchResult.bytes)
-                                PlainTextDocumentReader(tempFile, chunkSize, chunkOverlap).read()
-                            } finally {
-                                tempFile.delete()
+                                if (strippedText.isBlank()) {
+                                    warningWriter.println("Warning: No extractable text in binary content at URL: $url")
+                                    skipped++
+                                    continue
+                                }
+                                val tempDir = tempDirProvider()
+                                val tempFile = Files.createTempFile(tempDir, "ez-rag-bin-", ".txt").toFile()
+                                try {
+                                    tempFile.writeText(strippedText)
+                                    PlainTextDocumentReader(tempFile, chunkSize, chunkOverlap).read()
+                                } finally {
+                                    tempFile.delete()
+                                }
+                            } else {
+                                // Text content — ingest as plain text using a temp file
+                                val tempDir = tempDirProvider()
+                                val tempFile = Files.createTempFile(tempDir, "ez-rag-txt-", ".txt").toFile()
+                                try {
+                                    tempFile.writeBytes(fetchResult.bytes)
+                                    PlainTextDocumentReader(tempFile, chunkSize, chunkOverlap).read()
+                                } finally {
+                                    tempFile.delete()
+                                }
                             }
                         }
                     }

@@ -56,10 +56,11 @@ class IngestServiceTest {
         warningWriter: PrintWriter = PrintWriter(System.err, true),
         urlFetcher: UrlFetcher = JsoupUrlFetcher(),
         tempDirProvider: () -> Path = { Files.createTempDirectory("ez-rag-url-") },
+        binaryStripExtensions: Set<String> = emptySet(),
         block: (IngestService) -> Unit,
     ) {
         LuceneRepository.open(fakeEmbeddingModel, storeDir, "standard").use { repo ->
-            val service = IngestService(repo, chunkSize, chunkOverlap, warningWriter, urlFetcher, tempDirProvider)
+            val service = IngestService(repo, chunkSize, chunkOverlap, warningWriter, urlFetcher, tempDirProvider, binaryStripExtensions = binaryStripExtensions)
             block(service)
         }
     }
@@ -710,6 +711,112 @@ class IngestServiceTest {
             val result = service.ingest(listOf(encryptedFixture))
             assertThat(result.filesIngested).isEqualTo(1)
             assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `binary file with embedded printable strings is ingested with warning instead of skipped`(@TempDir tempDir: Path) {
+        // Build a binary file: null bytes, then a run of 8 printable chars, then more null bytes
+        val embeddedString = "ERRORVAL"  // 8 printable chars (>= min 4)
+        val binaryContent = byteArrayOf(0x00, 0x01, 0x02, 0x03) +
+                embeddedString.toByteArray(Charsets.US_ASCII) +
+                byteArrayOf(0x00, 0x01, 0x02, 0x03)
+        val binaryFile = tempDir.resolve("firmware.bin")
+        binaryFile.toFile().writeBytes(binaryContent)
+
+        val warnings = StringWriter()
+        withIngestService(tempDir, warningWriter = PrintWriter(warnings, true), binaryStripExtensions = setOf("bin")) { service ->
+            val result = service.ingest(listOf(binaryFile.toFile()))
+            assertThat(result.filesIngested).isGreaterThanOrEqualTo(1)
+            assertThat(result.skipped).isEqualTo(0)
+            assertThat(warnings.toString()).contains("stripped to plain text")
+        }
+    }
+
+    @Test
+    fun `binary file with no extractable text is skipped with two warnings`(@TempDir tempDir: Path) {
+        // All null bytes — no printable text at all
+        val binaryFile = tempDir.resolve("zeroes.bin")
+        binaryFile.toFile().writeBytes(ByteArray(64) { 0x00.toByte() })
+
+        val warnings = StringWriter()
+        withIngestService(tempDir, warningWriter = PrintWriter(warnings, true), binaryStripExtensions = setOf("bin")) { service ->
+            val result = service.ingest(listOf(binaryFile.toFile()))
+            assertThat(result.filesIngested).isEqualTo(0)
+            assertThat(result.skipped).isEqualTo(1)
+            val w = warnings.toString()
+            assertThat(w).contains("stripped to plain text")
+            assertThat(w).contains("No extractable text")
+        }
+    }
+
+    @Test
+    fun `binary URL response with embedded printable strings is ingested with warning instead of skipped`(@TempDir tempDir: Path) {
+        val url = "https://example.com/firmware.bin"
+        // Build a binary body: null bytes, then a run of 8 printable chars, then more null bytes
+        val embeddedString = "ERRORVAL"  // 8 printable chars (>= min 4)
+        val binaryBody = byteArrayOf(0x00, 0x01, 0x02, 0x03) +
+                embeddedString.toByteArray(Charsets.US_ASCII) +
+                byteArrayOf(0x00, 0x01, 0x02, 0x03)
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, contentType = "application/octet-stream", bytes = binaryBody)
+
+        val warnings = StringWriter()
+        withIngestService(tempDir, warningWriter = PrintWriter(warnings, true), urlFetcher = fakeUrlFetcher, binaryStripExtensions = setOf("bin")) { service ->
+            val result = service.ingest(listOf(UrlSource(url)))
+            assertThat(result.filesIngested).isGreaterThanOrEqualTo(1)
+            assertThat(result.skipped).isEqualTo(0)
+            assertThat(warnings.toString()).contains("stripped to plain text")
+        }
+    }
+
+    @Test
+    fun `binary URL response with no extractable text is skipped with warning`(@TempDir tempDir: Path) {
+        val url = "https://example.com/zeroes.bin"
+        // All null bytes — no printable text at all
+        val binaryBody = ByteArray(64) { 0x00.toByte() }
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, contentType = "application/octet-stream", bytes = binaryBody)
+
+        val warnings = StringWriter()
+        withIngestService(tempDir, warningWriter = PrintWriter(warnings, true), urlFetcher = fakeUrlFetcher, binaryStripExtensions = setOf("bin")) { service ->
+            val result = service.ingest(listOf(UrlSource(url)))
+            assertThat(result.filesIngested).isEqualTo(0)
+            assertThat(result.skipped).isEqualTo(1)
+            assertThat(warnings.toString()).contains("No extractable text")
+        }
+    }
+
+    @Test
+    fun `binary file is skipped without stripping when extension is not in binaryStripExtensions`(@TempDir tempDir: Path) {
+        val embeddedString = "ERRORVAL"
+        val binaryContent = byteArrayOf(0x00, 0x01, 0x02, 0x03) +
+                embeddedString.toByteArray(Charsets.US_ASCII) +
+                byteArrayOf(0x00, 0x01, 0x02, 0x03)
+        val binaryFile = tempDir.resolve("firmware.bin")
+        binaryFile.toFile().writeBytes(binaryContent)
+
+        val warnings = StringWriter()
+        withIngestService(tempDir, warningWriter = PrintWriter(warnings, true)) { service ->
+            val result = service.ingest(listOf(binaryFile.toFile()))
+            assertThat(result.filesIngested).isEqualTo(0)
+            assertThat(result.skipped).isEqualTo(1)
+            assertThat(warnings.toString()).doesNotContain("stripped to plain text")
+        }
+    }
+
+    @Test
+    fun `binary URL is skipped without stripping when extension is not in binaryStripExtensions`(@TempDir tempDir: Path) {
+        val url = "https://example.com/firmware.bin"
+        val binaryBody = byteArrayOf(0x00, 0x01, 0x02, 0x03) +
+                "ERRORVAL".toByteArray(Charsets.US_ASCII) +
+                byteArrayOf(0x00, 0x01, 0x02, 0x03)
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, contentType = "application/octet-stream", bytes = binaryBody)
+
+        val warnings = StringWriter()
+        withIngestService(tempDir, warningWriter = PrintWriter(warnings, true), urlFetcher = fakeUrlFetcher) { service ->
+            val result = service.ingest(listOf(UrlSource(url)))
+            assertThat(result.filesIngested).isEqualTo(0)
+            assertThat(result.skipped).isEqualTo(1)
+            assertThat(warnings.toString()).doesNotContain("stripped to plain text")
         }
     }
 }

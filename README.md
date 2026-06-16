@@ -220,6 +220,14 @@ ez-rag install-skill --tool claude-code --tool opencode
 
 Ingest files or directories into the vector store. Supported file types: `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.csv`, `.rtf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`.
 
+Binary text stripping is opt-in. By default, binary files and binary URL responses are skipped. To enable stripping for specific extensions, pass `--binary-strip-extensions`:
+
+```sh
+ez-rag ingest --binary-strip-extensions bin exe dll ./firmware
+```
+
+When an extension is listed, the tool extracts all contiguous runs of at least 4 printable ASCII characters from the binary content and indexes them as plain text. A warning is printed when binary text stripping is applied. Files or URLs that yield no extractable text produce zero chunks and are counted as skipped. Files whose extension is not in the list are skipped without stripping.
+
 ```sh
 ez-rag ingest ./docs
 ```
@@ -243,6 +251,7 @@ If a file is encrypted and no matching password is supplied, it is skipped with 
 | `--quiet` / `-q` | Suppress per-file output; print only the final summary line.                                  |
 | `--details`      | Print chunk details (token count and text preview) for each ingested file.                    |
 | `--password`     | Password for encrypted Office files. Repeat the flag for multiple passwords: `--password p1 --password p2`. Each password is tried in order; the first that succeeds is used. |
+| `--binary-strip-extensions` | File extensions to enable binary text-stripping for. Repeat for multiple: `--binary-strip-extensions bin --binary-strip-extensions exe`. Default: no binary stripping. |
 
 By default, `ingest` prints one line per file as it processes it:
 
