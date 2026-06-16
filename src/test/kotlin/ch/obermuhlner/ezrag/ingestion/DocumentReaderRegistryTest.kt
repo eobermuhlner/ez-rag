@@ -248,4 +248,71 @@ class DocumentReaderRegistryTest {
 
         assertThat(documents).isNotEmpty()
     }
+
+    @Test
+    fun `supports returns true for xml, svg, rss, atom, xhtml`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("xml")).isTrue()
+        assertThat(registry.supports("svg")).isTrue()
+        assertThat(registry.supports("rss")).isTrue()
+        assertThat(registry.supports("atom")).isTrue()
+        assertThat(registry.supports("xhtml")).isTrue()
+    }
+
+    @Test
+    fun `read dispatches xml file and produces at least one chunk`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.xml").toFile()
+        file.writeText("<root><item>content</item></root>")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+    }
+
+    @Test
+    fun `read dispatches svg file and produces at least one chunk`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.svg").toFile()
+        file.writeText("<svg><title>Test SVG</title></svg>")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+    }
+
+    @Test
+    fun `read dispatches rss file and produces at least one chunk`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.rss").toFile()
+        file.writeText("<rss><channel><item><title>Latest Release</title></item></channel></rss>")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+    }
+
+    @Test
+    fun `read dispatches atom file and produces at least one chunk`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.atom").toFile()
+        file.writeText("<feed><entry><title>My Entry</title></entry></feed>")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+    }
+
+    @Test
+    fun `read dispatches xhtml file with h1 heading and chunk carries heading_title metadata`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.xhtml").toFile()
+        file.writeText("""<!DOCTYPE html><html><body><h1>Installation Guide</h1><p>Follow these steps to install.</p></body></html>""")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+        assertThat(documents.any { it.metadata.containsKey("heading_title") }).isTrue()
+        assertThat(documents.any { (it.metadata["heading_title"] as? String)?.contains("Installation Guide") == true }).isTrue()
+    }
 }

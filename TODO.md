@@ -1,6 +1,6 @@
-- add parsing/chunking for xml
 - add parsing/chunking for document text file formats (adoc, ...)
-- generalize `to-markdown` sub-command
+- generalize `to-markdown` sub-command for all processed file types (before chunking) name to be defined. Consider also `to-chunks` for after chunking.
 - add table with supported file formats and parsing/chunking information
-- support for indexing source code
-- unpack zip files during ingestion ?
+- support for ingesting source code
+- unpack zip files during ingestion
+- sub-command to start as background ingestion (observing file changes and/or cron job to ingest)

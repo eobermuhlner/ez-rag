@@ -22,10 +22,15 @@ class DocumentReaderRegistry(
         "ppt"  to { file -> PowerPointDocumentReader(file, chunkSize, chunkOverlap, passwords).read() },
         "xlsx" to { file -> ExcelDocumentReader(file, chunkSize, chunkOverlap, passwords).read() },
         "xls"  to { file -> ExcelDocumentReader(file, chunkSize, chunkOverlap, passwords).read() },
-        "html" to { file -> HtmlDocumentReader(file, chunkSize, chunkOverlap).read() },
-        "htm"  to { file -> HtmlDocumentReader(file, chunkSize, chunkOverlap).read() },
-        "rtf"  to { file -> RtfDocumentReader(file, chunkSize, chunkOverlap).read() },
-        "csv"  to { file -> CsvDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "html"  to { file -> HtmlDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "htm"   to { file -> HtmlDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "xhtml" to { file -> HtmlDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "rtf"   to { file -> RtfDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "csv"   to { file -> CsvDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "xml"   to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "svg"   to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "rss"   to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "atom"  to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap).read() },
     )
 
     fun supports(extension: String): Boolean = extension.lowercase() in readers
