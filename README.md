@@ -148,7 +148,8 @@ A document is marked `[STALE]` when its filesystem mtime has changed since the l
 | `search [<word>...]`           | Search returning raw chunks without LLM involvement. Defaults to hybrid (BM25 + embedding) mode; override with `--mode`. Reads question from positional args or stdin. |
 | `query [<word>...]`            | Retrieve relevant chunks and answer using an LLM. Reads question from positional args or stdin.    |
 | `shell`                        | Interactive REPL mode with multi-turn conversation history and slash commands.                     |
-| `to-markdown <input>`          | Convert a local PDF, local HTML/HTM file, or an HTTP/HTTPS URL to Markdown and print it to stdout. |
+| `to-document <input>`          | Convert any supported file or HTTP/HTTPS URL to its intermediate text representation and print it to stdout. Supports all file types accepted by `ingest`. |
+| `to-chunks <input>`            | Run any supported file or URL through the full chunking pipeline and print every chunk with its metadata. Works without an initialised store. |
 
 Every command accepts `--help` for details.
 
@@ -594,53 +595,123 @@ conversation history cleared
 
 Slash-command turns are not added to the conversation history. Only successful RAG query turns are accumulated. Turns that produce an error are also not added, so the history always contains only complete, successful exchanges.
 
-### to-markdown
+### to-document
 
-Convert a local PDF file, a local HTML/HTM file, or an HTTP/HTTPS URL to Markdown and print it to stdout. This is useful for inspecting how a document will be represented before ingesting it.
+Convert any supported file or HTTP/HTTPS URL to its intermediate text representation and print it to stdout. This is useful for inspecting exactly what the ingestion pipeline will see before committing to a full ingest. Errors are printed to stderr with a non-zero exit code.
 
 **Supported inputs:**
 
-- Local PDF file (`.pdf`)
-- Local HTML file (`.html` or `.htm`)
-- HTTP or HTTPS URL — the content type returned by the server determines the conversion pipeline (`text/html` → HTML converter, `application/pdf` → PDF converter)
+- Any file type accepted by `ingest`: `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.csv`, `.rtf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`, `.xml`, `.svg`, `.rss`, `.atom`, `.xhtml`
+- HTTP or HTTPS URLs — the content type returned by the server determines the conversion pipeline
 
 **Examples:**
 
 ```sh
-# Convert a local PDF file
-ez-rag to-markdown report.pdf
+# Convert a Word document to Markdown
+ez-rag to-document report.docx
 
-# Convert a local HTML file
-ez-rag to-markdown page.html
+# Convert a PowerPoint file to Markdown
+ez-rag to-document slides.pptx
+
+# Convert an Excel spreadsheet to a Markdown table
+ez-rag to-document data.xlsx
+
+# Convert a CSV file to a Markdown table
+ez-rag to-document data.csv
+
+# Convert an RTF file to plain text
+ez-rag to-document notes.rtf
+
+# Convert a local PDF file
+ez-rag to-document report.pdf
 
 # Convert a web page via HTTP
-ez-rag to-markdown https://example.com/docs/overview
-
-# Convert a PDF hosted over HTTPS
-ez-rag to-markdown https://example.com/report.pdf
+ez-rag to-document https://example.com/docs/overview
 ```
-
-The Markdown output for HTML inputs mirrors exactly what the ingestion pipeline produces when it ingests the same file, so you can preview the chunking-ready text before running `ingest`.
 
 **Options (PDF inputs only):**
 
-The following options apply only when the input is a PDF file or a URL that returns `application/pdf`. Passing any of them with an HTML input or a URL that returns HTML causes the command to exit 1 with an error.
+The following options apply only when the input is a PDF file or a URL that returns `application/pdf`. Passing any of them with a non-PDF input causes the command to exit 1 with an error.
 
-| Flag               | Default    | Description                                                             |
-|--------------------|------------|-------------------------------------------------------------------------|
-| `--mode`           | `readable` | Conversion mode: `readable` (preserves formatting) or `rag` (strips bold/italic noise for cleaner chunk text) |
-| `--max-pages N`    | unlimited  | Stop after converting the first N pages                                 |
-| `--output-format`  | `markdown` | Output format: `markdown` or `xml`                                      |
+| Flag                | Default    | Description                                                              |
+|---------------------|------------|--------------------------------------------------------------------------|
+| `--pdf-mode`        | `readable` | Conversion mode: `readable` (preserves formatting) or `rag` (strips bold/italic noise for cleaner chunk text) |
+| `--pdf-max-pages N` | unlimited  | Stop after converting the first N pages                                  |
 
 ```sh
 # RAG-optimised mode (strips bold/italic noise)
-ez-rag to-markdown report.pdf --mode rag
+ez-rag to-document report.pdf --pdf-mode rag
 
 # Convert only the first 5 pages
-ez-rag to-markdown report.pdf --max-pages 5
+ez-rag to-document report.pdf --pdf-max-pages 5
+```
 
-# XML output format
-ez-rag to-markdown report.pdf --output-format xml
+### to-chunks
+
+Run any supported file or URL through the full chunking pipeline and print every chunk with its metadata. Works standalone without an initialised store, making it easy to tune `--chunk-size` and `--chunk-overlap` before ingesting.
+
+**Supported inputs:** same as `to-document` — all file types accepted by `ingest` and HTTP/HTTPS URLs.
+
+**Options:**
+
+| Flag                | Default    | Description                                                               |
+|---------------------|------------|---------------------------------------------------------------------------|
+| `--output-format`   | `text`     | Output format: `text`, `json`, or `xml`                                   |
+| `--chunk-size N`    | `1000`     | Token count per chunk                                                     |
+| `--chunk-overlap N` | `200`      | Overlap between consecutive chunks                                        |
+| `--pdf-mode`        | `readable` | PDF conversion mode: `readable` or `rag` (PDF inputs only)               |
+| `--pdf-max-pages N` | unlimited  | Stop after the first N pages (PDF inputs only)                            |
+
+**Examples:**
+
+```sh
+# Default text output — human-readable chunk preview
+ez-rag to-chunks docs/architecture.md
+
+# Tune chunk size and inspect the result
+ez-rag to-chunks --chunk-size 500 --chunk-overlap 50 docs/architecture.md
+
+# JSON output — parse with jq
+ez-rag to-chunks --output-format json docs/architecture.md | jq '.chunks | length'
+
+# XML output — structured format for scripting or piping to other tools
+ez-rag to-chunks --output-format xml docs/architecture.md
+```
+
+**Text output format:**
+
+```
+[1] chunk=0  heading_path=Introduction > Overview
+chunk text here
+
+[2] chunk=1  heading_path=Introduction > Details
+chunk text here
+```
+
+Metadata fields are omitted when not present for a given file type (e.g., `heading_path` is absent for plain text files).
+
+**JSON output format:**
+
+```json
+{
+  "chunks": [
+    {"chunkIndex": 0, "headingPath": "Introduction > Overview", "content": "chunk text here"},
+    {"chunkIndex": 1, "headingPath": "Introduction > Details", "content": "chunk text here"}
+  ]
+}
+```
+
+**XML output format:**
+
+```xml
+<results>
+<result index="1" chunk="0" heading_path="Introduction &gt; Overview">
+chunk text here
+</result>
+<result index="2" chunk="1" heading_path="Introduction &gt; Details">
+chunk text here
+</result>
+</results>
 ```
 
 ## Hybrid search

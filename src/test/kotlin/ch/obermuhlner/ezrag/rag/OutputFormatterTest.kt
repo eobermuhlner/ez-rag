@@ -2,6 +2,7 @@ package ch.obermuhlner.ezrag.rag
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.springframework.ai.document.Document
 
 class OutputFormatterTest {
 
@@ -266,5 +267,169 @@ class OutputFormatterTest {
         // The key and values should be present
         assertThat(json).contains("docs/arch.md")
         assertThat(json).contains("docs/overview.md")
+    }
+
+    // ---- Document list (chunks) format tests ----
+
+    private fun chunkWithHeading(): Document {
+        return Document.builder()
+            .text("The architecture consists of three layers.")
+            .metadata(mapOf(
+                "chunk_index" to 0,
+                "heading_title" to "Overview",
+                "heading_level" to 2,
+                "heading_path" to listOf("Introduction", "Overview")
+            ))
+            .build()
+    }
+
+    private fun chunkWithoutHeading(): Document {
+        return Document.builder()
+            .text("Plain text content with no headings.")
+            .metadata(mapOf("chunk_index" to 1))
+            .build()
+    }
+
+    @Test
+    fun `formatText chunks first header line reads bracket-1-bracket chunk=0 heading_path`() {
+        val chunks = listOf(chunkWithHeading())
+        val output = formatter.formatText(chunks)
+
+        assertThat(output).contains("[1] chunk=0")
+        assertThat(output).contains("heading_path=Introduction > Overview")
+    }
+
+    @Test
+    fun `formatText chunks contains chunk text`() {
+        val chunks = listOf(chunkWithHeading())
+        val output = formatter.formatText(chunks)
+
+        assertThat(output).contains("The architecture consists of three layers.")
+    }
+
+    @Test
+    fun `formatText chunks has blank line between two chunks`() {
+        val chunks = listOf(chunkWithHeading(), chunkWithoutHeading())
+        val output = formatter.formatText(chunks)
+
+        assertThat(output).contains("\n\n")
+        assertThat(output).contains("[1] chunk=0")
+        assertThat(output).contains("[2] chunk=1")
+    }
+
+    @Test
+    fun `formatText chunks without heading_path omits heading_path in output`() {
+        val chunks = listOf(chunkWithoutHeading())
+        val output = formatter.formatText(chunks)
+
+        assertThat(output).doesNotContain("heading_path")
+    }
+
+    @Test
+    fun `formatText empty chunk list returns empty string`() {
+        val output = formatter.formatText(emptyList<Document>())
+
+        assertThat(output).isEmpty()
+    }
+
+    @Test
+    fun `formatJson chunks output parses as valid JSON with chunks array`() {
+        val chunks = listOf(chunkWithHeading())
+        val json = formatter.formatJson(chunks)
+
+        assertThat(json.trim()).startsWith("{")
+        assertThat(json.trim()).endsWith("}")
+        assertThat(json).contains("\"chunks\"")
+        assertThat(json).contains("[")
+    }
+
+    @Test
+    fun `formatJson chunks each entry contains chunkIndex and content`() {
+        val chunks = listOf(chunkWithHeading())
+        val json = formatter.formatJson(chunks)
+
+        assertThat(json).contains("\"chunkIndex\"")
+        assertThat(json).contains("\"content\"")
+        assertThat(json).contains("The architecture consists of three layers.")
+    }
+
+    @Test
+    fun `formatJson chunks with heading_path includes headingPath field`() {
+        val chunks = listOf(chunkWithHeading())
+        val json = formatter.formatJson(chunks)
+
+        assertThat(json).contains("\"headingPath\"")
+        assertThat(json).contains("Introduction > Overview")
+    }
+
+    @Test
+    fun `formatJson chunks without heading_path omits headingPath field`() {
+        val chunks = listOf(chunkWithoutHeading())
+        val json = formatter.formatJson(chunks)
+
+        assertThat(json).doesNotContain("\"headingPath\"")
+    }
+
+    @Test
+    fun `formatJson empty chunk list produces chunks empty array`() {
+        val json = formatter.formatJson(emptyList<Document>())
+
+        assertThat(json).contains("\"chunks\"")
+        assertThat(json).contains("[]")
+    }
+
+    @Test
+    fun `formatXml chunks produces results root element`() {
+        val chunks = listOf(chunkWithHeading())
+        val xml = formatter.formatXml(chunks)
+
+        assertThat(xml).startsWith("<results>")
+        assertThat(xml.trim()).endsWith("</results>")
+    }
+
+    @Test
+    fun `formatXml chunks each chunk produces result element with index and chunk attributes`() {
+        val chunks = listOf(chunkWithHeading())
+        val xml = formatter.formatXml(chunks)
+
+        assertThat(xml).contains("<result index=\"1\" chunk=\"0\"")
+        assertThat(xml).contains("The architecture consists of three layers.")
+        assertThat(xml).contains("</result>")
+    }
+
+    @Test
+    fun `formatXml chunks with heading_path includes heading_path attribute`() {
+        val chunks = listOf(chunkWithHeading())
+        val xml = formatter.formatXml(chunks)
+
+        assertThat(xml).contains("heading_path=\"Introduction &gt; Overview\"")
+    }
+
+    @Test
+    fun `formatXml chunks without heading_path omits heading_path attribute`() {
+        val chunks = listOf(chunkWithoutHeading())
+        val xml = formatter.formatXml(chunks)
+
+        assertThat(xml).doesNotContain("heading_path")
+    }
+
+    @Test
+    fun `formatXml empty chunk list produces empty results element`() {
+        val xml = formatter.formatXml(emptyList<Document>())
+
+        assertThat(xml).isEqualTo("<results></results>")
+    }
+
+    @Test
+    fun `formatJson chunks content with special characters is properly escaped`() {
+        val chunk = Document.builder()
+            .text("Line1\nLine2 with \"quotes\" and \\backslash")
+            .metadata(mapOf("chunk_index" to 0))
+            .build()
+        val json = formatter.formatJson(listOf(chunk))
+
+        assertThat(json).contains("\\n")
+        assertThat(json).contains("\\\"")
+        assertThat(json).contains("\\\\")
     }
 }
