@@ -4,7 +4,6 @@ import ch.obermuhlner.ezrag.ingestion.office.PowerPointFixtureGenerator
 import ch.obermuhlner.ezrag.ingestion.office.WordToMarkdownConverter
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -15,7 +14,7 @@ import java.nio.file.Paths
 class DocumentReaderRegistryTest {
 
     @Test
-    fun `supports returns true for txt, pdf, md, docx, doc, pptx, ppt, xlsx, and xls`() {
+    fun `supports returns true for txt, pdf, md, docx, doc, pptx, ppt, xlsx, xls, html, htm, and rtf`() {
         val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
 
         assertThat(registry.supports("txt")).isTrue()
@@ -27,14 +26,73 @@ class DocumentReaderRegistryTest {
         assertThat(registry.supports("ppt")).isTrue()
         assertThat(registry.supports("xlsx")).isTrue()
         assertThat(registry.supports("xls")).isTrue()
+        assertThat(registry.supports("html")).isTrue()
+        assertThat(registry.supports("htm")).isTrue()
+        assertThat(registry.supports("rtf")).isTrue()
+    }
+
+    @Test
+    fun `supports returns true for html`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("html")).isTrue()
+    }
+
+    @Test
+    fun `supports returns true for htm`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("htm")).isTrue()
+    }
+
+    @Test
+    fun `read dispatches html file and produces at least one chunk`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.html").toFile()
+        file.writeText("<html><head><title>Test</title></head><body><h2>Test Section</h2><p>Content here.</p></body></html>")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+    }
+
+    @Test
+    fun `read dispatches htm file and produces at least one chunk`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.htm").toFile()
+        file.writeText("<html><head><title>Test</title></head><body><h2>Test Section</h2><p>Content here.</p></body></html>")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+    }
+
+    @Test
+    fun `supports returns true for rtf`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("rtf")).isTrue()
+    }
+
+    @Test
+    fun `read dispatches rtf file and produces at least one chunk`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.rtf").toFile()
+        file.writeText("{\\rtf1\\ansi Hello world content for registry dispatch test.}")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
     }
 
     @Test
     fun `supports returns false for unknown extensions`() {
         val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
 
-        assertThat(registry.supports("csv")).isFalse()
         assertThat(registry.supports("odt")).isFalse()
+    }
+
+    @Test
+    fun `supports returns true for csv`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("csv")).isTrue()
     }
 
     @Test
@@ -115,15 +173,17 @@ class DocumentReaderRegistryTest {
     }
 
     @Test
-    fun `read throws IllegalArgumentException for unsupported extension`(@TempDir tempDir: Path) {
+    fun `read dispatches csv file and produces chunks`(@TempDir tempDir: Path) {
         val file = tempDir.resolve("data.csv").toFile()
-        file.writeText("col1,col2\nval1,val2")
+        file.writeText("col1,col2\nval1,val2\n")
 
         val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
 
-        assertThatThrownBy { registry.read(file) }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("csv")
+        assertThat(documents).isNotEmpty()
+        val allText = documents.joinToString(" ") { it.text ?: "" }
+        assertThat(allText).contains("col1")
+        assertThat(allText).contains("val1")
     }
 
     @Test

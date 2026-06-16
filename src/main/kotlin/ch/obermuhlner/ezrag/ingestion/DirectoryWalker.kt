@@ -10,7 +10,7 @@ class DirectoryWalker(
 ) {
 
     companion object {
-        val SUPPORTED_EXTENSIONS = setOf("txt", "pdf", "md", "docx", "doc", "pptx", "ppt", "xlsx", "xls")
+        val SUPPORTED_EXTENSIONS = setOf("txt", "pdf", "md", "docx", "doc", "pptx", "ppt", "xlsx", "xls", "html", "htm", "rtf", "csv")
     }
 
     fun walk(root: Path): List<Path> {

@@ -12,6 +12,7 @@ object ExcelFixtureGenerator {
 
     val fixturesDir = File("src/test/resources/fixtures").also { it.mkdirs() }
     val xlsxFile = File(fixturesDir, "sample.xlsx")
+    val xlsxManyRowsFile = File(fixturesDir, "sample_many_rows.xlsx")
 
     fun createXlsxFixture(file: File) {
         XSSFWorkbook().use { wb ->
@@ -42,6 +43,29 @@ object ExcelFixtureGenerator {
             detailsRow2.createCell(1).setCellValue("7")
             detailsRow2.createCell(2).setCellValue("Second item")
 
+            FileOutputStream(file).use { fos ->
+                wb.write(fos)
+            }
+        }
+    }
+
+    /**
+     * Creates an xlsx fixture with a single "Data" sheet containing 50 data rows,
+     * used to verify row-chunking behaviour in ExcelDocumentReader.
+     */
+    fun createXlsxManyRowsFixture(file: File) {
+        XSSFWorkbook().use { wb ->
+            val sheet = wb.createSheet("Data")
+            val header = sheet.createRow(0)
+            header.createCell(0).setCellValue("ID")
+            header.createCell(1).setCellValue("Name")
+            header.createCell(2).setCellValue("Description")
+            for (i in 1..50) {
+                val row = sheet.createRow(i)
+                row.createCell(0).setCellValue(i.toString())
+                row.createCell(1).setCellValue("Item$i")
+                row.createCell(2).setCellValue("Description for item number $i in the large fixture")
+            }
             FileOutputStream(file).use { fos ->
                 wb.write(fos)
             }

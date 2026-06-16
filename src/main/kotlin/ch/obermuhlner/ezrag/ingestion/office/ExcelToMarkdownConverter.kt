@@ -20,6 +20,65 @@ class ExcelToMarkdownConverter {
     }
 
     /**
+     * Extracts structured sheet data from an Excel file.
+     * Returns a list of triples: (sheetName, headerRow, dataRows).
+     * Each element in headerRow and dataRows is a list of cell values.
+     */
+    fun extractSheets(file: File, passwords: List<String> = emptyList()): List<Triple<String, List<String>, List<List<String>>>> {
+        return when {
+            file.name.lowercase().endsWith(".xlsx") -> extractSheetsXlsx(file, passwords)
+            file.name.lowercase().endsWith(".xls")  -> extractSheetsXls(file)
+            else -> throw IllegalArgumentException("Unsupported Excel format: ${file.name}")
+        }
+    }
+
+    private fun extractSheetsXlsx(file: File, passwords: List<String>): List<Triple<String, List<String>, List<List<String>>>> {
+        val formatter = DataFormatter()
+        return openXlsx(file, passwords).use { wb ->
+            (0 until wb.numberOfSheets).map { sheetIndex ->
+                val sheet = wb.getSheetAt(sheetIndex)
+                val sheetName = wb.getSheetName(sheetIndex)
+                extractSheetData(formatter, sheet.rowIterator(), sheetName)
+            }
+        }
+    }
+
+    private fun extractSheetsXls(file: File): List<Triple<String, List<String>, List<List<String>>>> {
+        val formatter = DataFormatter()
+        return FileInputStream(file).use { fis ->
+            HSSFWorkbook(fis).use { wb ->
+                (0 until wb.numberOfSheets).map { sheetIndex ->
+                    val sheet = wb.getSheetAt(sheetIndex)
+                    val sheetName = wb.getSheetName(sheetIndex)
+                    extractSheetData(formatter, sheet.rowIterator(), sheetName)
+                }
+            }
+        }
+    }
+
+    private fun extractSheetData(
+        formatter: DataFormatter,
+        rowIterator: Iterator<org.apache.poi.ss.usermodel.Row>,
+        sheetName: String,
+    ): Triple<String, List<String>, List<List<String>>> {
+        val allRows = mutableListOf<List<String>>()
+        while (rowIterator.hasNext()) {
+            val row = rowIterator.next()
+            val lastCellNum = row.lastCellNum.toInt()
+            if (lastCellNum <= 0) continue
+            val cellValues = (0 until lastCellNum).map { cellIndex ->
+                val cell = row.getCell(cellIndex)
+                if (cell == null) "" else formatter.formatCellValue(cell).trim()
+            }
+            if (cellValues.all { it.isEmpty() }) continue
+            allRows.add(cellValues)
+        }
+        val header = if (allRows.isNotEmpty()) allRows[0] else emptyList()
+        val dataRows = if (allRows.size > 1) allRows.subList(1, allRows.size) else emptyList()
+        return Triple(sheetName, header, dataRows)
+    }
+
+    /**
      * Try to open the file as an unencrypted XLSX first; if that fails with an
      * OLE2 / encryption exception, iterate [passwords] until one decrypts it.
      */

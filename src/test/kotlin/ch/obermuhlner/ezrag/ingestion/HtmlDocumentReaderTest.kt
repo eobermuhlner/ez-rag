@@ -2,6 +2,8 @@ package ch.obermuhlner.ezrag.ingestion
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
 
 class HtmlDocumentReaderTest {
 
@@ -309,6 +311,38 @@ class HtmlDocumentReaderTest {
         val headingChunk = docs.find { it.metadata["heading_title"] == "Section Title" }
         assertThat(headingChunk).isNotNull()
         assertThat(headingChunk!!.metadata["heading_level"]).isEqualTo(2)
+    }
+
+    @Test
+    fun `reader constructed from dot html File produces at least one chunk`(@TempDir tempDir: Path) {
+        val htmlFile = tempDir.resolve("page.html").toFile()
+        htmlFile.writeText("""
+            <html><head><title>File Test</title></head>
+            <body>
+              <h2>File Section</h2>
+              <p>Content loaded from a local html file.</p>
+            </body></html>
+        """.trimIndent())
+
+        val docs = HtmlDocumentReader(htmlFile).read()
+
+        assertThat(docs).isNotEmpty()
+    }
+
+    @Test
+    fun `reader constructed from dot htm File produces at least one chunk`(@TempDir tempDir: Path) {
+        val htmFile = tempDir.resolve("page.htm").toFile()
+        htmFile.writeText("""
+            <html><head><title>HTM File Test</title></head>
+            <body>
+              <h2>HTM Section</h2>
+              <p>Content loaded from a local htm file.</p>
+            </body></html>
+        """.trimIndent())
+
+        val docs = HtmlDocumentReader(htmFile).read()
+
+        assertThat(docs).isNotEmpty()
     }
 
     @Test

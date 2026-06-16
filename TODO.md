@@ -1,2 +1,6 @@
-- use Apache POI for reading MS Office files to ingest a document
-- use Apache Tika for remaining file types (?)
+- add parsing/chunking fallback for all text file formats
+- add parsing/chunking fallback for all binary file formats (simple text stripping) ?
+- add parsing/chunking for xml
+- add parsing/chunking for document text file formats (adoc, ...)
+- add table with supported file formats and parsing/chunking information
+- support for indexing source code

@@ -140,14 +140,14 @@ class IngestServiceTest {
 
     @Test
     fun `ingest warns and skips file with unsupported extension`(@TempDir tempDir: Path) {
-        val unsupported = tempDir.resolve("data.csv")
-        unsupported.toFile().writeText("col1,col2\nval1,val2")
+        val unsupported = tempDir.resolve("data.odt")
+        unsupported.toFile().writeText("unsupported content")
         val warnings = StringWriter()
         withIngestService(tempDir, warningWriter = PrintWriter(warnings, true)) { service ->
             val result = service.ingest(listOf(unsupported.toFile()))
             assertThat(result.filesIngested).isEqualTo(0)
             assertThat(result.chunksCreated).isEqualTo(0)
-            assertThat(warnings.toString()).contains("data.csv")
+            assertThat(warnings.toString()).contains("data.odt")
         }
     }
 

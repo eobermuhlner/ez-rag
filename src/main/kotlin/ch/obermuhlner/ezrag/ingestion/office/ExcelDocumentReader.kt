@@ -1,6 +1,6 @@
 package ch.obermuhlner.ezrag.ingestion.office
 
-import ch.obermuhlner.ezrag.ingestion.MarkdownDocumentReader
+import ch.obermuhlner.ezrag.ingestion.TableChunker
 import org.springframework.ai.document.Document
 import java.io.File
 
@@ -12,7 +12,17 @@ class ExcelDocumentReader(
 ) {
 
     fun read(): List<Document> {
-        val markdown = ExcelToMarkdownConverter().convert(file, passwords)
-        return MarkdownDocumentReader(markdown, chunkSize, chunkOverlap).read()
+        val converter = ExcelToMarkdownConverter()
+        val sheets = converter.extractSheets(file, passwords)
+        val chunker = TableChunker(chunkSize)
+        val documents = mutableListOf<Document>()
+        for ((sheetName, header, dataRows) in sheets) {
+            val chunks = chunker.chunk(header, dataRows)
+            for (chunk in chunks) {
+                val text = "## $sheetName\n$chunk"
+                documents.add(Document(text))
+            }
+        }
+        return documents
     }
 }

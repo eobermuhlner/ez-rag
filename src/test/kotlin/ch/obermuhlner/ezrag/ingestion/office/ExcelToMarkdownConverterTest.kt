@@ -13,6 +13,7 @@ class ExcelToMarkdownConverterTest {
         @BeforeAll
         fun createFixtures() {
             ExcelFixtureGenerator.createXlsxFixture(ExcelFixtureGenerator.xlsxFile)
+            ExcelFixtureGenerator.createXlsxManyRowsFixture(ExcelFixtureGenerator.xlsxManyRowsFile)
         }
     }
 
@@ -91,5 +92,70 @@ class ExcelToMarkdownConverterTest {
         val result = converter.convert(legacyXls)
 
         assertThat(result).isNotBlank()
+    }
+
+    // ---- New row-chunking tests using ExcelDocumentReader ----
+
+    @Test
+    fun `many-row sheet produces more than one chunk with small chunkSize`() {
+        // chunkSize=100 is small enough to force multiple chunks for 50 rows
+        val reader = ExcelDocumentReader(ExcelFixtureGenerator.xlsxManyRowsFile, chunkSize = 100)
+        val docs = reader.read()
+
+        assertThat(docs.size).isGreaterThan(1)
+    }
+
+    @Test
+    fun `every chunk contains the sheet header column names`() {
+        val reader = ExcelDocumentReader(ExcelFixtureGenerator.xlsxManyRowsFile, chunkSize = 100)
+        val docs = reader.read()
+
+        docs.forEach { doc ->
+            val text = doc.text ?: ""
+            assertThat(text).contains("ID")
+            assertThat(text).contains("Name")
+            assertThat(text).contains("Description")
+        }
+    }
+
+    @Test
+    fun `no data row is split across two chunks`() {
+        val reader = ExcelDocumentReader(ExcelFixtureGenerator.xlsxManyRowsFile, chunkSize = 100)
+        val docs = reader.read()
+
+        // Each row has a unique "Description for item number <N> in the large fixture" phrase;
+        // verify each appears in exactly one chunk
+        for (i in 1..50) {
+            val label = "Description for item number $i in the large fixture"
+            val chunksContaining = docs.count { (it.text ?: "").contains(label) }
+            assertThat(chunksContaining)
+                .withFailMessage("Row description for item $i appeared in $chunksContaining chunks (expected 1)")
+                .isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `no row appears in more than one chunk (non-overlapping)`() {
+        val reader = ExcelDocumentReader(ExcelFixtureGenerator.xlsxManyRowsFile, chunkSize = 100)
+        val docs = reader.read()
+
+        // Use the unique description phrase to identify each row unambiguously
+        for (i in 1..50) {
+            val uniquePhrase = "Description for item number $i in the large fixture"
+            val chunksContaining = docs.count { (it.text ?: "").contains(uniquePhrase) }
+            assertThat(chunksContaining)
+                .withFailMessage("Row for item $i appeared in $chunksContaining chunks (expected 1)")
+                .isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `every chunk text begins with sheet name heading`() {
+        val reader = ExcelDocumentReader(ExcelFixtureGenerator.xlsxManyRowsFile, chunkSize = 100)
+        val docs = reader.read()
+
+        docs.forEach { doc ->
+            assertThat(doc.text ?: "").startsWith("## Data")
+        }
     }
 }

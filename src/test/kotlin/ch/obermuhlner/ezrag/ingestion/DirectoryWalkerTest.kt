@@ -27,10 +27,37 @@ class DirectoryWalkerTest {
     }
 
     @Test
+    fun `walk includes html and htm files in results`(@TempDir tempDir: Path) {
+        tempDir.resolve("page.html").toFile().writeText("<html><body><p>html content</p></body></html>")
+        tempDir.resolve("page.htm").toFile().writeText("<html><body><p>htm content</p></body></html>")
+        tempDir.resolve("ignored.xyz").toFile().writeText("unsupported")
+
+        val walker = DirectoryWalker()
+        val paths = walker.walk(tempDir)
+
+        val names = paths.map { it.fileName.toString() }
+        assertThat(names).contains("page.html")
+        assertThat(names).contains("page.htm")
+        assertThat(names).doesNotContain("ignored.xyz")
+    }
+
+    @Test
+    fun `walk includes rtf files in results`(@TempDir tempDir: Path) {
+        tempDir.resolve("doc.rtf").toFile().writeText("{\\rtf1\\ansi rtf content}")
+        tempDir.resolve("ignored.xyz").toFile().writeText("unsupported")
+
+        val walker = DirectoryWalker()
+        val paths = walker.walk(tempDir)
+
+        val names = paths.map { it.fileName.toString() }
+        assertThat(names).contains("doc.rtf")
+        assertThat(names).doesNotContain("ignored.xyz")
+    }
+
+    @Test
     fun `walk emits a warning for each unsupported file`(@TempDir tempDir: Path) {
         tempDir.resolve("valid.txt").toFile().writeText("text")
         tempDir.resolve("bad.xyz").toFile().writeText("unsupported")
-        tempDir.resolve("bad2.csv").toFile().writeText("also unsupported")
 
         val warningOutput = StringWriter()
         val walker = DirectoryWalker(PrintWriter(warningOutput))
@@ -38,7 +65,24 @@ class DirectoryWalkerTest {
 
         val warnings = warningOutput.toString()
         assertThat(warnings).contains("bad.xyz")
-        assertThat(warnings).contains("bad2.csv")
+    }
+
+    @Test
+    fun `walk includes csv files in results and does not emit warning for them`(@TempDir tempDir: Path) {
+        tempDir.resolve("data.csv").toFile().writeText("col1,col2\nval1,val2")
+        tempDir.resolve("ignored.xyz").toFile().writeText("unsupported")
+
+        val warningOutput = StringWriter()
+        val walker = DirectoryWalker(PrintWriter(warningOutput))
+        val paths = walker.walk(tempDir)
+
+        val names = paths.map { it.fileName.toString() }
+        assertThat(names).contains("data.csv")
+        assertThat(names).doesNotContain("ignored.xyz")
+
+        val warnings = warningOutput.toString()
+        assertThat(warnings).doesNotContain("data.csv")
+        assertThat(warnings).contains("ignored.xyz")
     }
 
     @Test

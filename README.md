@@ -71,7 +71,7 @@ No configuration needed — works out of the box:
 
 ```sh
 # Ingest a single file (downloads embedding model on first run)
-# Supported file types: .txt, .pdf, .md, .html / .htm, .docx, .doc, .xlsx, .xls, .pptx, .ppt
+# Supported file types: .txt, .pdf, .md, .html / .htm, .csv, .rtf, .docx, .doc, .xlsx, .xls, .pptx, .ppt
 ez-rag ingest README.md
 
 # Ingest a webpage
@@ -138,7 +138,7 @@ A document is marked `[STALE]` when its filesystem mtime has changed since the l
 |--------------------------------|----------------------------------------------------------------------------------------------------|
 | `init`                         | Initialize a `.ez-rag/` workspace in the current directory and add the store to `.gitignore`.      |
 | `install-skill`                | Install the ez-rag skill for your AI coding tool. Auto-detects Claude Code, OpenCode, or falls back to generic. |
-| `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`. Prints each file as it is ingested. |
+| `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.csv`, `.rtf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`. Prints each file as it is ingested. |
 | `delete <file> [<file>...]`    | Remove one or more ingested documents from the vector store without touching other content.        |
 | `list`                         | List all ingested documents with chunk counts and staleness flags. Use `--output-format json` for machine-readable output with absolute paths. |
 | `reingest`                     | Re-ingest all stale documents (mtime changed since last ingest). Use `--all` to force re-ingest of every document. |
@@ -218,7 +218,7 @@ ez-rag install-skill --tool claude-code --tool opencode
 
 ### ingest
 
-Ingest files or directories into the vector store. Supported file types: `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`.
+Ingest files or directories into the vector store. Supported file types: `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.csv`, `.rtf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`.
 
 ```sh
 ez-rag ingest ./docs
