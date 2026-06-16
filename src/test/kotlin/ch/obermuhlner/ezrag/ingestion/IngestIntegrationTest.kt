@@ -115,8 +115,8 @@ class IngestIntegrationTest {
     }
 
     @Test
-    fun `ingest a mixed directory produces 3 files ingested and warning for unsupported file`(@TempDir tempDir: Path) {
-        // Create a temp directory with supported and unsupported files
+    fun `ingest a mixed directory ingests all text files including unknown extensions and skips binary files`(@TempDir tempDir: Path) {
+        // Create a temp directory with known and unknown extensions, plus a binary file
         val docsDir = tempDir.resolve("docs")
         docsDir.toFile().mkdirs()
         docsDir.resolve("file.txt").toFile().writeText("Text content for ingestion testing.")
@@ -126,7 +126,11 @@ class IngestIntegrationTest {
         val pdfSource = Paths.get(javaClass.getResource("/documents/sample.pdf")!!.toURI())
         docsDir.resolve("file.pdf").toFile().writeBytes(pdfSource.toFile().readBytes())
 
-        docsDir.resolve("file.xyz").toFile().writeText("unsupported content")
+        // Unknown extension with plain text — now ingested as fallback plain text
+        docsDir.resolve("file.xyz").toFile().writeText("plain text with unknown extension")
+
+        // Binary file with unknown extension — should be skipped with a warning
+        docsDir.resolve("binary.bin").toFile().writeBytes(byteArrayOf(0x00, 0x01, 0x02, 0x03))
 
         val out = StringWriter()
         val warn = StringWriter()
@@ -135,10 +139,12 @@ class IngestIntegrationTest {
 
         assertThat(exitCode).isEqualTo(0)
         val summary = out.toString()
-        assertThat(summary).contains("3 files ingested")
+        // txt, md, pdf, file.xyz are all ingested (4 files)
+        assertThat(summary).contains("4 files ingested")
 
         val warnings = warn.toString()
-        assertThat(warnings).contains("file.xyz")
+        // binary.bin should be skipped with a warning
+        assertThat(warnings).contains("binary.bin")
     }
 
     @Test

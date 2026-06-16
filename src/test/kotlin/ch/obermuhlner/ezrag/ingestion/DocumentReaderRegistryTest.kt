@@ -90,6 +90,52 @@ class DocumentReaderRegistryTest {
     }
 
     @Test
+    fun `read falls back to plain text for unknown extension containing plain text`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("config.yaml").toFile()
+        file.writeText("key: value\nother: data\n")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+    }
+
+    @Test
+    fun `read throws IllegalArgumentException for unknown extension file containing null byte`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("data.xyz").toFile()
+        file.writeBytes(byteArrayOf(0x68, 0x00, 0x65, 0x6c, 0x6c, 0x6f))
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException::class.java) {
+            registry.read(file)
+        }
+    }
+
+    @Test
+    fun `read falls back to plain text for file with no extension`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("Makefile").toFile()
+        file.writeText("all:\n\techo hello\n")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+    }
+
+    @Test
+    fun `read throws IllegalArgumentException for no-extension file containing null byte`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("Dockerfile").toFile()
+        file.writeBytes(byteArrayOf(0x46, 0x52, 0x4f, 0x4d, 0x00, 0x62, 0x61, 0x73, 0x65))
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException::class.java) {
+            registry.read(file)
+        }
+    }
+
+    @Test
     fun `supports returns true for csv`() {
         val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
         assertThat(registry.supports("csv")).isTrue()

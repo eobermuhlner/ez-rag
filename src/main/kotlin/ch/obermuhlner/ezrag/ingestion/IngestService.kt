@@ -47,15 +47,7 @@ open class IngestService(
                             warningWriter.println("Warning: Path does not exist: $file")
                             emptyList()
                         }
-                        else -> {
-                            val ext = file.name.substringAfterLast('.', "").lowercase()
-                            if (ext !in DirectoryWalker.SUPPORTED_EXTENSIONS) {
-                                warningWriter.println("Warning: Skipping unsupported file type: $file")
-                                emptyList()
-                            } else {
-                                listOf(source)
-                            }
-                        }
+                        else -> listOf(source)
                     }
                 }
                 is UrlSource -> listOf(source)
@@ -86,6 +78,10 @@ open class IngestService(
                     onFileIngesting?.invoke(absolutePath)
                     val rawChunks = try {
                         registry.read(absolutePath.toFile())
+                    } catch (e: IllegalArgumentException) {
+                        warningWriter.println("Warning: Skipping binary file: $absolutePath — ${e.message}")
+                        skipped++
+                        continue
                     } catch (e: IllegalStateException) {
                         if (e.message?.contains("Cannot open encrypted file") == true) {
                             warningWriter.println("WARN: Cannot open encrypted file, skipping: $absolutePath")
@@ -160,11 +156,23 @@ open class IngestService(
                             }
                         }
                         else -> {
-                            warningWriter.println(
-                                "Warning: Unsupported content type '${fetchResult.contentType}' for URL: $url"
-                            )
-                            skipped++
-                            continue
+                            // Fallback: binary detection on the raw bytes
+                            if (BinaryDetector.isBinary(fetchResult.bytes)) {
+                                warningWriter.println(
+                                    "Warning: Skipping binary content at URL: $url (content-type: ${fetchResult.contentType})"
+                                )
+                                skipped++
+                                continue
+                            }
+                            // Text content — ingest as plain text using a temp file
+                            val tempDir = tempDirProvider()
+                            val tempFile = Files.createTempFile(tempDir, "ez-rag-txt-", ".txt").toFile()
+                            try {
+                                tempFile.writeBytes(fetchResult.bytes)
+                                PlainTextDocumentReader(tempFile, chunkSize, chunkOverlap).read()
+                            } finally {
+                                tempFile.delete()
+                            }
                         }
                     }
 

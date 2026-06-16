@@ -139,15 +139,65 @@ class IngestServiceTest {
     }
 
     @Test
-    fun `ingest warns and skips file with unsupported extension`(@TempDir tempDir: Path) {
-        val unsupported = tempDir.resolve("data.odt")
-        unsupported.toFile().writeText("unsupported content")
+    fun `ingest ingests file with unknown extension containing plain text`(@TempDir tempDir: Path) {
+        val unknownExt = tempDir.resolve("data.odt")
+        unknownExt.toFile().writeText("This is plain text content in an unknown extension file.")
+        withIngestService(tempDir) { service ->
+            val result = service.ingest(listOf(unknownExt.toFile()))
+            assertThat(result.filesIngested).isEqualTo(1)
+            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+            assertThat(result.skipped).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `ingest yaml file produces ingested greater than zero and skipped equals zero`(@TempDir tempDir: Path) {
+        val yamlFile = tempDir.resolve("config.yaml")
+        yamlFile.toFile().writeText("key: value\nother: data\nmore: stuff here for chunking\n")
+        withIngestService(tempDir) { service ->
+            val result = service.ingest(listOf(yamlFile.toFile()))
+            assertThat(result.filesIngested).isEqualTo(1)
+            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+            assertThat(result.skipped).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `ingest no-extension Makefile produces ingested greater than zero`(@TempDir tempDir: Path) {
+        val makefile = tempDir.resolve("Makefile")
+        makefile.toFile().writeText("all:\n\techo hello\nbuild:\n\techo building\n")
+        withIngestService(tempDir) { service ->
+            val result = service.ingest(listOf(makefile.toFile()))
+            assertThat(result.filesIngested).isEqualTo(1)
+            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `ingest binary file with unknown extension produces skipped equals 1 and ingested equals 0`(@TempDir tempDir: Path) {
+        val binaryFile = tempDir.resolve("compiled.obj")
+        binaryFile.toFile().writeBytes(byteArrayOf(0x4d, 0x5a, 0x00, 0x01, 0x02, 0x03))
         val warnings = StringWriter()
         withIngestService(tempDir, warningWriter = PrintWriter(warnings, true)) { service ->
-            val result = service.ingest(listOf(unsupported.toFile()))
+            val result = service.ingest(listOf(binaryFile.toFile()))
             assertThat(result.filesIngested).isEqualTo(0)
-            assertThat(result.chunksCreated).isEqualTo(0)
-            assertThat(warnings.toString()).contains("data.odt")
+            assertThat(result.skipped).isEqualTo(1)
+            val w = warnings.toString().lowercase()
+            assertThat(w).satisfiesAnyOf(
+                { s -> assertThat(s as String).contains("binary") },
+                { s -> assertThat(s as String).contains("skipping") }
+            )
+        }
+    }
+
+    @Test
+    fun `ingest directory with one text yaml and one binary file produces ingested 1 and skipped 1`(@TempDir tempDir: Path, @TempDir storeDir: Path) {
+        tempDir.resolve("config.yaml").toFile().writeText("key: value\nother: data\n")
+        tempDir.resolve("compiled.bin").toFile().writeBytes(byteArrayOf(0x00, 0x01, 0x02, 0x03))
+        withIngestService(storeDir) { service ->
+            val result = service.ingest(listOf(tempDir.toFile()))
+            assertThat(result.filesIngested).isEqualTo(1)
+            assertThat(result.skipped).isEqualTo(1)
         }
     }
 
@@ -367,17 +417,67 @@ class IngestServiceTest {
     }
 
     @Test
-    fun `unsupported content type emits warning and increments skipped`(@TempDir tempDir: Path) {
+    fun `unsupported content type with binary body emits warning and increments skipped`(@TempDir tempDir: Path) {
         val url = "https://example.com/image.png"
-        val fakeUrlFetcher = makeFakeUrlFetcher(url, html = "PNG_DATA", contentType = "image/png")
+        // Body contains a null byte so binary detection fires → skipped
+        val binaryBody = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x00, 0x0d, 0x0a, 0x1a)
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, contentType = "image/png", bytes = binaryBody)
 
         val warnings = StringWriter()
         withIngestService(tempDir, warningWriter = PrintWriter(warnings, true), urlFetcher = fakeUrlFetcher) { service ->
             val result = service.ingest(listOf(UrlSource(url)))
             assertThat(result.filesIngested).isEqualTo(0)
             assertThat(result.skipped).isEqualTo(1)
-            assertThat(warnings.toString()).contains("image/png")
+            val w = warnings.toString().lowercase()
+            assertThat(w).satisfiesAnyOf(
+                { s -> assertThat(s as String).contains("binary") },
+                { s -> assertThat(s as String).contains("skipping") }
+            )
         }
+    }
+
+    @Test
+    fun `URL with application_json content type and plain text body produces ingested greater than zero`(@TempDir tempDir: Path) {
+        val url = "https://api.example.com/data.json"
+        val jsonBody = """{"items":["alpha","beta","gamma","delta","epsilon","zeta","eta","theta"]}""".toByteArray()
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, contentType = "application/json", bytes = jsonBody)
+        withIngestService(tempDir, urlFetcher = fakeUrlFetcher) { service ->
+            val result = service.ingest(listOf(UrlSource(url)))
+            assertThat(result.filesIngested).isEqualTo(1)
+            assertThat(result.chunksCreated).isGreaterThanOrEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `URL with unrecognised content type and binary body produces skipped equals 1 and warning`(@TempDir tempDir: Path) {
+        val url = "https://example.com/data.bin"
+        // Body starts with a null byte → binary
+        val binaryBody = byteArrayOf(0x00, 0x01, 0x02, 0x03, 0x04)
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, contentType = "application/octet-stream", bytes = binaryBody)
+
+        val warnings = StringWriter()
+        withIngestService(tempDir, warningWriter = PrintWriter(warnings, true), urlFetcher = fakeUrlFetcher) { service ->
+            val result = service.ingest(listOf(UrlSource(url)))
+            assertThat(result.filesIngested).isEqualTo(0)
+            assertThat(result.skipped).isEqualTo(1)
+            val w = warnings.toString().lowercase()
+            assertThat(w).satisfiesAnyOf(
+                { s -> assertThat(s as String).contains("binary") },
+                { s -> assertThat(s as String).contains("skipping") }
+            )
+        }
+    }
+
+    @Test
+    fun `URL text fallback leaves no temp files in injected temp dir after ingest`(@TempDir tempDir: Path, @TempDir urlTempDir: Path) {
+        val url = "https://api.example.com/data.json"
+        val jsonBody = """{"items":["alpha","beta","gamma","delta","epsilon","zeta","eta","theta"]}""".toByteArray()
+        val fakeUrlFetcher = makeFakeUrlFetcher(url, contentType = "application/json", bytes = jsonBody)
+        withIngestService(tempDir, urlFetcher = fakeUrlFetcher, tempDirProvider = { urlTempDir }) { service ->
+            service.ingest(listOf(UrlSource(url)))
+        }
+
+        assertThat(urlTempDir.toFile().listFiles()).isEmpty()
     }
 
     @Test

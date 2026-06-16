@@ -33,7 +33,13 @@ class DocumentReaderRegistry(
     fun read(file: File): List<Document> {
         val extension = file.name.substringAfterLast('.', "").lowercase()
         val readerFn = readers[extension]
-            ?: throw IllegalArgumentException("Unsupported file type: .$extension")
-        return readerFn(file)
+        if (readerFn != null) return readerFn(file)
+
+        // Fallback: binary detection — read up to 8 KB and check for null bytes
+        val bytes = file.inputStream().use { it.readNBytes(8192) }
+        if (BinaryDetector.isBinary(bytes)) {
+            throw IllegalArgumentException("Binary file detected, skipping: ${file.name}")
+        }
+        return PlainTextDocumentReader(file, chunkSize, chunkOverlap).read()
     }
 }
