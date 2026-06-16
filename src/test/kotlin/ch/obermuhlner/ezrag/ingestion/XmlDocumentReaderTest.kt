@@ -6,19 +6,20 @@ import org.junit.jupiter.api.Test
 class XmlDocumentReaderTest {
 
     @Test
-    fun `simple element with text produces element colon text in chunk`() {
+    fun `simple element with text produces section heading and relative body line`() {
         val xml = "<root><name>myapp</name></root>"
         val docs = XmlDocumentReader(xml).read()
         val allText = docs.joinToString("\n") { it.text ?: "" }
-        assertThat(allText).contains("root > name: myapp")
+        assertThat(allText).contains("## root")
+        assertThat(allText).contains("name: myapp")
     }
 
     @Test
-    fun `nested elements produce full parent greater child colon text path in chunk`() {
+    fun `nested elements produce relative path body line`() {
         val xml = "<a><b><c>hello</c></b></a>"
         val docs = XmlDocumentReader(xml).read()
         val allText = docs.joinToString("\n") { it.text ?: "" }
-        assertThat(allText).contains("a > b > c: hello")
+        assertThat(allText).contains("b > c: hello")
     }
 
     @Test
@@ -26,8 +27,7 @@ class XmlDocumentReaderTest {
         val xml = "<root>\n  <name>myapp</name>\n</root>"
         val docs = XmlDocumentReader(xml).read()
         val allText = docs.joinToString("\n") { it.text ?: "" }
-        // The only content line should be root > name: myapp, not extra blank lines
-        assertThat(allText).contains("root > name: myapp")
+        assertThat(allText).contains("name: myapp")
         // Whitespace-only should not produce lines like "root: "
         val lines = allText.lines().filter { it.startsWith("root:") }
         assertThat(lines).isEmpty()
@@ -44,19 +44,19 @@ class XmlDocumentReaderTest {
     }
 
     @Test
-    fun `element with attribute produces element bracket attr equals val colon text notation`() {
+    fun `element with attribute produces bracket attr equals val notation in body line`() {
         val xml = """<root><string name="key">Hello</string></root>"""
         val docs = XmlDocumentReader(xml).read()
         val allText = docs.joinToString("\n") { it.text ?: "" }
-        assertThat(allText).contains("root > string[name=key]: Hello")
+        assertThat(allText).contains("string[name=key]: Hello")
     }
 
     @Test
-    fun `element with only attributes and no text produces element bracket attr bracket with no colon value suffix`() {
+    fun `element with only attributes and no text produces no colon value suffix`() {
         val xml = """<beans><bean id="ds" class="DS"/></beans>"""
         val docs = XmlDocumentReader(xml).read()
         val allText = docs.joinToString("\n") { it.text ?: "" }
-        assertThat(allText).contains("beans > bean[id=ds][class=DS]")
+        assertThat(allText).contains("bean[id=ds][class=DS]")
         // Should NOT end with ": " when no text content
         assertThat(allText).doesNotContain("bean[id=ds][class=DS]: ")
     }
@@ -98,23 +98,42 @@ class XmlDocumentReaderTest {
     }
 
     @Test
-    fun `every chunk carries xml_root metadata equal to document root element local name`() {
+    fun `every chunk carries heading_title metadata`() {
         val xml = "<project><name>myapp</name></project>"
         val docs = XmlDocumentReader(xml).read()
         assertThat(docs).isNotEmpty()
         docs.forEach { doc ->
-            assertThat(doc.metadata["xml_root"]).isEqualTo("project")
+            assertThat(doc.metadata).containsKey("heading_title")
         }
     }
 
     @Test
-    fun `xml_root metadata strips namespace prefix from root element name`() {
-        val xml = """<ns:project xmlns:ns="http://example.com"><ns:name>app</ns:name></ns:project>"""
+    fun `every chunk carries heading_path metadata`() {
+        val xml = "<project><name>myapp</name></project>"
         val docs = XmlDocumentReader(xml).read()
         assertThat(docs).isNotEmpty()
         docs.forEach { doc ->
-            assertThat(doc.metadata["xml_root"]).isEqualTo("project")
+            assertThat(doc.metadata).containsKey("heading_path")
         }
+    }
+
+    @Test
+    fun `xml_root metadata key is absent from all chunks`() {
+        val xml = "<project><name>myapp</name></project>"
+        val docs = XmlDocumentReader(xml).read()
+        assertThat(docs).isNotEmpty()
+        docs.forEach { doc ->
+            assertThat(doc.metadata).doesNotContainKey("xml_root")
+        }
+    }
+
+    @Test
+    fun `namespace prefix stripped from root element name in heading`() {
+        val xml = """<ns:project xmlns:ns="http://example.com"><ns:name>app</ns:name></ns:project>"""
+        val docs = XmlDocumentReader(xml).read()
+        val allText = docs.joinToString("\n") { it.text ?: "" }
+        assertThat(allText).contains("## project")
+        assertThat(allText).doesNotContain("## ns:project")
     }
 
     @Test
@@ -125,7 +144,7 @@ class XmlDocumentReaderTest {
     }
 
     @Test
-    fun `large XML with many elements produces at least 2 chunks`() {
+    fun `large XML with many repeated elements produces at least 2 chunks`() {
         val items = (1..200).joinToString("\n") { i -> "<item><id>$i</id><description>This is item number $i with some description text to fill up the chunk</description></item>" }
         val xml = "<catalog>$items</catalog>"
         val docs = XmlDocumentReader(xml, chunkSize = 200, chunkOverlap = 20).read()
@@ -137,5 +156,31 @@ class XmlDocumentReaderTest {
         val xml = "<!-- only a comment -->"
         val docs = XmlDocumentReader(xml).read()
         assertThat(docs).isNullOrEmpty()
+    }
+
+    @Test
+    fun `XML with repeated siblings produces chunks with heading_path metadata containing element path`() {
+        val xml = """<dependencies>
+            <dependency><groupId>org.spring</groupId></dependency>
+            <dependency><groupId>junit</groupId></dependency>
+        </dependencies>"""
+        val docs = XmlDocumentReader(xml).read()
+        assertThat(docs).isNotEmpty()
+        val allHeadingPaths = docs.flatMap {
+            @Suppress("UNCHECKED_CAST")
+            (it.metadata["heading_path"] as? List<String>) ?: emptyList()
+        }
+        assertThat(allHeadingPaths.any { it.contains("dependency") }).isTrue()
+    }
+
+    @Test
+    fun `XML with no repeated siblings produces chunk containing all leaf content`() {
+        val xml = "<config><host>localhost</host><port>5432</port><database>mydb</database></config>"
+        val docs = XmlDocumentReader(xml).read()
+        assertThat(docs).isNotEmpty()
+        val allText = docs.joinToString("\n") { it.text ?: "" }
+        assertThat(allText).contains("host: localhost")
+        assertThat(allText).contains("port: 5432")
+        assertThat(allText).contains("database: mydb")
     }
 }

@@ -1,3 +1,4 @@
+- add eval corpus for the new supported file formats.
 - add parsing/chunking for document text file formats (adoc, ...)
 - generalize `to-markdown` sub-command for all processed file types (before chunking) name to be defined. Consider also `to-chunks` for after chunking.
 - add table with supported file formats and parsing/chunking information
