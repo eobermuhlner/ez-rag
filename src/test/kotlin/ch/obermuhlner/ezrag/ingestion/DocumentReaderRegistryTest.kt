@@ -324,17 +324,8 @@ class DocumentReaderRegistryTest {
     }
 
     @Test
-    fun `read dispatches kt file using source-code-aware reader and produces chunks with language kotlin`(@TempDir tempDir: Path) {
-        val file = tempDir.resolve("Sample.kt").toFile()
-        file.writeText("""
-            package com.example
-
-            class Sample {
-                fun hello() {
-                    println("Hello, World!")
-                }
-            }
-        """.trimIndent())
+    fun `read dispatches kt file using source-code-aware reader and produces chunks with language kotlin`() {
+        val file = Paths.get(javaClass.getResource("/fixtures/sample.kt")!!.toURI()).toFile()
 
         val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
         val documents = registry.read(file)
@@ -363,17 +354,8 @@ class DocumentReaderRegistryTest {
     }
 
     @Test
-    fun `read dispatches java file using source-code-aware reader and produces chunks with language java`(@TempDir tempDir: Path) {
-        val file = tempDir.resolve("Sample.java").toFile()
-        file.writeText("""
-            package com.example;
-
-            public class Sample {
-                public void hello() {
-                    System.out.println("Hello, World!");
-                }
-            }
-        """.trimIndent())
+    fun `read dispatches java file using source-code-aware reader and produces chunks with language java`() {
+        val file = Paths.get(javaClass.getResource("/fixtures/sample.java")!!.toURI()).toFile()
 
         val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
         val documents = registry.read(file)
@@ -393,15 +375,8 @@ class DocumentReaderRegistryTest {
     }
 
     @Test
-    fun `read dispatches ts file using source-code-aware reader and produces chunks with language typescript`(@TempDir tempDir: Path) {
-        val file = tempDir.resolve("Sample.ts").toFile()
-        file.writeText("""
-            class Sample {
-                hello(): void {
-                    console.log("Hello, World!");
-                }
-            }
-        """.trimIndent())
+    fun `read dispatches ts file using source-code-aware reader and produces chunks with language typescript`() {
+        val file = Paths.get(javaClass.getResource("/fixtures/sample.ts")!!.toURI()).toFile()
 
         val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
         val documents = registry.read(file)
@@ -430,15 +405,8 @@ class DocumentReaderRegistryTest {
     }
 
     @Test
-    fun `read dispatches js file using source-code-aware reader and produces chunks with language javascript`(@TempDir tempDir: Path) {
-        val file = tempDir.resolve("sample.js").toFile()
-        file.writeText("""
-            class Sample {
-                greet() {
-                    console.log("hello");
-                }
-            }
-        """.trimIndent())
+    fun `read dispatches js file using source-code-aware reader and produces chunks with language javascript`() {
+        val file = Paths.get(javaClass.getResource("/fixtures/sample.js")!!.toURI()).toFile()
 
         val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
         val documents = registry.read(file)
