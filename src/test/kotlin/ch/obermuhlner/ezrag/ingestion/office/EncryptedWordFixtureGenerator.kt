@@ -19,6 +19,7 @@ object EncryptedWordFixtureGenerator {
     val encryptedDocxFile = File(fixturesDir, "protected.docx")
 
     fun createEncryptedDocxFixture(file: File, password: String = CORRECT_PASSWORD) {
+        if (file.exists()) return  // POIFS encryption uses a random salt; content comparison is not possible
         // First build the DOCX in memory
         val doc = XWPFDocument()
         val para = doc.createParagraph()
