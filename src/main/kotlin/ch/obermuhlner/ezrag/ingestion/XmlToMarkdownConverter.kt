@@ -80,8 +80,7 @@ class XmlToMarkdownConverter(private val chunkSize: Int = 1000) {
                 val lines = mutableListOf<String>()
                 walkDescendants(element, emptyList(), lines)
                 if (lines.isEmpty()) return
-                val headingName = elementLocalName
-                sb.appendLine("## $headingName")
+                sb.appendLine("## ${currentPath.joinToString(" > ")}")
                 lines.forEach { sb.appendLine(it) }
             }
             return
@@ -93,7 +92,6 @@ class XmlToMarkdownConverter(private val chunkSize: Int = 1000) {
         // If not, this is the actual boundary level.
 
         val repeatedChildren = directChildren.filter { localName(it.tagName()) in repeatedTags }
-        val uniqueChildren = directChildren.filter { localName(it.tagName()) !in repeatedTags }
 
         // Do any repeated children have repeated descendants?
         val repeatedChildrenWithRepeatedDesc = repeatedChildren.filter { hasRepeatedDescendants(it) }
@@ -106,12 +104,34 @@ class XmlToMarkdownConverter(private val chunkSize: Int = 1000) {
             return
         }
 
-        // This is the boundary level — emit preamble for unique siblings, then one section per repeated element.
+        // This is the boundary level.
+        // Split unique siblings into preamble (before/among the repeated block) and epilogue
+        // (strictly after the last repeated element), so suffix content like <system-out> is
+        // not mislabeled as preamble.
+        val lastRepeatedIdx = directChildren.indexOfLast { localName(it.tagName()) in repeatedTags }
+        val uniquesForPreamble = directChildren.filterIndexed { idx, el ->
+            localName(el.tagName()) !in repeatedTags && idx < lastRepeatedIdx
+        }
+        val uniquesAfter = directChildren.filterIndexed { idx, el ->
+            localName(el.tagName()) !in repeatedTags && idx > lastRepeatedIdx
+        }
 
-        // Emit preamble section for unique children (if any)
-        if (uniqueChildren.isNotEmpty()) {
+        // Emit preamble: parent element's own attributes first, then unique children before repeated
+        val elementAttrSuffix = buildAttributeSuffix(element)
+        val hasElementAttrs = elementAttrSuffix.isNotEmpty()
+
+        if (hasElementAttrs || uniquesForPreamble.isNotEmpty()) {
             val preambleLines = mutableListOf<String>()
-            for (child in uniqueChildren) {
+            // Include the boundary element's own attributes as the first body line
+            if (hasElementAttrs) {
+                val ownText = collectOwnText(element)
+                val line = when {
+                    ownText.isNotBlank() -> "$elementLocalName$elementAttrSuffix: $ownText"
+                    else -> "$elementLocalName$elementAttrSuffix"
+                }
+                preambleLines.add(line)
+            }
+            for (child in uniquesForPreamble) {
                 val childLocalName = localName(child.tagName())
                 val attrSuffix = buildAttributeSuffix(child)
                 val ownText = collectOwnText(child)
@@ -123,11 +143,10 @@ class XmlToMarkdownConverter(private val chunkSize: Int = 1000) {
                     }
                     preambleLines.add(line)
                 }
-                // Also include descendants of unique children with relative paths
                 walkDescendants(child, listOf(childLocalName), preambleLines)
             }
             if (preambleLines.isNotEmpty()) {
-                sb.appendLine("## $elementLocalName")
+                sb.appendLine("## ${currentPath.joinToString(" > ")}")
                 preambleLines.forEach { sb.appendLine(it) }
             }
         }
@@ -135,6 +154,29 @@ class XmlToMarkdownConverter(private val chunkSize: Int = 1000) {
         // Emit one section per repeated element, with small sibling merging
         val headingPrefix = currentPath.joinToString(" > ")
         emitRepeatedWithMerging(repeatedChildren, headingPrefix, sb)
+
+        // Emit epilogue section for unique children after the last repeated element
+        if (uniquesAfter.isNotEmpty()) {
+            val epilogueLines = mutableListOf<String>()
+            for (child in uniquesAfter) {
+                val childLocalName = localName(child.tagName())
+                val attrSuffix = buildAttributeSuffix(child)
+                val ownText = collectOwnText(child)
+                if (attrSuffix.isNotEmpty() || ownText.isNotBlank()) {
+                    val line = when {
+                        attrSuffix.isNotEmpty() && ownText.isNotBlank() -> "$childLocalName$attrSuffix: $ownText"
+                        attrSuffix.isNotEmpty() -> "$childLocalName$attrSuffix"
+                        else -> "$childLocalName: $ownText"
+                    }
+                    epilogueLines.add(line)
+                }
+                walkDescendants(child, listOf(childLocalName), epilogueLines)
+            }
+            if (epilogueLines.isNotEmpty()) {
+                sb.appendLine("## ${currentPath.joinToString(" > ")}")
+                epilogueLines.forEach { sb.appendLine(it) }
+            }
+        }
     }
 
     /**

@@ -313,6 +313,53 @@ class XmlToMarkdownConverterTest {
         assertThat(result).contains("P2")
     }
 
+    // Fix 1: boundary parent element attributes in preamble
+
+    @Test
+    fun `boundary parent element attributes appear in preamble section body`() {
+        val xml = """<testsuite tests="21" failures="0"><testcase name="a"/><testcase name="b"/></testsuite>"""
+        val result = XmlToMarkdownConverter().convert(xml)
+        assertThat(result).contains("testsuite[tests=21][failures=0]")
+    }
+
+    // Fix 1b: preamble/epilogue/fallback headings include full ancestor path
+
+    @Test
+    fun `preamble heading for nested boundary element includes full ancestor path`() {
+        val xml = """<root><wrapper><meta>info</meta><item>A</item><item>B</item></wrapper></root>"""
+        val result = XmlToMarkdownConverter().convert(xml)
+        // Preamble heading must use the full path to the boundary element, not just its local name
+        assertThat(result).contains("## root > wrapper")
+        assertThat(result.lines().filter { it == "## wrapper" }).isEmpty()
+    }
+
+    @Test
+    fun `epilogue heading for nested boundary element includes full ancestor path`() {
+        val xml = """<root><wrapper><item>A</item><item>B</item><footer>trailing</footer></wrapper></root>"""
+        val result = XmlToMarkdownConverter().convert(xml)
+        assertThat(result).contains("trailing")
+        // Epilogue heading must be the exact full path "## root > wrapper", not just "## wrapper"
+        val headings = result.lines().filter { it.startsWith("## ") }
+        assertThat(headings.any { it == "## root > wrapper" }).isTrue()
+        assertThat(headings.none { it == "## wrapper" }).isTrue()
+        // Trailing content must appear after all item sections
+        val lastItemIdx = result.lastIndexOf("## root > wrapper > item")
+        assertThat(lastItemIdx).isGreaterThanOrEqualTo(0)
+        assertThat(result.substring(lastItemIdx)).contains("trailing")
+    }
+
+    // Fix 2: epilogue section for unique siblings after repeated elements
+
+    @Test
+    fun `unique siblings after last repeated element produce a trailing section after repeated sections`() {
+        val xml = """<root><item>A</item><item>B</item><footer>trailing</footer></root>"""
+        val result = XmlToMarkdownConverter().convert(xml)
+        assertThat(result).contains("trailing")
+        val lastItemIdx = result.lastIndexOf("## root > item")
+        assertThat(lastItemIdx).isGreaterThanOrEqualTo(0)
+        assertThat(result.substring(lastItemIdx)).contains("trailing")
+    }
+
     // Task 03: small sibling merging
 
     @Test
