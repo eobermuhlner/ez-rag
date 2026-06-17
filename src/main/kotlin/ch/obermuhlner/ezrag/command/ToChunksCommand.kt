@@ -45,6 +45,12 @@ class ToChunksCommand(
     @Option(names = ["--pdf-max-pages"], description = ["Maximum number of PDF pages to convert (0 = unlimited). PDF-only."])
     var pdfMaxPages: Int = 0
 
+    @Option(
+        names = ["--xml-boundary-tags"],
+        description = ["Element tag names to use as XML chunk boundaries. Repeat for multiple: --xml-boundary-tags product --xml-boundary-tags item. Overrides auto-detection."]
+    )
+    var xmlBoundaryTags: List<String> = emptyList()
+
     override fun call(): Int {
         val rawChunks: List<Document> = try {
             loadChunks()
@@ -118,7 +124,7 @@ class ToChunksCommand(
             throw IllegalArgumentException("File not found: '${file.path}'.")
         }
         val extension = file.extension.lowercase()
-        val registry = DocumentReaderRegistry(chunkSize, chunkOverlap)
+        val registry = DocumentReaderRegistry(chunkSize, chunkOverlap, xmlBoundaryTags = xmlBoundaryTags)
         if (!registry.supports(extension) && extension != "pdf") {
             throw IllegalArgumentException("Unsupported file extension '.$extension'.")
         }

@@ -77,6 +77,12 @@ class IngestCommand(
     )
     var binaryStripExtensionsOption: List<String> = emptyList()
 
+    @Option(
+        names = ["--xml-boundary-tags"],
+        description = ["Element tag names to use as XML chunk boundaries. Repeat for multiple: --xml-boundary-tags product --xml-boundary-tags item. Overrides auto-detection."]
+    )
+    var xmlBoundaryTagsOption: List<String> = emptyList()
+
     override fun call(): Int {
         val sources = paths.map { path ->
             if (path.startsWith("http://") || path.startsWith("https://")) UrlSource(path)
@@ -127,6 +133,7 @@ class IngestCommand(
                 urlFetcher = urlFetcher,
                 passwords = resolvedPasswords,
                 binaryStripExtensions = resolvedBinaryStripExtensions,
+                xmlBoundaryTags = xmlBoundaryTagsOption,
             )
 
             if (!isQuiet) {

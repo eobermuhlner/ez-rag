@@ -41,6 +41,12 @@ class ToDocumentCommand(
     @Option(names = ["--pdf-max-pages"], description = ["Maximum number of PDF pages to convert (0 = unlimited). PDF-only."])
     var pdfMaxPages: Int = 0
 
+    @Option(
+        names = ["--xml-boundary-tags"],
+        description = ["Element tag names to use as XML chunk boundaries. Repeat for multiple: --xml-boundary-tags product --xml-boundary-tags item. Overrides auto-detection."]
+    )
+    var xmlBoundaryTags: List<String> = emptyList()
+
     override fun call(): Int {
         return when {
             input.startsWith("http://") || input.startsWith("https://") -> handleUrl()
@@ -107,7 +113,7 @@ class ToDocumentCommand(
                 convertPdf(file)
             }
             else -> {
-                val registry = DocumentReaderRegistry(chunkSize = Int.MAX_VALUE / 2, chunkOverlap = 0)
+                val registry = DocumentReaderRegistry(chunkSize = Int.MAX_VALUE / 2, chunkOverlap = 0, xmlBoundaryTags = xmlBoundaryTags)
                 if (!registry.supports(extension)) {
                     errorWriter.println("Error: Unsupported file extension '.$extension'.")
                     return 1

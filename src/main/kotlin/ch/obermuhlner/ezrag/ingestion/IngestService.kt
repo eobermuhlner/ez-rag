@@ -22,6 +22,7 @@ open class IngestService(
     private val tempDirProvider: () -> Path = { Files.createTempDirectory("ez-rag-url-") },
     private val passwords: List<String> = emptyList(),
     binaryStripExtensions: Set<String> = emptySet(),
+    private val xmlBoundaryTags: List<String> = emptyList(),
 ) {
     private val normalizedBinaryStripExtensions: Set<String> =
         binaryStripExtensions.map { it.trimStart('.').lowercase() }.toSet()
@@ -33,7 +34,7 @@ open class IngestService(
     open fun ingest(files: List<File>): IngestResult = ingest(files.map { FileSource(it) })
 
     open fun ingest(sources: Iterable<IngestSource>): IngestResult {
-        val registry = DocumentReaderRegistry(chunkSize, chunkOverlap, passwords)
+        val registry = DocumentReaderRegistry(chunkSize, chunkOverlap, passwords, xmlBoundaryTags)
         val directoryWalker = DirectoryWalker(warningWriter)
 
         var filesIngested = 0

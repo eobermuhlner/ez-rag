@@ -8,34 +8,105 @@ import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
 import org.jsoup.parser.Parser
 
-class XmlToMarkdownConverter {
+class XmlToMarkdownConverter(private val chunkSize: Int = 1000) {
 
-    fun convert(xmlContent: String): String {
+    fun convert(xmlContent: String, boundaryTags: List<String> = emptyList()): String {
         val doc = Jsoup.parse(xmlContent, "", Parser.xmlParser())
 
         // Find the actual document root element (skip Jsoup's synthetic #root wrapper)
         val rootElement = doc.children().firstOrNull() ?: return ""
-        val rootName = localName(rootElement.tagName())
-
-        // Partition root's direct children into repeated vs unique groups
-        val directChildren = rootElement.children().toList()
-        val countByTag = directChildren.groupBy { localName(it.tagName()) }
-        val repeatedTags = countByTag.filter { it.value.size >= 2 }.keys
-        val uniqueChildren = directChildren.filter { localName(it.tagName()) !in repeatedTags }
-        val repeatedChildren = directChildren.filter { localName(it.tagName()) in repeatedTags }
-
-        // If no repeated siblings anywhere, fallback to a single section
-        if (repeatedTags.isEmpty()) {
-            val lines = mutableListOf<String>()
-            walkDescendants(rootElement, emptyList(), lines)
-            if (lines.isEmpty()) return ""
-            val sb = StringBuilder()
-            sb.appendLine("## $rootName")
-            lines.forEach { sb.appendLine(it) }
-            return sb.toString()
-        }
 
         val sb = StringBuilder()
+        if (boundaryTags.isNotEmpty()) {
+            emitWithBoundaryTags(rootElement, emptyList(), boundaryTags, sb)
+        } else {
+            emit(rootElement, emptyList(), sb)
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Emit Markdown sections for elements matching [boundaryTags], walking the entire tree.
+     * Full ancestor path is used as the heading prefix. Small sibling merging applies.
+     * [ancestorPath] contains local names of ancestors above [element] (not including [element]).
+     */
+    private fun emitWithBoundaryTags(
+        element: Element,
+        ancestorPath: List<String>,
+        boundaryTags: List<String>,
+        sb: StringBuilder
+    ) {
+        val elementLocalName = localName(element.tagName())
+        val currentPath = ancestorPath + elementLocalName
+
+        val matchingChildren = element.children().filter { localName(it.tagName()) in boundaryTags }
+        val nonMatchingChildren = element.children().filter { localName(it.tagName()) !in boundaryTags }
+
+        if (matchingChildren.isNotEmpty()) {
+            // Emit all matching children as boundary elements with merging
+            val headingPrefix = currentPath.joinToString(" > ")
+            emitRepeatedWithMerging(matchingChildren, headingPrefix, sb)
+        }
+
+        // Recurse into non-matching children to find deeper boundary-tag elements
+        for (child in nonMatchingChildren) {
+            emitWithBoundaryTags(child, currentPath, boundaryTags, sb)
+        }
+    }
+
+    /**
+     * Recursively emit Markdown sections for [element] and its descendants.
+     * [ancestorPath] contains the local names of all ancestors above [element] (not including [element] itself).
+     */
+    private fun emit(element: Element, ancestorPath: List<String>, sb: StringBuilder) {
+        val elementLocalName = localName(element.tagName())
+        val currentPath = ancestorPath + elementLocalName
+
+        // Partition direct children into repeated vs unique groups
+        val directChildren = element.children().toList()
+        val countByTag = directChildren.groupBy { localName(it.tagName()) }
+        val repeatedTags = countByTag.filter { it.value.size >= 2 }.keys
+
+        if (repeatedTags.isEmpty()) {
+            // No repeated siblings at this level — either recurse into unique children
+            // looking for repeated descendants, or emit a single fallback section.
+            if (anyChildHasRepeatedDescendants(element)) {
+                // Some child has repeated descendants deeper — recurse into each child
+                for (child in directChildren) {
+                    emit(child, currentPath, sb)
+                }
+            } else {
+                // Truly flat — emit single fallback section
+                val lines = mutableListOf<String>()
+                walkDescendants(element, emptyList(), lines)
+                if (lines.isEmpty()) return
+                val headingName = elementLocalName
+                sb.appendLine("## $headingName")
+                lines.forEach { sb.appendLine(it) }
+            }
+            return
+        }
+
+        // There ARE repeated tags at this level.
+        // Check if any of the repeated children themselves have repeated descendants.
+        // If so, the repeated children are containers — recurse into them.
+        // If not, this is the actual boundary level.
+
+        val repeatedChildren = directChildren.filter { localName(it.tagName()) in repeatedTags }
+        val uniqueChildren = directChildren.filter { localName(it.tagName()) !in repeatedTags }
+
+        // Do any repeated children have repeated descendants?
+        val repeatedChildrenWithRepeatedDesc = repeatedChildren.filter { hasRepeatedDescendants(it) }
+
+        if (repeatedChildrenWithRepeatedDesc.isNotEmpty()) {
+            // Repeated children are containers — recurse into each child (both repeated and unique)
+            for (child in directChildren) {
+                emit(child, currentPath, sb)
+            }
+            return
+        }
+
+        // This is the boundary level — emit preamble for unique siblings, then one section per repeated element.
 
         // Emit preamble section for unique children (if any)
         if (uniqueChildren.isNotEmpty()) {
@@ -56,23 +127,104 @@ class XmlToMarkdownConverter {
                 walkDescendants(child, listOf(childLocalName), preambleLines)
             }
             if (preambleLines.isNotEmpty()) {
-                sb.appendLine("## $rootName")
+                sb.appendLine("## $elementLocalName")
                 preambleLines.forEach { sb.appendLine(it) }
             }
         }
 
-        // Emit one section per repeated element
+        // Emit one section per repeated element, with small sibling merging
+        val headingPrefix = currentPath.joinToString(" > ")
+        emitRepeatedWithMerging(repeatedChildren, headingPrefix, sb)
+    }
+
+    /**
+     * Emit sections for repeated boundary elements, merging adjacent small elements
+     * into a single Markdown section to avoid many tiny chunks.
+     *
+     * An element is "small" if its body text is below [chunkSize] × 3 characters.
+     * A batch is flushed when accumulated body text reaches [chunkSize] × 12 characters
+     * or when a non-small element is encountered.
+     */
+    private fun emitRepeatedWithMerging(
+        repeatedChildren: List<Element>,
+        headingPrefix: String,
+        sb: StringBuilder
+    ) {
+        val smallThreshold = chunkSize * 3
+        val flushThreshold = chunkSize * 12
+
+        val batchLines = mutableListOf<String>()
+        var batchText = 0
+        var batchHeadingTag = ""
+
+        fun flushBatch() {
+            if (batchLines.isEmpty()) return
+            sb.appendLine("## $headingPrefix > $batchHeadingTag")
+            batchLines.forEach { sb.appendLine(it) }
+            batchLines.clear()
+            batchText = 0
+        }
+
         for (child in repeatedChildren) {
             val childLocalName = localName(child.tagName())
             val attrSuffix = buildAttributeSuffix(child)
-            val headingPath = "$rootName > $childLocalName$attrSuffix"
             val bodyLines = mutableListOf<String>()
             walkDescendants(child, emptyList(), bodyLines)
-            sb.appendLine("## $headingPath")
-            bodyLines.forEach { sb.appendLine(it) }
+
+            // Compute the own text + body text for size estimation
+            val ownText = collectOwnText(child)
+            val bodyText = bodyLines.joinToString("\n")
+            val elementText = if (ownText.isNotBlank()) "$ownText\n$bodyText" else bodyText
+            val elementSize = elementText.length
+
+            val isSmall = elementSize < smallThreshold
+
+            if (!isSmall) {
+                // Flush current batch first, then emit this large element alone
+                flushBatch()
+                val headingPath = "$headingPrefix > $childLocalName$attrSuffix"
+                sb.appendLine("## $headingPath")
+                bodyLines.forEach { sb.appendLine(it) }
+            } else {
+                // Flush if tag type changed or adding this element would exceed flush threshold
+                if (batchText > 0 && (childLocalName != batchHeadingTag || batchText + elementSize >= flushThreshold)) {
+                    flushBatch()
+                }
+
+                // Add element to batch using localName[attrs]: prefix line
+                val prefixLine = when {
+                    attrSuffix.isNotEmpty() && ownText.isNotBlank() -> "$childLocalName$attrSuffix: $ownText"
+                    attrSuffix.isNotEmpty() -> "$childLocalName$attrSuffix"
+                    ownText.isNotBlank() -> "$childLocalName: $ownText"
+                    else -> "$childLocalName:"
+                }
+                batchLines.add(prefixLine)
+                bodyLines.forEach { batchLines.add("  $it") }
+                batchText += elementSize
+                batchHeadingTag = childLocalName
+            }
         }
 
-        return sb.toString()
+        // Flush any remaining batch
+        flushBatch()
+    }
+
+    /**
+     * Returns true if [element] itself has any direct children that appear more than once (same tag),
+     * or if any descendant does.
+     */
+    private fun hasRepeatedDescendants(element: Element): Boolean {
+        val directChildren = element.children().toList()
+        val countByTag = directChildren.groupBy { localName(it.tagName()) }
+        if (countByTag.any { it.value.size >= 2 }) return true
+        return directChildren.any { hasRepeatedDescendants(it) }
+    }
+
+    /**
+     * Returns true if any direct child of [element] has repeated descendants (but not [element] itself).
+     */
+    private fun anyChildHasRepeatedDescendants(element: Element): Boolean {
+        return element.children().any { hasRepeatedDescendants(it) }
     }
 
     /**

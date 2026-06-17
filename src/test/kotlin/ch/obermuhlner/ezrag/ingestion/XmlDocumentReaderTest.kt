@@ -2,8 +2,21 @@ package ch.obermuhlner.ezrag.ingestion
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
 
 class XmlDocumentReaderTest {
+
+    @Test
+    fun `non-existent file returns emptyList without throwing and writes a warning`() {
+        val warningOutput = StringWriter()
+        val warningWriter = PrintWriter(warningOutput, true)
+        val reader = XmlDocumentReader(File("does-not-exist.xml"), warningWriter = warningWriter)
+        val docs = reader.read()
+        assertThat(docs).isEmpty()
+        assertThat(warningOutput.toString().trim()).isNotBlank()
+    }
 
     @Test
     fun `simple element with text produces section heading and relative body line`() {
@@ -171,6 +184,25 @@ class XmlDocumentReaderTest {
             (it.metadata["heading_path"] as? List<String>) ?: emptyList()
         }
         assertThat(allHeadingPaths.any { it.contains("dependency") }).isTrue()
+    }
+
+    // Task 04: boundary tag override forwarded via XmlDocumentReader
+
+    @Test
+    fun `boundaryTags constructor parameter is forwarded to converter`() {
+        // Auto-detection would pick product (deepest repeated); boundaryTags forces category
+        val xml = """<catalog><category><product>A</product><product>B</product></category></catalog>"""
+        val docs = XmlDocumentReader(xml, boundaryTags = listOf("category")).read()
+        assertThat(docs).isNotEmpty()
+        val allHeadingPaths = docs.flatMap {
+            @Suppress("UNCHECKED_CAST")
+            (it.metadata["heading_path"] as? List<String>) ?: emptyList()
+        }
+        assertThat(allHeadingPaths.any { it.contains("category") }).isTrue()
+        // No heading_path should contain just "product" at the boundary (it may appear as body content)
+        // The key assertion: category is a boundary element, evidenced by heading_path containing it
+        val allText = docs.joinToString("\n") { it.text ?: "" }
+        assertThat(allText).contains("## catalog > category")
     }
 
     @Test

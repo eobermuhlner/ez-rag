@@ -10,6 +10,7 @@ class DocumentReaderRegistry(
     private val chunkSize: Int = 1000,
     private val chunkOverlap: Int = 200,
     private val passwords: List<String> = emptyList(),
+    private val xmlBoundaryTags: List<String> = emptyList(),
 ) {
 
     private val readers: Map<String, (File) -> List<Document>> = mapOf(
@@ -27,10 +28,10 @@ class DocumentReaderRegistry(
         "xhtml" to { file -> HtmlDocumentReader(file, chunkSize, chunkOverlap).read() },
         "rtf"   to { file -> RtfDocumentReader(file, chunkSize, chunkOverlap).read() },
         "csv"   to { file -> CsvDocumentReader(file, chunkSize, chunkOverlap).read() },
-        "xml"   to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap).read() },
-        "svg"   to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap).read() },
-        "rss"   to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap).read() },
-        "atom"  to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "xml"   to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap, boundaryTags = xmlBoundaryTags).read() },
+        "svg"   to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap, boundaryTags = xmlBoundaryTags).read() },
+        "rss"   to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap, boundaryTags = xmlBoundaryTags).read() },
+        "atom"  to { file -> XmlDocumentReader(file, chunkSize, chunkOverlap, boundaryTags = xmlBoundaryTags).read() },
     )
 
     fun supports(extension: String): Boolean = extension.lowercase() in readers

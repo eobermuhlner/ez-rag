@@ -105,12 +105,27 @@ class XmlToMarkdownConverterTest {
     // Task 02: repeated-sibling detection and preamble emission
 
     @Test
-    fun `two repeated direct children produce one section per element`() {
+    fun `two repeated direct children produce sections with project-dependency path`() {
         val xml = """<project>
             <dependency><groupId>org.spring</groupId></dependency>
             <dependency><groupId>junit</groupId></dependency>
         </project>"""
         val result = XmlToMarkdownConverter().convert(xml)
+        // Small elements may merge into one or more batches; the heading path must still reference the boundary
+        val headings = result.lines().filter { it.startsWith("## ") }
+        assertThat(headings).isNotEmpty()
+        assertThat(headings.all { it.contains("project > dependency") }).isTrue()
+    }
+
+    @Test
+    fun `two large repeated direct children produce one section per element`() {
+        // Elements whose body exceeds chunkSize*3 are never merged
+        val largeContent = "x".repeat(250) // 250 chars > chunkSize(50)*3=150
+        val xml = """<project>
+            <dependency>$largeContent</dependency>
+            <dependency>$largeContent</dependency>
+        </project>"""
+        val result = XmlToMarkdownConverter(chunkSize = 50).convert(xml)
         val headings = result.lines().filter { it.startsWith("## ") }
         assertThat(headings).hasSize(2)
         assertThat(headings[0]).contains("project > dependency")
@@ -118,14 +133,15 @@ class XmlToMarkdownConverterTest {
     }
 
     @Test
-    fun `repeated section body lines are relative to the repeated element`() {
+    fun `repeated section body lines contain content of each element`() {
         val xml = """<project>
             <dependency><groupId>org.spring</groupId></dependency>
             <dependency><groupId>junit</groupId></dependency>
         </project>"""
         val result = XmlToMarkdownConverter().convert(xml)
-        assertThat(result).contains("groupId: org.spring")
-        assertThat(result).contains("groupId: junit")
+        // Both groups' content must appear in the output (merged or separate)
+        assertThat(result).contains("org.spring")
+        assertThat(result).contains("junit")
         assertThat(result).doesNotContain("dependency > groupId")
     }
 
@@ -157,6 +173,8 @@ class XmlToMarkdownConverterTest {
         // Only repeated sections, no preamble heading "## items" without items > item
         val headings = result.lines().filter { it.startsWith("## ") }
         // All headings should be for the repeated element, not the preamble
+        // (small elements may be merged into one batch heading)
+        assertThat(headings).isNotEmpty()
         assertThat(headings.all { it.contains("items > item") }).isTrue()
     }
 
@@ -169,20 +187,153 @@ class XmlToMarkdownConverterTest {
             <plugin><id>y</id></plugin>
         </root>"""
         val result = XmlToMarkdownConverter().convert(xml)
+        // Both groups must appear in headings (small elements may be merged within each group)
         assertThat(result).contains("root > dependency")
         assertThat(result).contains("root > plugin")
-        val headings = result.lines().filter { it.startsWith("## ") }
-        assertThat(headings).hasSize(4)
+        // Content must still be accessible
+        assertThat(result).contains("a")
+        assertThat(result).contains("x")
     }
 
     @Test
-    fun `attributes of repeated element appear in its heading`() {
+    fun `attributes of repeated large element appear in its heading`() {
+        // Large elements (body > chunkSize*3) never merge; their attributes appear in the heading
+        val largeContent = "x".repeat(250)
+        val xml = """<beans>
+            <bean id="dataSource" class="DS">$largeContent</bean>
+            <bean id="userService" class="US">$largeContent</bean>
+        </beans>"""
+        val result = XmlToMarkdownConverter(chunkSize = 50).convert(xml)
+        assertThat(result).contains("beans > bean[id=dataSource][class=DS]")
+        assertThat(result).contains("beans > bean[id=userService][class=US]")
+    }
+
+    @Test
+    fun `attributes of small repeated elements appear in body prefix lines`() {
+        // Small elements are merged; attributes appear as localName[attrs]: prefix lines in the body
         val xml = """<beans>
             <bean id="dataSource" class="DS"/>
             <bean id="userService" class="US"/>
         </beans>"""
         val result = XmlToMarkdownConverter().convert(xml)
-        assertThat(result).contains("beans > bean[id=dataSource][class=DS]")
-        assertThat(result).contains("beans > bean[id=userService][class=US]")
+        // Content should still be accessible, attributes in body prefix
+        assertThat(result).contains("bean[id=dataSource][class=DS]")
+        assertThat(result).contains("bean[id=userService][class=US]")
+    }
+
+    // Task 02: multi-level boundary detection
+
+    @Test
+    fun `single-wrapper XML produces headings each containing full ancestor path`() {
+        // Products with substantial content to avoid merging at default chunkSize
+        val largeContent = "x".repeat(250)
+        val xml = """<catalog><products><product><name>Widget A $largeContent</name></product><product><name>Widget B $largeContent</name></product></products></catalog>"""
+        val result = XmlToMarkdownConverter(chunkSize = 50).convert(xml)
+        val headings = result.lines().filter { it.startsWith("## ") }
+        assertThat(headings).hasSize(2)
+        assertThat(headings[0]).contains("catalog > products > product")
+        assertThat(headings[1]).contains("catalog > products > product")
+    }
+
+    @Test
+    fun `single-wrapper XML small products are merged into one batch heading with correct path`() {
+        val xml = """<catalog><products><product><name>Widget A</name></product><product><name>Widget B</name></product></products></catalog>"""
+        val result = XmlToMarkdownConverter().convert(xml)
+        val headings = result.lines().filter { it.startsWith("## ") }
+        // Small products may merge into one batch; heading must still reference the ancestor path
+        assertThat(headings).isNotEmpty()
+        assertThat(headings.all { it.contains("catalog > products > product") }).isTrue()
+        // Both product names must appear in the output
+        assertThat(result).contains("Widget A")
+        assertThat(result).contains("Widget B")
+    }
+
+    @Test
+    fun `two-level nesting places boundary at product not category`() {
+        // Large products so they don't merge
+        val largeContent = "x".repeat(250)
+        val xml = """<catalog><category><product>A $largeContent</product><product>B $largeContent</product></category></catalog>"""
+        val result = XmlToMarkdownConverter(chunkSize = 50).convert(xml)
+        val headings = result.lines().filter { it.startsWith("## ") }
+        assertThat(headings).hasSize(2)
+        assertThat(headings[0]).contains("catalog > category > product")
+        assertThat(headings[1]).contains("catalog > category > product")
+    }
+
+    @Test
+    fun `two-level nesting small products boundary is at product level`() {
+        val xml = """<catalog><category><product>A</product><product>B</product></category></catalog>"""
+        val result = XmlToMarkdownConverter().convert(xml)
+        val headings = result.lines().filter { it.startsWith("## ") }
+        // Boundary is at product level (not category), even if products are merged
+        assertThat(headings.all { it.contains("catalog > category > product") }).isTrue()
+        assertThat(headings).isNotEmpty()
+    }
+
+    @Test
+    fun `preamble meta sibling plus repeated products at root level`() {
+        val xml = """<catalog><meta>doc title</meta><product>A</product><product>B</product></catalog>"""
+        val result = XmlToMarkdownConverter().convert(xml)
+        // One preamble section with catalog heading containing meta content
+        assertThat(result).contains("## catalog")
+        assertThat(result).contains("doc title")
+        // At least one product section heading (small products may be merged into one batch)
+        val productHeadings = result.lines().filter { it.startsWith("## ") && it.contains("catalog > product") }
+        assertThat(productHeadings).isNotEmpty()
+        // meta text should NOT appear in the product sections
+        val productSections = result.substringAfter("## catalog > product")
+        assertThat(productSections).doesNotContain("doc title")
+    }
+
+    // Task 04: boundary tag override
+
+    @Test
+    fun `boundary tag override forces chunking at specified element`() {
+        // Auto-detection would pick product (deepest repeated level); override forces category
+        val xml = """<catalog><category><product>A</product><product>B</product></category></catalog>"""
+        val result = XmlToMarkdownConverter().convert(xml, boundaryTags = listOf("category"))
+        val headings = result.lines().filter { it.startsWith("## ") }
+        // Only category elements should produce headings, not product
+        assertThat(headings).isNotEmpty()
+        assertThat(headings.all { it.contains("category") }).isTrue()
+        assertThat(headings.none { it.contains("product") }).isTrue()
+    }
+
+    @Test
+    fun `boundary tag override with multiple tags produces sections for each matching element`() {
+        val xml = """<catalog>
+            <category name="A"><product>P1</product></category>
+            <category name="B"><product>P2</product></category>
+        </catalog>"""
+        val result = XmlToMarkdownConverter().convert(xml, boundaryTags = listOf("category"))
+        val headings = result.lines().filter { it.startsWith("## ") }
+        assertThat(headings).isNotEmpty()
+        assertThat(headings.all { it.contains("category") }).isTrue()
+        assertThat(result).contains("P1")
+        assertThat(result).contains("P2")
+    }
+
+    // Task 03: small sibling merging
+
+    @Test
+    fun `ten small items with chunkSize 50 produce exactly one heading`() {
+        // chunkSize=50, flush threshold = 50*12 = 600 chars
+        // each item body is "one word" = 8 chars, 10 items = 80 chars < 600 → single batch
+        val items = (1..10).joinToString("") { "<item>one word</item>" }
+        val xml = "<root>$items</root>"
+        val result = XmlToMarkdownConverter(chunkSize = 50).convert(xml)
+        val headings = result.lines().filter { it.startsWith("## ") }
+        assertThat(headings).hasSize(1)
+    }
+
+    @Test
+    fun `100 small items with chunkSize 50 produce exactly two headings`() {
+        // chunkSize=50, flush threshold = 50*12 = 600 chars
+        // each item body is "one word" = 8 chars, 100 items = 800 chars > 600 → two batches
+        val items = (1..100).joinToString("") { "<item>one word</item>" }
+        val xml = "<root>$items</root>"
+        val result = XmlToMarkdownConverter(chunkSize = 50).convert(xml)
+        val headings = result.lines().filter { it.startsWith("## ") }
+        assertThat(headings).hasSize(2)
     }
 }

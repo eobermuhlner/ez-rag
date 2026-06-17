@@ -245,6 +245,18 @@ ez-rag ingest --password password1 --password password2 ./office-docs
 
 If a file is encrypted and no matching password is supplied, it is skipped with a warning and ingestion of other files in the batch continues normally.
 
+To override the automatic XML chunking boundary for `.xml`, `.svg`, `.rss`, or `.atom` files, pass `--xml-boundary-tags`:
+
+```sh
+# Force each <product> element to become its own chunk in a product catalog XML
+ez-rag ingest --xml-boundary-tags product catalog.xml
+
+# Multiple boundary tags — useful when a document has more than one record element type
+ez-rag ingest --xml-boundary-tags product --xml-boundary-tags item catalog.xml
+```
+
+By default, `ingest` auto-detects the deepest level where repeated sibling elements appear. The `--xml-boundary-tags` flag bypasses this heuristic entirely: every element whose local name matches a specified tag becomes its own chunk (subject to small-sibling merging).
+
 ## Ingest-specific flags
 
 | Flag             | Description                                                                                   |
@@ -253,6 +265,7 @@ If a file is encrypted and no matching password is supplied, it is skipped with 
 | `--details`      | Print chunk details (token count and text preview) for each ingested file.                    |
 | `--password`     | Password for encrypted Office files. Repeat the flag for multiple passwords: `--password p1 --password p2`. Each password is tried in order; the first that succeeds is used. |
 | `--binary-strip-extensions` | File extensions to enable binary text-stripping for. Repeat for multiple: `--binary-strip-extensions bin --binary-strip-extensions exe`. Default: no binary stripping. |
+| `--xml-boundary-tags` | Element tag names to use as XML chunk boundaries. Repeat for multiple: `--xml-boundary-tags product --xml-boundary-tags item`. Overrides auto-detection for `.xml`, `.svg`, `.rss`, and `.atom` files. |
 
 By default, `ingest` prints one line per file as it processes it:
 
@@ -646,6 +659,21 @@ ez-rag to-document report.pdf --pdf-mode rag
 ez-rag to-document report.pdf --pdf-max-pages 5
 ```
 
+**XML boundary tag override:**
+
+Pass `--xml-boundary-tags` to control which element type is used as a section boundary in XML-family files (`.xml`, `.svg`, `.rss`, `.atom`). By default, the converter auto-detects the deepest level where repeated sibling elements appear. Use this flag to override that heuristic:
+
+```sh
+# Force chunking at <product> elements instead of auto-detected level
+ez-rag to-document --xml-boundary-tags product catalog.xml
+
+# Force chunking at <testcase> elements in a JUnit report
+ez-rag to-document --xml-boundary-tags testcase results.xml
+
+# Multiple boundary tags
+ez-rag to-document --xml-boundary-tags product --xml-boundary-tags item catalog.xml
+```
+
 ### to-chunks
 
 Run any supported file or URL through the full chunking pipeline and print every chunk with its metadata. Works standalone without an initialised store, making it easy to tune `--chunk-size` and `--chunk-overlap` before ingesting.
@@ -661,6 +689,7 @@ Run any supported file or URL through the full chunking pipeline and print every
 | `--chunk-overlap N` | `200`      | Overlap between consecutive chunks                                        |
 | `--pdf-mode`        | `readable` | PDF conversion mode: `readable` or `rag` (PDF inputs only)               |
 | `--pdf-max-pages N` | unlimited  | Stop after the first N pages (PDF inputs only)                            |
+| `--xml-boundary-tags` | (auto)   | Element tag names to use as XML chunk boundaries (`.xml`, `.svg`, `.rss`, `.atom`). Repeat for multiple values. Overrides auto-detection. |
 
 **Examples:**
 
@@ -676,6 +705,9 @@ ez-rag to-chunks --output-format json docs/architecture.md | jq '.chunks | lengt
 
 # XML output — structured format for scripting or piping to other tools
 ez-rag to-chunks --output-format xml docs/architecture.md
+
+# Override XML boundary detection for an XML file
+ez-rag to-chunks --xml-boundary-tags product catalog.xml
 ```
 
 **Text output format:**
