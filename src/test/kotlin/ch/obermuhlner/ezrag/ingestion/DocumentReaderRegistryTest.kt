@@ -315,4 +315,174 @@ class DocumentReaderRegistryTest {
         assertThat(documents.any { it.metadata.containsKey("heading_title") }).isTrue()
         assertThat(documents.any { (it.metadata["heading_title"] as? String)?.contains("Installation Guide") == true }).isTrue()
     }
+
+    @Test
+    fun `supports returns true for kt and kts`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("kt")).isTrue()
+        assertThat(registry.supports("kts")).isTrue()
+    }
+
+    @Test
+    fun `read dispatches kt file using source-code-aware reader and produces chunks with language kotlin`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("Sample.kt").toFile()
+        file.writeText("""
+            package com.example
+
+            class Sample {
+                fun hello() {
+                    println("Hello, World!")
+                }
+            }
+        """.trimIndent())
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+        assertThat(documents.any { it.metadata["language"] == "kotlin" }).isTrue()
+        assertThat(documents.any { it.metadata["declaration_type"] == "class" }).isTrue()
+    }
+
+    @Test
+    fun `read dispatches kts file using source-code-aware reader and produces chunks with language kotlin`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("build.kts").toFile()
+        file.writeText("fun greet(name: String) {\n    println(\"Hello, \${name}!\")\n}")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+        assertThat(documents.any { it.metadata["language"] == "kotlin" }).isTrue()
+    }
+
+    @Test
+    fun `supports returns true for java`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("java")).isTrue()
+    }
+
+    @Test
+    fun `read dispatches java file using source-code-aware reader and produces chunks with language java`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("Sample.java").toFile()
+        file.writeText("""
+            package com.example;
+
+            public class Sample {
+                public void hello() {
+                    System.out.println("Hello, World!");
+                }
+            }
+        """.trimIndent())
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+        assertThat(documents.any { it.metadata["language"] == "java" }).isTrue()
+        assertThat(documents.any { it.metadata["declaration_type"] == "class" }).isTrue()
+    }
+
+    @Test
+    fun `supports returns true for ts, tsx, js, jsx`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("ts")).isTrue()
+        assertThat(registry.supports("tsx")).isTrue()
+        assertThat(registry.supports("js")).isTrue()
+        assertThat(registry.supports("jsx")).isTrue()
+    }
+
+    @Test
+    fun `read dispatches ts file using source-code-aware reader and produces chunks with language typescript`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("Sample.ts").toFile()
+        file.writeText("""
+            class Sample {
+                hello(): void {
+                    console.log("Hello, World!");
+                }
+            }
+        """.trimIndent())
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+        assertThat(documents.any { it.metadata["language"] == "typescript" }).isTrue()
+        assertThat(documents.any { it.metadata["declaration_type"] == "class" }).isTrue()
+    }
+
+    @Test
+    fun `read dispatches tsx file using source-code-aware reader and produces chunks with language typescript`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("Sample.tsx").toFile()
+        file.writeText("""
+            class MyComponent {
+                render(): void {
+                    console.log("rendering");
+                }
+            }
+        """.trimIndent())
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+        assertThat(documents.any { it.metadata["language"] == "typescript" }).isTrue()
+    }
+
+    @Test
+    fun `read dispatches js file using source-code-aware reader and produces chunks with language javascript`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.js").toFile()
+        file.writeText("""
+            class Sample {
+                greet() {
+                    console.log("hello");
+                }
+            }
+        """.trimIndent())
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+        assertThat(documents.any { it.metadata["language"] == "javascript" }).isTrue()
+    }
+
+    @Test
+    fun `read dispatches jsx file using source-code-aware reader and produces chunks with language javascript`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.jsx").toFile()
+        file.writeText("""
+            class Sample {
+                greet() {
+                    console.log("hello");
+                }
+            }
+        """.trimIndent())
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+        assertThat(documents.any { it.metadata["language"] == "javascript" }).isTrue()
+    }
+
+    @Test
+    fun `read falls through to plain text for go file without error`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("main.go").toFile()
+        file.writeText("""
+            package main
+
+            import "fmt"
+
+            func main() {
+                fmt.Println("Hello, World!")
+            }
+        """.trimIndent())
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        // Go falls through to plain-text — should produce at least one chunk, no language metadata
+        assertThat(documents).isNotEmpty()
+        assertThat(documents.none { it.metadata.containsKey("language") }).isTrue()
+    }
 }

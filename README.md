@@ -71,7 +71,7 @@ No configuration needed — works out of the box:
 
 ```sh
 # Ingest a single file (downloads embedding model on first run)
-# Supported file types: .txt, .pdf, .md, .html / .htm, .csv, .rtf, .docx, .doc, .xlsx, .xls, .pptx, .ppt, .xml, .svg, .rss, .atom, .xhtml
+# Supported file types: .txt, .pdf, .md, .html / .htm, .csv, .rtf, .docx, .doc, .xlsx, .xls, .pptx, .ppt, .xml, .svg, .rss, .atom, .xhtml, .kt, .kts, .java, .ts, .tsx, .js, .jsx
 ez-rag ingest README.md
 
 # Ingest a webpage
@@ -138,7 +138,7 @@ A document is marked `[STALE]` when its filesystem mtime has changed since the l
 |--------------------------------|----------------------------------------------------------------------------------------------------|
 | `init`                         | Initialize a `.ez-rag/` workspace in the current directory and add the store to `.gitignore`.      |
 | `install-skill`                | Install the ez-rag skill for your AI coding tool. Auto-detects Claude Code, OpenCode, or falls back to generic. |
-| `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.csv`, `.rtf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`, `.xml`, `.svg`, `.rss`, `.atom`, `.xhtml`. Prints each file as it is ingested. |
+| `ingest <file\|dir>`           | Ingest files or directories (recursive) into the vector store. Supports `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.csv`, `.rtf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`, `.xml`, `.svg`, `.rss`, `.atom`, `.xhtml`, `.kt`, `.kts`, `.java`, `.ts`, `.tsx`, `.js`, `.jsx`. Prints each file as it is ingested. |
 | `delete <file> [<file>...]`    | Remove one or more ingested documents from the vector store without touching other content.        |
 | `list`                         | List all ingested documents with chunk counts and staleness flags. Use `--output-format json` for machine-readable output with absolute paths. |
 | `reingest`                     | Re-ingest all stale documents (mtime changed since last ingest). Use `--all` to force re-ingest of every document. |
@@ -219,7 +219,9 @@ ez-rag install-skill --tool claude-code --tool opencode
 
 ### ingest
 
-Ingest files or directories into the vector store. Supported file types: `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.csv`, `.rtf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`, `.xml`, `.svg`, `.rss`, `.atom`, `.xhtml`.
+Ingest files or directories into the vector store. Supported file types: `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.csv`, `.rtf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`, `.xml`, `.svg`, `.rss`, `.atom`, `.xhtml`, `.kt`, `.kts`, `.java`, `.ts`, `.tsx`, `.js`, `.jsx`.
+
+Source code files (`.kt`, `.kts`, `.java`, `.ts`, `.tsx`, `.js`, `.jsx`) are parsed with a tree-sitter AST and chunked at structural boundaries — class declarations, methods, functions, and constructors — so that each retrieved chunk corresponds to a coherent, self-contained unit of code. Package declarations and imports are included in every chunk. All other file types fall through to plain-text ingestion.
 
 Binary text stripping is opt-in. By default, binary files and binary URL responses are skipped. To enable stripping for specific extensions, pass `--binary-strip-extensions`:
 
@@ -614,7 +616,7 @@ Convert any supported file or HTTP/HTTPS URL to its intermediate text representa
 
 **Supported inputs:**
 
-- Any file type accepted by `ingest`: `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.csv`, `.rtf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`, `.xml`, `.svg`, `.rss`, `.atom`, `.xhtml`
+- Any file type accepted by `ingest`: `.txt`, `.pdf`, `.md`, `.html`/`.htm`, `.csv`, `.rtf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.pptx`, `.ppt`, `.xml`, `.svg`, `.rss`, `.atom`, `.xhtml`, `.kt`, `.kts`, `.java`, `.ts`, `.tsx`, `.js`, `.jsx`
 - HTTP or HTTPS URLs — the content type returned by the server determines the conversion pipeline
 
 **Examples:**

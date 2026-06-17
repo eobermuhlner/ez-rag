@@ -65,6 +65,11 @@ dependencies {
     implementation("org.jsoup:jsoup:1.18.3")
     implementation("org.apache.poi:poi-ooxml:5.5.1")
     implementation("org.apache.poi:poi-scratchpad:5.5.1")
+    implementation("io.github.bonede:tree-sitter:0.26.6")
+    implementation("io.github.bonede:tree-sitter-kotlin:0.3.8.1")
+    implementation("io.github.bonede:tree-sitter-java:0.23.4")
+    implementation("io.github.bonede:tree-sitter-typescript:0.23.2")
+    implementation("io.github.bonede:tree-sitter-javascript:0.23.1")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
