@@ -10,6 +10,8 @@ All chunking respects a configurable **token budget** (`--chunk-size`, default 1
 
 - [Plain Text](#plain-text-txt-and-unknown-text-files)
 - [Markdown](#markdown-md)
+- [AsciiDoc](#asciidoc-adoc-asciidoc)
+- [reStructuredText](#restructuredtext-rst)
 - [PDF](#pdf-pdf)
 - [HTML / XHTML](#html--xhtml-html-htm-xhtml)
 - [RTF](#rtf-rtf)
@@ -104,6 +106,131 @@ Use Homebrew: `brew install tool`.
 
 Download the MSI.
 ```
+
+Each chunk carries metadata: `heading_title`, `heading_level`, and `heading_path` (the list of ancestor titles).
+
+---
+
+## AsciiDoc (`.adoc`, `.asciidoc`)
+
+**Strategy: heading-aware section split.**
+
+The document is split at AsciiDoc heading lines (`= Title`, `== Subtitle`, `=== Sub-subtitle`, etc.). Each heading and its body text become one or more chunks. The full ancestor heading path is prepended to every chunk so that context is preserved regardless of which chunk is retrieved.
+
+AsciiDoc's document title (`= Document Title`, level 0) is treated as level 1, consistent with how Markdown's `#` is treated.
+
+Delimited code blocks (surrounded by `----` lines) are converted to Markdown fenced code blocks before chunking, so they are always treated as intact units and never split mid-block.
+
+When no headings are found, the entire file is split with the token-based splitter (same as `.txt`).
+
+**Input:**
+```asciidoc
+= User Guide
+
+Welcome to the guide.
+
+== Installation
+
+Run the installer.
+
+----
+$ ./install.sh
+----
+
+=== macOS
+
+Use Homebrew: `brew install tool`.
+```
+
+**Output chunks:**
+```
+= User Guide
+
+Welcome to the guide.
+```
+```
+= User Guide
+== Installation
+
+Run the installer.
+
+```
+$ ./install.sh
+```
+```
+```
+= User Guide
+== Installation
+=== macOS
+
+Use Homebrew: `brew install tool`.
+```
+
+Each chunk carries metadata: `heading_title`, `heading_level`, and `heading_path` (the list of ancestor titles).
+
+---
+
+## reStructuredText (`.rst`)
+
+**Strategy: heading-aware section split.**
+
+The document is split at RST section headings. RST headings consist of a line of text followed by (and optionally preceded by) an underline of a single punctuation character at least as long as the text. The heading level is assigned by **first-seen order** across the file — the first underline character encountered becomes level 1, the second distinct character becomes level 2, and so on — regardless of which specific punctuation character is used.
+
+Optional overline+underline headings (same punctuation character above and below the title text) are also detected.
+
+Code blocks are preserved intact:
+- `.. code-block::` directives: the following indented block is emitted as a single chunk.
+- `::` shorthand (a paragraph ending with `::`): the following indented block is kept together.
+
+When no headings are found, the entire file is split with the token-based splitter (same as `.txt`).
+
+**Input:**
+```rst
+User Guide
+==========
+
+Welcome to the guide.
+
+Installation
+------------
+
+Run the installer.
+
+.. code-block:: bash
+
+   $ ./install.sh
+
+macOS
+~~~~~
+
+Use Homebrew: ``brew install tool``.
+```
+
+**Output chunks:**
+```
+User Guide
+
+Welcome to the guide.
+```
+```
+User Guide
+Installation
+
+Run the installer.
+
+.. code-block:: bash
+
+   $ ./install.sh
+```
+```
+User Guide
+Installation
+macOS
+
+Use Homebrew: ``brew install tool``.
+```
+
+Level assignment in this example: `=` is level 1 (first seen), `-` is level 2 (second seen), `~` is level 3 (third seen).
 
 Each chunk carries metadata: `heading_title`, `heading_level`, and `heading_path` (the list of ancestor titles).
 

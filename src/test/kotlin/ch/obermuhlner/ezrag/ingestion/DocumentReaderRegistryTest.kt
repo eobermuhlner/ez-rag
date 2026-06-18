@@ -580,4 +580,37 @@ class DocumentReaderRegistryTest {
 
         assertThat(documents.size).isGreaterThan(1)
     }
+
+    @Test
+    fun `supports returns false for asc`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("asc")).isFalse()
+    }
+
+    @Test
+    fun `mixed format directory produces at least one chunk from each of adoc, asciidoc, rst, and md files`(@TempDir tempDir: Path) {
+        val adocFile = tempDir.resolve("doc.adoc").toFile()
+        adocFile.writeText("= AsciiDoc Document\n\nThis is an AsciiDoc file with some content.")
+
+        val asciidocFile = tempDir.resolve("doc.asciidoc").toFile()
+        asciidocFile.writeText("= AsciiDoc Extended\n\nThis is an asciidoc file with some content.")
+
+        val rstFile = tempDir.resolve("doc.rst").toFile()
+        rstFile.writeText("RST Document\n============\n\nThis is a reStructuredText file with some content.")
+
+        val mdFile = tempDir.resolve("doc.md").toFile()
+        mdFile.writeText("# Markdown Document\n\nThis is a Markdown file with some content.")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+
+        val adocChunks = registry.read(adocFile)
+        val asciidocChunks = registry.read(asciidocFile)
+        val rstChunks = registry.read(rstFile)
+        val mdChunks = registry.read(mdFile)
+
+        assertThat(adocChunks).isNotEmpty()
+        assertThat(asciidocChunks).isNotEmpty()
+        assertThat(rstChunks).isNotEmpty()
+        assertThat(mdChunks).isNotEmpty()
+    }
 }

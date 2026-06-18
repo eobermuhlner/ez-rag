@@ -77,19 +77,19 @@ Verify end-to-end ingestion of a mixed-format directory and update documentation
 
 ### Implementation steps
 
-- [ ] Add a test (e.g., in `DocumentReaderRegistryTest` or a new `MixedFormatDirectoryIngestTest`) that writes one file per extension (`.adoc`, `.asciidoc`, `.rst`, `.md`) to a `@TempDir`, calls the ingestion pipeline on the directory, and asserts at least one chunk was produced from each file.
-- [ ] Add or extend a test asserting `DocumentReaderRegistry.supports("asc")` returns `false`.
-- [ ] Update `README.md`: add `.adoc`, `.asciidoc`, and `.rst` to the supported file types list.
-- [ ] Update `CHUNKING.md`: add AsciiDoc and RST sections documenting the heading-aware chunking strategy, consistent with the existing Markdown section format.
+- [x] Add a test (e.g., in `DocumentReaderRegistryTest` or a new `MixedFormatDirectoryIngestTest`) that writes one file per extension (`.adoc`, `.asciidoc`, `.rst`, `.md`) to a `@TempDir`, calls the ingestion pipeline on the directory, and asserts at least one chunk was produced from each file.
+- [x] Add or extend a test asserting `DocumentReaderRegistry.supports("asc")` returns `false`.
+- [x] Update `README.md`: add `.adoc`, `.asciidoc`, and `.rst` to the supported file types list.
+- [x] Update `CHUNKING.md`: add AsciiDoc and RST sections documenting the heading-aware chunking strategy, consistent with the existing Markdown section format.
 
 ### Acceptance criteria
 
-- [ ] A directory containing exactly one `.adoc`, one `.asciidoc`, one `.rst`, and one `.md` file, when ingested, produces at least one chunk sourced from each of the four files.
-- [ ] `DocumentReaderRegistry.supports("asc")` returns `false`.
-- [ ] README.md lists `.adoc` (AsciiDoc) and `.rst` (reStructuredText) in the supported file formats section.
-- [ ] CHUNKING.md contains sections for AsciiDoc and RST describing the heading-aware chunking strategy.
+- [x] A directory containing exactly one `.adoc`, one `.asciidoc`, one `.rst`, and one `.md` file, when ingested, produces at least one chunk sourced from each of the four files.
+- [x] `DocumentReaderRegistry.supports("asc")` returns `false`.
+- [x] README.md lists `.adoc` (AsciiDoc) and `.rst` (reStructuredText) in the supported file formats section.
+- [x] CHUNKING.md contains sections for AsciiDoc and RST describing the heading-aware chunking strategy.
 
 ### Quality gates
 
-- [ ] `./gradlew test` passes with zero failures and zero errors.
-- [ ] `./gradlew build` completes without compile errors.
+- [x] `./gradlew test` passes with zero failures and zero errors.
+- [x] `./gradlew build` completes without compile errors.
