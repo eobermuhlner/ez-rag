@@ -335,6 +335,78 @@ class JsoncChunkerTest {
         assertThat(result[0]).startsWith("##")
     }
 
+    // ---- Array prose rendering (inline object context) ----
+
+    @Test
+    fun `scalar string array inside inline object renders as comma-separated prose`() {
+        val source = """[{"tags": ["AI", "NLP", "search"]}]"""
+        val result = chunker().chunk(source)
+        assertThat(result).isNotEmpty()
+        val allText = result.joinToString("\n")
+        assertThat(allText).contains("**tags**: AI, NLP, search")
+        assertThat(allText).doesNotContain("```")
+    }
+
+    @Test
+    fun `scalar number array inside inline object renders as comma-separated prose`() {
+        val source = """[{"scores": [4.8, 4.5, 4.2]}]"""
+        val result = chunker().chunk(source)
+        assertThat(result).isNotEmpty()
+        val allText = result.joinToString("\n")
+        assertThat(allText).contains("**scores**: 4.8, 4.5, 4.2")
+        assertThat(allText).doesNotContain("```")
+    }
+
+    @Test
+    fun `scalar array with null element inside inline object renders null as prose`() {
+        val source = """[{"codes": [null, "active"]}]"""
+        val result = chunker().chunk(source)
+        assertThat(result).isNotEmpty()
+        val allText = result.joinToString("\n")
+        assertThat(allText).contains("**codes**: null, active")
+        assertThat(allText).doesNotContain("```")
+    }
+
+    @Test
+    fun `empty array inside inline object omits the field`() {
+        val source = """[{"tags": [], "name": "Alice"}]"""
+        val result = chunker().chunk(source)
+        assertThat(result).isNotEmpty()
+        val allText = result.joinToString("\n")
+        assertThat(allText).doesNotContain("**tags**")
+        assertThat(allText).contains("**name**: Alice")
+    }
+
+    @Test
+    fun `mixed scalar and object array inside inline object renders as code block`() {
+        val source = """[{"data": ["note", {"id": 1}]}]"""
+        val result = chunker().chunk(source)
+        assertThat(result).isNotEmpty()
+        val allText = result.joinToString("\n")
+        assertThat(allText).contains("```")
+    }
+
+    @Test
+    fun `object array inside inline object renders as semicolon-separated flat items with plain keys`() {
+        val source = """[{"contributors": [{"name": "Alice", "role": "author"}, {"name": "Bob", "role": "editor"}]}]"""
+        val result = chunker().chunk(source)
+        assertThat(result).isNotEmpty()
+        val allText = result.joinToString("\n")
+        assertThat(allText).contains("**contributors**: name: Alice, role: author; name: Bob, role: editor")
+        assertThat(allText).doesNotContain("```")
+    }
+
+    @Test
+    fun `nested object inside flat object-array item renders as raw JSON not further flattened`() {
+        val source = """[{"contributors": [{"name": "Alice", "address": {"city": "Zurich"}}]}]"""
+        val result = chunker().chunk(source)
+        assertThat(result).isNotEmpty()
+        val allText = result.joinToString("\n")
+        assertThat(allText).contains("name: Alice")
+        // Nested object stops recursion — city stays inside JSON-like text
+        assertThat(allText).contains("city")
+    }
+
     // ---- Bug fix: preceding comments on nested object/array keys must not be dropped ----
 
     @Test

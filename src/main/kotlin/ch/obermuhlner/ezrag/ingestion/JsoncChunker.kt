@@ -111,7 +111,7 @@ class JsoncChunker(
                 }
                 else -> {
                     val commentProse = renderPrecedingComments(precedingComments, source)
-                    val fieldLine = renderPair(key, valueNode, source, trailingComment)
+                    val fieldLine = renderPair(key, valueNode, source, trailingComment) ?: continue
                     val line = if (commentProse != null) "$commentProse\n$fieldLine" else fieldLine
 
                     val textWithLine = if (accumulatorLines.isEmpty()) "$heading\n\n$line"
@@ -194,17 +194,66 @@ class JsoncChunker(
 
     // ---- Rendering helpers ----
 
-    private fun renderPair(key: String, valueNode: TSNode, source: String, trailingComment: TSNode? = null): String {
+    // Returns null when the field should be omitted (empty array value).
+    private fun renderPair(key: String, valueNode: TSNode, source: String, trailingComment: TSNode? = null): String? {
         val valueText = nodeText(valueNode, source)
-        val base = when (valueNode.type) {
+        val base: String? = when (valueNode.type) {
             "string" -> "**$key**: ${unquoteString(valueText)}"
             "number" -> "**$key**: $valueText"
             "true", "false" -> "**$key**: $valueText"
             "null" -> "**$key**: null"
-            "object", "array" -> "**$key**:\n```json\n$valueText\n```"
+            "object" -> "**$key**:\n```json\n$valueText\n```"
+            "array" -> {
+                val prose = renderArrayProse(valueNode, source)
+                when {
+                    prose == null -> null                                             // empty → omit
+                    prose.isEmpty() -> "**$key**:\n```json\n$valueText\n```"         // mixed → code block
+                    else -> "**$key**: $prose"
+                }
+            }
             else -> "**$key**: $valueText"
         }
+        if (base == null) return null
         return if (trailingComment != null) "$base - ${normaliseComment(trailingComment, source)}" else base
+    }
+
+    /**
+     * Classifies and renders an array node as prose.
+     * Returns null for empty arrays (field should be omitted),
+     * empty string for mixed arrays (caller should use a code block),
+     * or a prose string for all-scalar or all-object arrays.
+     */
+    private fun renderArrayProse(arrayNode: TSNode, source: String): String? {
+        val children = (0 until arrayNode.namedChildCount).map { arrayNode.getNamedChild(it) }
+        if (children.isEmpty()) return null
+
+        val scalarTypes = setOf("string", "number", "true", "false", "null")
+        return when {
+            children.all { it.type in scalarTypes } ->
+                children.joinToString(", ") { child ->
+                    if (child.type == "string") unquoteString(nodeText(child, source))
+                    else nodeText(child, source)
+                }
+            children.all { it.type == "object" } ->
+                children.joinToString("; ") { renderObjectFlat(it, source) }
+            else -> ""  // mixed
+        }
+    }
+
+    /**
+     * Renders an object as flat "key: value, key: value" prose for use inside inline object arrays.
+     * Nested objects or arrays are rendered as raw JSON — recursion stops at one level.
+     */
+    private fun renderObjectFlat(objNode: TSNode, source: String): String {
+        val pairs = collectNamedChildrenOfType(objNode, "pair")
+        if (pairs.isEmpty()) return ""
+        return pairs.joinToString(", ") { pair ->
+            val key = extractPairKey(pair, source)
+            val valueNode = findValueNode(pair) ?: return@joinToString "$key: (unknown)"
+            val value = if (valueNode.type == "string") unquoteString(nodeText(valueNode, source))
+                        else nodeText(valueNode, source)
+            "$key: $value"
+        }
     }
 
     private fun renderArrayElement(element: TSNode, source: String, trailingComment: TSNode? = null): String {
@@ -226,12 +275,12 @@ class JsoncChunker(
     private fun renderObjectInline(objNode: TSNode, source: String): String {
         val pairs = collectNamedChildrenOfType(objNode, "pair")
         if (pairs.isEmpty()) return "{}"
-        return pairs.joinToString("\n") { pair ->
+        val lines = pairs.mapNotNull { pair ->
             val key = extractPairKey(pair, source)
-            val valueNode = findValueNode(pair)
-            if (valueNode != null) renderPair(key, valueNode, source)
-            else "**$key**: (unknown)"
+            val valueNode = findValueNode(pair) ?: return@mapNotNull "**$key**: (unknown)"
+            renderPair(key, valueNode, source)
         }
+        return if (lines.isEmpty()) "{}" else lines.joinToString("\n")
     }
 
     // ---- Comment rendering helpers ----
