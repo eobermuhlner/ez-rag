@@ -282,11 +282,11 @@ Carol,35,Berlin
 
 The file is parsed with Jackson. The root node dispatches:
 
-- **Array root**: elements are batched by token budget. Each chunk gets a heading `## Items N–M` (or `## Item N` for a single element). Elements that individually exceed the budget are emitted alone.
-- **Object root**: fields are accumulated into chunks. Each chunk gets a heading `## key1 → key2` reflecting the path. Oversized nested objects or arrays recurse deeper. Oversized string values are split with the token splitter.
+- **Array root**: elements are batched by token budget. Each chunk gets a heading `## Items N-M` (or `## Item N` for a single element). Elements that individually exceed the budget are emitted alone.
+- **Object root**: fields are accumulated into chunks. Each chunk gets a heading `## key1 -> key2` reflecting the path. Oversized nested objects or arrays recurse deeper. Oversized string values are split with the token splitter.
 - **Field rendering**: primitives render as `**key**: value`; small nested structures render as a fenced JSON code block; large nested structures recurse.
 
-Headings carry the full key path, e.g. `## users → address → city`.
+Headings carry the full key path, e.g. `## users -> address -> city`.
 
 **Input:**
 ```json
@@ -298,7 +298,7 @@ Headings carry the full key path, e.g. `## users → address → city`.
 
 **Output (both items fit in budget — one chunk):**
 ```markdown
-## Items 1–2
+## Items 1-2
 
 {
   "id" : 1,
@@ -332,7 +332,7 @@ Each non-blank line is parsed as an independent JSON object. The set of parsed o
 
 **Output (all items fit in budget — one chunk):**
 ```markdown
-## Items 1–3
+## Items 1-3
 
 {
   "timestamp" : "2024-06-01T08:00:00Z",
@@ -357,27 +357,65 @@ Each non-blank line is parsed as an independent JSON object. The set of parsed o
 
 ## JSONC (`.jsonc`)
 
-**Strategy: comment stripping → JSON chunking.**
+**Strategy: Tree-sitter CST parse → comment-preserving chunking.**
 
-`//` line comments and `/* */` block comments are stripped before parsing. Comment-like text inside string literals is preserved. The remaining JSON is chunked identically to `.json`.
+JSONC files (JSON with Comments, as used by VS Code settings, `tsconfig.json`, and similar developer-facing config files) are parsed with Tree-sitter into a concrete syntax tree. Comments are treated as first-class nodes and rendered as readable prose inside the chunk text. No comment text is discarded.
+
+### Comment positions and rendering
+
+| Position | Rendering |
+|---|---|
+| **Preceding line comment** (`// text` before a key) | Prose paragraph on the line before the `**key**: value` line |
+| **Preceding block comment** (`/* text */` before a key) | Same as line comment; internal whitespace collapsed to single space; `/*` and `*/` markers stripped |
+| **Trailing inline comment** (`value  // text` on same line as a value) | Appended to the value line: `**key**: value - text` |
+| **File-level comments** (before the root object or array) | Prepended to every chunk as a preamble; their token cost is deducted from the per-chunk budget |
+
+Comment text inside string literals is treated as data and is not modified.
+
+### Whitespace normalisation
+
+Block comments (`/* */`) may contain internal indentation. All internal whitespace runs (spaces, tabs, newlines) are collapsed to a single space, and the result is trimmed.
 
 **Input:**
 ```jsonc
+// ez-rag configuration
+// Adjust for your environment
 {
-  // Store configuration
-  "store": {
-    "directory": ".ez-rag",   // Lucene index path
-    "embeddingModel": "minilm"
-  },
-  /* Retrieval settings */
+  // path where the Lucene index is stored
+  "directory": ".ez-rag",
+  /* Retrieval settings
+     for hybrid search */
   "retrieval": {
-    "mode": "hybrid",
-    "topK": 10
+    "mode": "hybrid",   // combines BM25 and embeddings
+    "topK": 10          // result count
   }
 }
 ```
 
-After comment stripping the file becomes valid JSON, then chunked as a JSON object.
+**Output chunks:**
+
+Chunk 1 (root object fields, with file-level preamble and preceding/trailing comments):
+```markdown
+ez-rag configuration Adjust for your environment
+
+##
+
+path where the Lucene index is stored
+**directory**: .ez-rag
+Retrieval settings for hybrid search
+```
+
+Chunk 2 (nested `retrieval` object):
+```markdown
+ez-rag configuration Adjust for your environment
+
+## retrieval
+
+**mode**: hybrid - combines BM25 and embeddings
+**topK**: 10 - result count
+```
+
+The file-level preamble (`ez-rag configuration Adjust for your environment`) is prepended to every chunk. The per-chunk token budget is reduced by the preamble's token count so that each chunk remains within the overall `--chunk-size` limit.
 
 ---
 

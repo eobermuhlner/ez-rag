@@ -131,14 +131,14 @@ class JsonDocumentReaderTest {
     }
 
     @Test
-    fun `jsonc file with line and block comments produces no chunks containing comment text`(@TempDir tempDir: Path) {
+    fun `jsonc file with line and block comments produces chunks containing comment text`(@TempDir tempDir: Path) {
         val file = tempDir.resolve("config.jsonc").toFile()
         file.writeText(
             """
             {
-                // secret: this is a line comment SECRET_LINE
+                // this is a line comment COMMENT_LINE
                 "name": "VISIBLE_NAME",
-                /* block comment SECRET_BLOCK */
+                /* block comment COMMENT_BLOCK */
                 "count": 42
             }
             """.trimIndent()
@@ -149,8 +149,8 @@ class JsonDocumentReaderTest {
 
         assertThat(docs).isNotEmpty()
         val allText = docs.joinToString("\n") { it.text ?: "" }
-        assertThat(allText).doesNotContain("SECRET_LINE")
-        assertThat(allText).doesNotContain("SECRET_BLOCK")
+        assertThat(allText).contains("COMMENT_LINE")
+        assertThat(allText).contains("COMMENT_BLOCK")
         assertThat(allText).contains("VISIBLE_NAME")
         assertThat(allText).contains("42")
     }
@@ -179,9 +179,9 @@ class JsonDocumentReaderTest {
     }
 
     @Test
-    fun `jsonc file whose json is invalid after stripping throws IllegalArgumentException`(@TempDir tempDir: Path) {
+    fun `jsonc file with invalid json structure throws IllegalArgumentException containing filename`(@TempDir tempDir: Path) {
         val file = tempDir.resolve("broken.jsonc").toFile()
-        // After stripping the comment, the remaining content is invalid JSON
+        // Invalid JSON structure even considering JSONC comment syntax
         file.writeText(
             """
             {
@@ -299,5 +299,60 @@ class JsonDocumentReaderTest {
         assertThat(text).contains("BLANK_A")
         assertThat(text).contains("BLANK_B")
         assertThat(text).contains("BLANK_C")
+    }
+
+    @Test
+    fun `jsonl lines with embedded quotes and backslashes are assembled and parsed correctly`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("special.jsonl").toFile()
+        // Lines with embedded escaped quotes and backslashes in string values
+        file.writeText(
+            """
+            {"id": "SPECIAL_A", "path": "C:\\Users\\test\\file.txt"}
+            {"id": "SPECIAL_B", "msg": "he said \"hello world\""}
+            {"id": "SPECIAL_C", "val": "normal"}
+            """.trimIndent()
+        )
+
+        val docs = JsonDocumentReader(file, chunkSize = 1000, chunkOverlap = 200).read()
+
+        assertThat(docs).isNotEmpty()
+        val allText = docs.joinToString("\n") { it.text ?: "" }
+        assertThat(allText).contains("SPECIAL_A")
+        assertThat(allText).contains("SPECIAL_B")
+        assertThat(allText).contains("SPECIAL_C")
+    }
+
+    @Test
+    fun `jsonl with one malformed line emits warning to stderr containing line number`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("onemalf.jsonl").toFile()
+        file.writeText(
+            """
+            {"id": "GOOD_1"}
+            {this is not valid}
+            {"id": "GOOD_3"}
+            """.trimIndent()
+        )
+
+        val errOutput = StringBuilder()
+        val originalErr = System.err
+        val captureStream = java.io.PrintStream(object : java.io.OutputStream() {
+            override fun write(b: Int) { errOutput.append(b.toChar()) }
+            override fun write(b: ByteArray, off: Int, len: Int) {
+                errOutput.append(String(b, off, len))
+            }
+        })
+        System.setErr(captureStream)
+        try {
+            val docs = JsonDocumentReader(file, chunkSize = 1000, chunkOverlap = 200).read()
+            assertThat(docs).isNotEmpty()
+            val allText = docs.joinToString("\n") { it.text ?: "" }
+            assertThat(allText).contains("GOOD_1")
+            assertThat(allText).contains("GOOD_3")
+        } finally {
+            System.setErr(originalErr)
+        }
+
+        assertThat(errOutput.toString()).contains("line 2")
+        assertThat(errOutput.toString()).contains("onemalf.jsonl")
     }
 }

@@ -70,6 +70,7 @@ dependencies {
     implementation("io.github.bonede:tree-sitter-java:0.23.4")
     implementation("io.github.bonede:tree-sitter-typescript:0.23.2")
     implementation("io.github.bonede:tree-sitter-javascript:0.23.1")
+    implementation("io.github.bonede:tree-sitter-json:0.24.8")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
