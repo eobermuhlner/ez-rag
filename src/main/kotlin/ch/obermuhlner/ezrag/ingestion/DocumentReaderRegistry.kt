@@ -46,6 +46,9 @@ class DocumentReaderRegistry(
         "tsx"   to { file -> SourceCodeDocumentReader(file.readText(), TypeScriptSourceCodeParser("tsx"), chunkSize, chunkOverlap).read() },
         "js"    to { file -> SourceCodeDocumentReader(file.readText(), TypeScriptSourceCodeParser("javascript"), chunkSize, chunkOverlap).read() },
         "jsx"   to { file -> SourceCodeDocumentReader(file.readText(), TypeScriptSourceCodeParser("jsx"), chunkSize, chunkOverlap).read() },
+        "adoc"     to { file -> AsciiDocDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "asciidoc" to { file -> AsciiDocDocumentReader(file, chunkSize, chunkOverlap).read() },
+        "rst"      to { file -> RstDocumentReader(file, chunkSize, chunkOverlap).read() },
     )
 
     fun supports(extension: String): Boolean = extension.lowercase() in readers

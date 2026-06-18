@@ -510,4 +510,74 @@ class DocumentReaderRegistryTest {
         assertThat(allText).contains("Ingestion job started")
         assertThat(allText).contains("Ingestion job completed")
     }
+
+    @Test
+    fun `supports returns true for adoc and asciidoc`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("adoc")).isTrue()
+        assertThat(registry.supports("asciidoc")).isTrue()
+    }
+
+    @Test
+    fun `read dispatches adoc file and produces at least one chunk`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.adoc").toFile()
+        file.writeText("= My Document\n\nThis is the body of the document.")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+    }
+
+    @Test
+    fun `read dispatches asciidoc file and produces at least one chunk`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.asciidoc").toFile()
+        file.writeText("= My Document\n\nThis is the body of the document.")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+    }
+
+    @Test
+    fun `adoc registry with small chunkSize produces multiple chunks for large section`(@TempDir tempDir: Path) {
+        val loremBody = (1..30).joinToString("\n\n") { "Paragraph $it with enough words to consume token budget." }
+        val file = tempDir.resolve("large.adoc").toFile()
+        file.writeText("= Big Section\n\n$loremBody")
+
+        val registry = DocumentReaderRegistry(chunkSize = 50, chunkOverlap = 10)
+        val documents = registry.read(file)
+
+        assertThat(documents.size).isGreaterThan(1)
+    }
+
+    @Test
+    fun `supports returns true for rst`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("rst")).isTrue()
+    }
+
+    @Test
+    fun `read dispatches rst file and produces at least one chunk`(@TempDir tempDir: Path) {
+        val file = tempDir.resolve("sample.rst").toFile()
+        file.writeText("My Document\n===========\n\nThis is the body of the document.")
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+    }
+
+    @Test
+    fun `rst registry with small chunkSize produces multiple chunks for large section`(@TempDir tempDir: Path) {
+        val loremBody = (1..30).joinToString("\n\n") { "Paragraph $it with enough words to consume token budget." }
+        val file = tempDir.resolve("large.rst").toFile()
+        file.writeText("Big Section\n===========\n\n$loremBody")
+
+        val registry = DocumentReaderRegistry(chunkSize = 50, chunkOverlap = 10)
+        val documents = registry.read(file)
+
+        assertThat(documents.size).isGreaterThan(1)
+    }
 }
