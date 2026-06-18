@@ -1,7 +1,7 @@
 - add eval corpus for the new supported file formats.
 - add parsing/chunking for document text file formats (adoc, ...)
-- generalize `to-markdown` sub-command for all processed file types (before chunking) name to be defined. Consider also `to-chunks` for after chunking.
 - add table with supported file formats and parsing/chunking information
-- support for ingesting source code
 - unpack zip files during ingestion
 - sub-command to start as background ingestion (observing file changes and/or cron job to ingest)
+- add support for image model to ingest images
+- use image model ingestion for PDF without text content

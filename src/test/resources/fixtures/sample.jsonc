@@ -1,0 +1,31 @@
+{
+  // ez-rag application configuration
+  // Adjust these settings to match your environment and hardware.
+
+  "store": {
+    "directory": ".ez-rag",       // path where the Lucene index is stored
+    "embeddingModel": "minilm"    // model used to embed chunks
+  },
+
+  "chunking": {
+    "chunkSize": 1000,            // maximum tokens per chunk
+    "chunkOverlap": 200           // token overlap between adjacent chunks
+  },
+
+  /* Retrieval settings control how search results are ranked.
+     hybrid mode combines BM25 (keyword) and embedding (semantic) scores
+     using Reciprocal Rank Fusion. */
+  "retrieval": {
+    "mode": "hybrid",
+    "topK": 10,
+    "rrf": {
+      "k": 60                     // RRF constant; higher values flatten the score distribution
+    }
+  },
+
+  // MCP server configuration — used when running "ez-rag mcp-server"
+  "mcp": {
+    "transport": "stdio",         // "stdio" or "http"
+    "port": 8080                  /* only relevant when transport is "http" */
+  }
+}

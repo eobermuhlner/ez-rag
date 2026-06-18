@@ -453,4 +453,61 @@ class DocumentReaderRegistryTest {
         assertThat(documents).isNotEmpty()
         assertThat(documents.none { it.metadata.containsKey("language") }).isTrue()
     }
+
+    @Test
+    fun `supports returns true for json`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("json")).isTrue()
+    }
+
+    @Test
+    fun `read dispatches json file using fixture and produces chunks containing all records`() {
+        val file = Paths.get(javaClass.getResource("/fixtures/sample.json")!!.toURI()).toFile()
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+        val allText = documents.joinToString("\n") { it.text ?: "" }
+        assertThat(allText).contains("Alice Johnson")
+        assertThat(allText).contains("BM25")
+    }
+
+    @Test
+    fun `supports returns true for jsonc`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("jsonc")).isTrue()
+    }
+
+    @Test
+    fun `read dispatches jsonc file using fixture and produces chunks without comment text`() {
+        val file = Paths.get(javaClass.getResource("/fixtures/sample.jsonc")!!.toURI()).toFile()
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+        val allText = documents.joinToString("\n") { it.text ?: "" }
+        assertThat(allText).contains("hybrid")
+        assertThat(allText).doesNotContain("// ez-rag application configuration")
+    }
+
+    @Test
+    fun `supports returns true for jsonl`() {
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        assertThat(registry.supports("jsonl")).isTrue()
+    }
+
+    @Test
+    fun `read dispatches jsonl file using fixture and produces chunks containing all records`() {
+        val file = Paths.get(javaClass.getResource("/fixtures/sample.jsonl")!!.toURI()).toFile()
+
+        val registry = DocumentReaderRegistry(chunkSize = 1000, chunkOverlap = 200)
+        val documents = registry.read(file)
+
+        assertThat(documents).isNotEmpty()
+        val allText = documents.joinToString("\n") { it.text ?: "" }
+        assertThat(allText).contains("Ingestion job started")
+        assertThat(allText).contains("Ingestion job completed")
+    }
 }

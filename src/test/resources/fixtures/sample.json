@@ -1,0 +1,52 @@
+[
+  {
+    "id": 1,
+    "title": "Introduction to Retrieval-Augmented Generation",
+    "author": "Alice Johnson",
+    "year": 2023,
+    "tags": ["AI", "NLP", "search"],
+    "available": true,
+    "rating": 4.8,
+    "summary": "A comprehensive overview of RAG systems, covering vector stores, embedding models, and hybrid retrieval strategies."
+  },
+  {
+    "id": 2,
+    "title": "Practical Vector Databases",
+    "author": "Bob Chen",
+    "year": 2024,
+    "tags": ["databases", "embeddings", "HNSW"],
+    "available": true,
+    "rating": 4.5,
+    "summary": "Hands-on guide to deploying and tuning HNSW-based approximate nearest-neighbour indexes for production workloads."
+  },
+  {
+    "id": 3,
+    "title": "BM25 and Beyond",
+    "author": "Carol Martinez",
+    "year": 2022,
+    "tags": ["search", "Lucene", "ranking"],
+    "available": false,
+    "rating": 4.2,
+    "summary": "Deep dive into term-frequency-based ranking, from classic BM25 through learned sparse retrieval."
+  },
+  {
+    "id": 4,
+    "title": "Chunking Strategies for Long Documents",
+    "author": "David Kim",
+    "year": 2024,
+    "tags": ["chunking", "NLP", "token-budget"],
+    "available": true,
+    "rating": 4.6,
+    "summary": "Compares fixed-size, sentence-boundary, and structure-aware chunking approaches and their effect on retrieval precision."
+  },
+  {
+    "id": 5,
+    "title": "Hybrid Search with RRF",
+    "author": "Eva Novak",
+    "year": 2023,
+    "tags": ["hybrid", "RRF", "fusion"],
+    "available": true,
+    "rating": 4.9,
+    "summary": "Explains Reciprocal Rank Fusion and shows how combining sparse and dense retrieval signals improves recall across diverse queries."
+  }
+]
