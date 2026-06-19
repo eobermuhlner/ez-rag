@@ -1,0 +1,24 @@
+documents:
+  - file: distributed_systems.rtf
+    role: relevant
+
+questions:
+  - id: q1
+    question: "What does the CAP theorem state about distributed data stores?"
+    expected_sources: ["distributed_systems.rtf"]
+    expected_chunk_contains: ["any distributed data store can guarantee at most two of three properties: consistency, availability, and partition tolerance"]
+
+  - id: q2
+    question: "What is the ABA problem in lock-free programming?"
+    expected_sources: ["distributed_systems.rtf"]
+    expected_chunk_contains: ["a compare-and-swap reads a value A, which is then changed to B and back to A by another thread, causing the CAS to succeed even though the state has changed in the interim"]
+
+  - id: q3
+    question: "What does the circuit breaker pattern do when failures are detected?"
+    expected_sources: ["distributed_systems.rtf"]
+    expected_chunk_contains: ["the circuit breaker transitions from the closed state to the open state and begins rejecting calls immediately without attempting to contact the failing service"]
+
+thresholds:
+  recall_at_k: 1.0
+  hit_rate_at_k: 1.0
+  mrr: 1.0

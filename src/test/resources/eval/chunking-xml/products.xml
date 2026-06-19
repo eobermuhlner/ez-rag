@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<catalog>
+  <product>
+    <name>Titanium Water Bottle</name>
+    <category>Outdoor</category>
+    <price>34.99</price>
+    <description>A lightweight titanium water bottle designed for hikers and trail runners. Holds 750 ml and keeps liquids cold for eight hours.</description>
+  </product>
+  <product>
+    <name>Solar LED Lantern</name>
+    <category>Camping</category>
+    <price>49.99</price>
+    <description>Rechargeable solar-powered LED lantern with a built-in USB port. Provides up to twelve hours of continuous illumination per charge.</description>
+  </product>
+  <product>
+    <name>Merino Wool Beanie</name>
+    <category>Apparel</category>
+    <price>22.50</price>
+    <description>Soft merino wool beanie suitable for cold weather activities. Machine washable and available in six neutral colours.</description>
+  </product>
+  <product>
+    <name>Carbon Fibre Trekking Poles</name>
+    <category>Outdoor</category>
+    <price>89.00</price>
+    <description>Collapsible carbon fibre trekking poles with ergonomic cork handles. Adjustable from 60 cm to 130 cm and weighing only 180 grams each.</description>
+  </product>
+  <product>
+    <name>Waterproof Trail Shoes</name>
+    <category>Footwear</category>
+    <price>129.95</price>
+    <description>Gore-Tex waterproof trail shoes with a Vibram outsole for maximum grip on wet and rocky terrain. Available in sizes 36 to 48.</description>
+  </product>
+  <product>
+    <name>Insulated Sleeping Bag</name>
+    <category>Camping</category>
+    <price>179.00</price>
+    <description>Three-season sleeping bag rated to minus ten degrees Celsius. Filled with 650-fill-power down and weighing 900 grams.</description>
+  </product>
+  <product>
+    <name>Portable Water Filter</name>
+    <category>Survival</category>
+    <price>44.95</price>
+    <description>Hollow-fibre membrane filter that removes 99.9999 percent of bacteria and protozoa. Filters up to 100 000 litres before replacement.</description>
+  </product>
+  <product>
+    <name>Headlamp Pro 500</name>
+    <category>Lighting</category>
+    <price>59.99</price>
+    <description>Rechargeable headlamp delivering 500 lumens with a 100-metre beam. Features red night-vision mode and IPX6 waterproof rating.</description>
+  </product>
+  <product>
+    <name>Packable Rain Jacket</name>
+    <category>Apparel</category>
+    <price>99.00</price>
+    <description>Ultra-packable 2.5-layer rain jacket that folds into its own chest pocket. Seam-sealed and weighing only 220 grams.</description>
+  </product>
+  <product>
+    <name>Satellite Communicator</name>
+    <category>Safety</category>
+    <price>349.00</price>
+    <description>Two-way satellite communicator with GPS tracking and SOS functionality. Compatible with all major satellite networks and weather forecast subscriptions.</description>
+  </product>
+  <product>
+    <name>Compression Dry Bag</name>
+    <category>Storage</category>
+    <price>18.75</price>
+    <description>Roll-top compression dry bag in 10-litre and 20-litre sizes. Constructed from 210D ripstop nylon with welded seams for complete waterproofing.</description>
+  </product>
+  <product>
+    <name>Multi-Tool Knife</name>
+    <category>Tools</category>
+    <price>74.50</price>
+    <description>Stainless steel multi-tool knife with fourteen functions including pliers, wire cutters, a file, and a bottle opener. Comes with a ballistic nylon sheath.</description>
+  </product>
+</catalog>

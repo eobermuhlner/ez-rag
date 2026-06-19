@@ -1,0 +1,74 @@
+[
+  {
+    "name": "Titanium Water Bottle",
+    "category": "Outdoor",
+    "price": 34.99,
+    "description": "A lightweight titanium water bottle designed for hikers and trail runners. Holds 750 ml and keeps liquids cold for eight hours."
+  },
+  {
+    "name": "Solar LED Lantern",
+    "category": "Camping",
+    "price": 49.99,
+    "description": "Rechargeable solar-powered LED lantern with a built-in USB port. Provides up to twelve hours of continuous illumination per charge."
+  },
+  {
+    "name": "Merino Wool Beanie",
+    "category": "Apparel",
+    "price": 22.50,
+    "description": "Soft merino wool beanie suitable for cold weather activities. Machine washable and available in six neutral colours."
+  },
+  {
+    "name": "Carbon Fibre Trekking Poles",
+    "category": "Outdoor",
+    "price": 89.00,
+    "description": "Collapsible carbon fibre trekking poles with ergonomic cork handles. Adjustable from 60 cm to 130 cm and weighing only 180 grams each."
+  },
+  {
+    "name": "Waterproof Trail Shoes",
+    "category": "Footwear",
+    "price": 129.95,
+    "description": "Gore-Tex waterproof trail shoes with a Vibram outsole for maximum grip on wet and rocky terrain. Available in sizes 36 to 48."
+  },
+  {
+    "name": "Insulated Sleeping Bag",
+    "category": "Camping",
+    "price": 179.00,
+    "description": "Three-season sleeping bag rated to minus ten degrees Celsius. Filled with 650-fill-power down and weighing 900 grams."
+  },
+  {
+    "name": "Portable Water Filter",
+    "category": "Survival",
+    "price": 44.95,
+    "description": "Hollow-fibre membrane filter that removes 99.9999 percent of bacteria and protozoa. Filters up to 100 000 litres before replacement."
+  },
+  {
+    "name": "Headlamp Pro 500",
+    "category": "Lighting",
+    "price": 59.99,
+    "description": "Rechargeable headlamp delivering 500 lumens with a 100-metre beam. Features red night-vision mode and IPX6 waterproof rating."
+  },
+  {
+    "name": "Packable Rain Jacket",
+    "category": "Apparel",
+    "price": 99.00,
+    "description": "Ultra-packable 2.5-layer rain jacket that folds into its own chest pocket. Seam-sealed and weighing only 220 grams."
+  },
+  {
+    "name": "Satellite Communicator",
+    "category": "Safety",
+    "price": 349.00,
+    "description": "Two-way satellite communicator with GPS tracking and SOS functionality. Compatible with all major satellite networks and weather forecast subscriptions."
+  },
+  {
+    "name": "Compression Dry Bag",
+    "category": "Storage",
+    "price": 18.75,
+    "description": "Roll-top compression dry bag in 10-litre and 20-litre sizes. Constructed from 210D ripstop nylon with welded seams for complete waterproofing."
+  },
+  {
+    "name": "Multi-Tool Knife",
+    "category": "Tools",
+    "price": 74.50,
+    "description": "Stainless steel multi-tool knife with fourteen functions including pliers, wire cutters, a file, and a bottle opener. Comes with a ballistic nylon sheath."
+  }
+]

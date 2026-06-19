@@ -1,6 +1,4 @@
 - add eval corpus for the new supported file formats.
-- add parsing/chunking for document text file formats (adoc, ...)
-- add table with supported file formats and parsing/chunking information
 - unpack zip files during ingestion
 - sub-command to start as background ingestion (observing file changes and/or cron job to ingest)
 - add support for image model to ingest images

@@ -1,0 +1,24 @@
+documents:
+  - file: StringUtils.kt
+    role: relevant
+
+questions:
+  - id: q1
+    question: "What does the truncate function do when the string is longer than maxLength?"
+    expected_sources: ["StringUtils.kt"]
+    expected_chunk_contains: ["cut off and an ellipsis is appended"]
+
+  - id: q2
+    question: "What does padLeft do when the string is already at or longer than the desired width?"
+    expected_sources: ["StringUtils.kt"]
+    expected_chunk_contains: ["the character used for left-padding"]
+
+  - id: q3
+    question: "What does countWords return for an empty string?"
+    expected_sources: ["StringUtils.kt"]
+    expected_chunk_contains: ["Empty strings and strings containing only whitespace return a word count of zero"]
+
+thresholds:
+  recall_at_k: 1.0
+  hit_rate_at_k: 1.0
+  mrr: 1.0

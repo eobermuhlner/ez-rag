@@ -21,3 +21,4 @@ Thumbs.db
 
 # Project-specific: runtime RAG store
 .ez-rag/
+/.claude/worktrees/

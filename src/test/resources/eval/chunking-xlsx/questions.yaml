@@ -1,0 +1,24 @@
+documents:
+  - file: products.xlsx
+    role: relevant
+
+questions:
+  - id: q1
+    question: "What is the price of the Titanium Water Bottle?"
+    expected_sources: ["products.xlsx"]
+    expected_chunk_contains: ["| Titanium Water Bottle |"]
+
+  - id: q2
+    question: "What category does the Headlamp Pro 500 belong to?"
+    expected_sources: ["products.xlsx"]
+    expected_chunk_contains: ["| Headlamp Pro 500 |"]
+
+  - id: q3
+    question: "What functions does the Multi-Tool Knife have?"
+    expected_sources: ["products.xlsx"]
+    expected_chunk_contains: ["| Multi-Tool Knife |"]
+
+thresholds:
+  recall_at_k: 1.0
+  hit_rate_at_k: 1.0
+  mrr: 1.0
